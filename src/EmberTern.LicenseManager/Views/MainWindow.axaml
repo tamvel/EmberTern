@@ -56,7 +56,7 @@
     <Border Classes="chrome" DockPanel.Dock="Top" Height="{DynamicResource Size.TitleBar}"
             Padding="0"
             PointerPressed="OnTitleBarPointerPressed" DoubleTapped="OnTitleBarDoubleTapped">
-      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
         <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center"
                    Margin="{DynamicResource Pad.Panel}"
                    Text="EmberTern License Manager" />
@@ -69,12 +69,56 @@
              active (click goes to Light), Moon while Light is. The glyphs are EmberTern's own, linked
              rather than copied; only the twenty-line converter is mirrored, because it lives in an
              assembly this solution must not reference. -->
+        <!-- ☰ APPLICATION MENU — the FIRST button of the action zone, and deliberately NOT fenced off
+             with a separator of its own: EmberTern's own titlebar makes the same call, and design §6
+             records the reason (ChatGPT and its peers do not fence it either, and it reads better).
+
+             ⭐⭐ It hosts a plain `ContextMenu`, opened from code-behind on left-click, because that
+             inherits the ONE menu appearance this application has (Themes/MenuStyles.axaml). ⛔ NOT a
+             `MenuFlyout`: that would need a second chrome variant for `MenuFlyoutPresenter` — the exact
+             trap that grew EmberTern's MessageBanner six per-host variants. See hamburger-navigation §2.2.
+
+             ⚠ Storage and the theme toggle deliberately STAY where they are. Storage is not a preference,
+             and the theme is a one-click always-visible control whose duplicate in a menu would add a
+             second owner of one action — EmberTern cut exactly that row for exactly that reason (§4 B). -->
+        <Button Grid.Column="3" Classes="icon" Name="AppMenuButton" Click="OnAppMenuClick"
+                VerticalAlignment="Center"
+                ToolTip.Tip="Application menu">
+          <Viewbox Classes="icon">
+            <Canvas Width="24" Height="24">
+              <Path Data="{DynamicResource Icon.Menu}" />
+            </Canvas>
+          </Viewbox>
+          <Button.ContextMenu>
+            <!-- Under the button, left edges aligned — a menu button's menu belongs below it, not at the
+                 pointer where a right-click menu belongs. -->
+            <ContextMenu Name="AppMenu" Placement="BottomEdgeAlignedLeft">
+              <MenuItem Name="AppMenuSettings"
+                        Header="Settings…"
+                        Icon="{lm:MenuIcon Icon.Settings}"
+                        Click="OnAppMenuSettingsClick" />
+              <Separator />
+              <!-- ⭐ A DELIBERATE DISABLED PLACEHOLDER, ratified with D‑8's sibling decision. It is here so
+                   the menu's shape is the shape it will keep, and it is DISABLED rather than absent
+                   because there is nothing behind it yet. EmberTern shipped its own `Settings…` row in
+                   exactly this state for exactly this reason (§4 A), and the readable-disabled styling in
+                   MenuStyles.axaml is what keeps it legible rather than a ghost.
+                   ⛔ No About window is built in this stage. -->
+              <MenuItem Name="AppMenuAbout"
+                        Header="About"
+                        Icon="{lm:MenuIcon Icon.Info}"
+                        IsEnabled="False"
+                        ToolTip.Tip="Not available yet" />
+            </ContextMenu>
+          </Button.ContextMenu>
+        </Button>
+
         <!-- ⭐⭐ STORAGE — backup, restore, the JSONL escape hatch and the data folder, in a window of
              their own (D‑4). ⛔ Deliberately NOT a third view tab: the two tabs answer two questions
              about LICENCES, and where the files live is not a third one of those. ⚠ The separation is
              also a safety property — restore is the most consequential action this application has, and
              it should take a deliberate step to reach rather than sit beside the daily work. -->
-        <Button Grid.Column="3" Classes="icon" Name="StorageButton" Click="OnOpenStorage"
+        <Button Grid.Column="4" Classes="icon" Name="StorageButton" Click="OnOpenStorage"
                 VerticalAlignment="Center"
                 ToolTip.Tip="Storage — backup, restore, JSONL export and the data folder">
           <Viewbox Classes="icon">
@@ -84,7 +128,7 @@
           </Viewbox>
         </Button>
 
-        <Button Grid.Column="4" Classes="icon" Name="ThemeToggle" Click="OnToggleTheme"
+        <Button Grid.Column="5" Classes="icon" Name="ThemeToggle" Click="OnToggleTheme"
                 VerticalAlignment="Center" ToolTip.Tip="Switch between the light and dark theme">
           <Viewbox Classes="icon">
             <Canvas Width="24" Height="24">
@@ -95,7 +139,7 @@
         </Button>
 
         <!-- Window controls -->
-        <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Stretch"
+        <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Stretch"
 >
           <Button Classes="caption" Name="MinimizeButton" Click="OnMinimizeClick"
                   ToolTip.Tip="Minimise">
@@ -218,8 +262,46 @@
       <GridSplitter Grid.Column="1" ResizeDirection="Columns"
                     Background="{DynamicResource BorderBrush}" Width="4" />
 
-      <ScrollViewer Grid.Column="2" Padding="{DynamicResource Pad.Panel}">
-        <StackPanel Spacing="{DynamicResource Space.Lg}">
+      <!-- ══ THE SELECTED CUSTOMER'S TWO PAGES ══════════════════════════════════════════════════
+           ⭐⭐ TWO QUESTIONS, TWO PAGES: "who is this customer?" and "what licences do they have, and
+           what happened to them?". They used to share one scrolling column, so contact details ran into
+           licence terms and then into the issuing history with no boundary the eye could use.
+           ⛔ That is not a spacing problem — no amount of gutter makes "which of these belongs to what I
+           am looking at" answerable.
+
+           ⭐ The switch sits ABOVE the whole detail pane (user decision), so it plainly says "this
+           switches the main view of the selected customer" rather than looking like a divider between
+           two cards of one form.
+
+           ⭐ `Border.view-switch` + `Button.view-tab` — the SAME markup the main Customers/Licences
+           switch and Storage's Backup/Restore switch use. ⛔ Not a `TabControl`: §40.2 records why a
+           templated tab control is not available here.
+
+           ⚠ ONE `ScrollViewer` around both pages rather than one each: the scrolled surface is "the
+           detail pane", and two viewers would be two scroll positions for one column. -->
+      <Grid Grid.Column="2" RowDefinitions="Auto,*">
+
+        <Border Grid.Row="0" Classes="view-switch">
+          <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
+            <Button Classes="view-tab" Name="CustomerTab" Content="Customer"
+                    Classes.active="{Binding IsCustomerTab}"
+                    Command="{Binding ShowCustomerTabCommand}" />
+            <Button Classes="view-tab" Name="LicencesTab" Content="Licences"
+                    Classes.active="{Binding IsLicencesTab}"
+                    Command="{Binding ShowLicencesTabCommand}" />
+          </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" Name="CustomerDetailScroll"
+                      Padding="{DynamicResource Pad.Panel}">
+          <Panel>
+
+        <!-- ══ CUSTOMER ═══════════════════════════════════════════════════════════════════════ -->
+        <!-- ⚠ `VerticalAlignment="Top"`: a Panel centres its children, and the shorter page would
+             otherwise float in the middle of the taller one's height. -->
+        <StackPanel Name="CustomerPage" VerticalAlignment="Top"
+                    IsVisible="{Binding IsCustomerTab}"
+                    Spacing="{DynamicResource Space.Lg}">
 
           <!-- Customer ───────────────────────────────────────────────────────────────────────── -->
           <Border Classes="card">
@@ -280,6 +362,18 @@
                       Command="{Binding SaveCustomerCommand}" />
             </StackPanel>
           </Border>
+
+        </StackPanel>
+
+        <!-- ══ LICENCES ═══════════════════════════════════════════════════════════════════════ -->
+        <!-- ⭐ The WHOLE licence domain, issuing history included. The history is not a third page: it
+             describes what was issued for the licence selected right here, so separating them would put
+             a question and its own answer on two different screens.
+             ⚠ The two cards keep their existing `IsVisible` gating on SelectedCustomer / SelectedLicense
+             — the "no customer selected" semantics are unchanged by this split, deliberately. -->
+        <StackPanel Name="LicencesPage" VerticalAlignment="Top"
+                    IsVisible="{Binding IsLicencesTab}"
+                    Spacing="{DynamicResource Space.Lg}">
 
           <!-- Licences ───────────────────────────────────────────────────────────────────────── -->
           <Border Classes="card" IsVisible="{Binding SelectedCustomer, Converter={x:Static ObjectConverters.IsNotNull}}">
@@ -400,16 +494,35 @@
               <TextBlock Classes="field-label" Text="Issue note — optional, recorded in the audit log" />
               <TextBox Text="{Binding IssueNote}" />
 
-              <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
-                          Spacing="{DynamicResource Space.Sm}">
+              <!-- WrapPanel, not StackPanel, since L6.3 added a fifth action: at 1080 DIP the five
+                   buttons measured 1251 wide and the last one was CLIPPED - present, named, bound and
+                   simply laid out past the edge, which is the failure `NothingIsClippedOnEitherPage`
+                   exists to catch. The repair is never to shrink a control or truncate a label, so the
+                   row WRAPS to a second right-aligned line instead. Same answer, same panel and the same
+                   per-button gap EmberTern's own `ChoiceDialog` footer uses for the identical problem.
+                   The gap is `Margin.InlineGap` rather than the StackPanel `Spacing` it replaces:
+                   WrapPanel has no Spacing, and a literal here would fail this application's stricter
+                   metric guard. -->
+              <WrapPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <WrapPanel.Styles>
+                  <Style Selector="Button">
+                    <Setter Property="Margin" Value="{DynamicResource Margin.InlineGap}" />
+                  </Style>
+                </WrapPanel.Styles>
                 <Button Classes="flat" Content="Inspect latest"
                         Command="{Binding InspectLatestCommand}" />
                 <Button Classes="flat" Content="Export latest…"
                         Command="{Binding ExportLatestCommand}" />
+                <!-- L6.3. A WINDOW, not an inline action: what is about to leave for a customer is shown
+                     in full before it goes, and the send is confirmed there (14.1). One licence, one
+                     customer, one send - there is deliberately no bulk path. -->
+                <Button Classes="flat" Name="SendLicenceButton" Content="Send licence…"
+                        ToolTip.Tip="Shows the message that will be sent, with the stored licence attached"
+                        Click="OnSendLicence" />
                 <Button Classes="flat" Content="Save terms" Command="{Binding SaveLicenseCommand}" />
                 <Button Classes="primary" Content="Issue and save…"
                         Command="{Binding IssueAndSaveCommand}" />
-              </StackPanel>
+              </WrapPanel>
             </StackPanel>
           </Border>
 
@@ -547,7 +660,10 @@
           </Border>
 
         </StackPanel>
-      </ScrollViewer>
+
+          </Panel>
+        </ScrollViewer>
+      </Grid>
     </Grid>
 
     <!-- Licences — every licence in the register, across every customer ─────────────────────── -->

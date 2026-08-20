@@ -292,6 +292,13 @@ public sealed class ArtifactHistoryPresentationTests
         var window = new MainWindow { DataContext = shell };
         window.Show();
         shell.SelectedCustomer = shell.Customers.First();
+
+        // ⚠⚠ L6.1a: the issuing history moved onto the customer's LICENCES page. A page that is not
+        //    showing is not laid out at all — its lists realise no rows and its controls report zero
+        //    bounds — so every assertion in this class would have measured NOTHING and passed. ⛔ The
+        //    repair is to activate the page, never to relax what the guards assert.
+        ViewProbe.ShowLicencesPage(window, shell);
+
         window.UpdateLayout();
         return window;
     }

@@ -41,8 +41,16 @@ internal sealed class ManagerFixture : IDisposable
 
     internal IssuingWorkflow Workflow { get; }
 
-    internal CustomerRecord SaveCustomer(string name = "ACME Sp. z o.o.") =>
-        Register.SaveCustomer(new CustomerRecord { CustomerId = Register.NextCustomerId(), Name = name });
+    internal CustomerRecord SaveCustomer(string name = "ACME Sp. z o.o.", string? email = null) =>
+        Register.SaveCustomer(new CustomerRecord
+        {
+            CustomerId = Register.NextCustomerId(),
+            Name = name,
+
+            // ⚠ Null by default, deliberately: a customer without an address is an ordinary state, and the
+            //    message guards have to be able to reach it. L6.2's tests pass one explicitly.
+            Email = email,
+        });
 
     internal LicenseRecord SaveLicense(CustomerRecord customer, int seats = 5, int years = 1) =>
         Register.SaveLicense(new LicenseRecord

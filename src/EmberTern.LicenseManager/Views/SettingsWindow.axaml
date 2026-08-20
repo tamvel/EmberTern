@@ -1,0 +1,321 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
+        xmlns:lm="using:EmberTern.LicenseManager"
+        x:Class="EmberTern.LicenseManager.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="Settings"
+        Width="760" Height="620"
+        MinWidth="640" MinHeight="420"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- ⭐⭐ DELIVERY IS ITS OWN RESPONSIBILITY, AND THAT IS WHY THIS IS ITS OWN WINDOW (decision D‑5).
+
+       Storage answers "how do I look after the register of record" — backup, restore, the data folder.
+       This answers "how does a licence reach the customer". Folding them together would have meant
+       editing a closed stage's window and rewriting a title chosen on purpose, to gain nothing.
+
+       ⭐⭐ ONE STABLE SIZE, AND IT DOES NOT DEPEND ON THE PAGE (user QA, L6.1a).
+
+       This window first shipped with `SizeToContent="Height"` and `CanResize="False"`, which measured
+       WHICHEVER PAGE WAS SHOWING: General opened small, E-mail opened much taller, and switching between
+       them resized the window under the operator. On the reporting screen the E-mail page did not fit at
+       all. ⛔ That is not a spacing problem and it is NOT fixed by making the content smaller.
+
+       ⭐ The shape is EmberTern's own `SettingsWindow`, taken rather than invented: a declared
+       `Width`/`Height` with `MinWidth`/`MinHeight` floors, NO `SizeToContent`, rows `Auto,*,Auto` so the
+       body FILLS, and a `ScrollViewer` around the content column ONLY. So General and E-mail occupy
+       exactly the same rectangle, General simply has empty space below its one group — and stability beats
+       minimising height, which is the trade the user named explicitly.
+
+       ⭐ What must stay still, and why it does by CONSTRUCTION rather than by arrangement: the navigation
+       and the hairline are sibling COLUMNS of the body grid, and the heading and footer are sibling ROWS
+       of the outer grid. None of them is inside `PageScroll`, so none of them can scroll.
+
+       ⚠ `SettingsWindow.axaml.cs` clamps the window to the screen's working area on open. It only ever
+       SHRINKS — it is not a fit-to-content mechanism, and the height still never depends on the page.
+
+       ⛔ No StackPanel `Spacing` in the body: every gap is owned by the element above it, through a
+       role, so a caption never sits as far from its own field as two fields sit from each other. -->
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Header ─────────────────────────────────────────────────────────────────────────────────── -->
+    <Border Grid.Row="0" Classes="dialog-header">
+      <TextBlock Classes="h1" VerticalAlignment="Center" Name="PageHeading"
+                 Text="{Binding SelectedPage.Title}" />
+    </Border>
+
+    <!-- Body ───────────────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⭐⭐ THE SHAPE IS EMBERTERN'S SETTINGS CENTRE: a navigation column, a hairline, and ONE PAGE PER
+         CATEGORY gated by IsVisible. ⛔ Deliberately not a generic page host — that would be an
+         abstraction for pages that do not exist, and with two categories this is one block each with
+         every binding still compiled and typed. -->
+    <Grid Grid.Row="1" ColumnDefinitions="180,Auto,*">
+
+      <!-- ⚠ The navigation uses this application's OWN base ListBox styling rather than a copy of
+           EmberTern's `settings-nav` (its 2 px selection indicator). Decision D‑7 narrowed the copying to
+           the MENU block alone, and a second copied block would be a second thing to guard. The rows read
+           correctly: selection and hover already come from the shared palette. -->
+      <Border Grid.Column="0"
+              Background="{DynamicResource PanelBrush}"
+              Padding="{DynamicResource Pad.Panel}">
+        <ListBox Name="PageList"
+                 ItemsSource="{Binding Pages}"
+                 SelectedItem="{Binding SelectedPage}"
+                 Background="Transparent"
+                 BorderThickness="0">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:SettingsPageViewModel">
+              <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Md}">
+                <!-- ⚠ The icon arrives as a KEY and is resolved by the same converter the message strip
+                     uses — one mechanism, not a second one. -->
+                <Viewbox Classes="icon" VerticalAlignment="Center">
+                  <Canvas Width="24" Height="24">
+                    <Path Data="{Binding IconKey,
+                                 Converter={x:Static lm:IconGeometryConverter.Instance}}" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Border>
+
+      <Border Grid.Column="1"
+              Width="{DynamicResource Stroke.Hairline}"
+              Background="{DynamicResource BorderBrush}" />
+
+      <!-- The Border stays as the pages' ancestor DELIBERATELY: `Border.dialog-body TextBox` is a
+           DESCENDANT selector and is what gives every field its `Margin.FieldGap`. Replacing it with a
+           plain Panel would have silently removed the vertical rhythm from every input on the E-mail
+           page - a layout change with no error and no failing binding. -->
+      <Border Grid.Column="2" Classes="dialog-body">
+        <ScrollViewer Name="PageScroll"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+        <Panel>
+
+        <!-- ══ GENERAL ══════════════════════════════════════════════════════════════════════════ -->
+        <StackPanel Name="GeneralPage" VerticalAlignment="Top" IsVisible="{Binding IsGeneralPage}">
+
+          <TextBlock Classes="section" Text="Language" />
+
+          <TextBlock Classes="field-label" Text="Application language" />
+          <!-- ⭐⭐ DISABLED ON PURPOSE (decision D‑8). The row is here so the structure is the structure it
+               will keep and the later localization stage has a place to land — but it stores NOTHING.
+               A preference the operator can set and that then changes nothing is the exact defect that
+               removed `ClientLibraryPath` from EmberTern's connection dialog. ⚠ The view model gives this
+               picker no setter at all, so there is not even an accidental path to persisting it. -->
+          <ComboBox Name="ApplicationLanguagePicker" HorizontalAlignment="Stretch"
+                    IsEnabled="False"
+                    Margin="{DynamicResource Margin.FieldGap}"
+                    ItemsSource="{Binding ApplicationLanguageOptions}"
+                    SelectedItem="{Binding ApplicationLanguage, Mode=OneWay}"
+                    ToolTip.Tip="{Binding ApplicationLanguageUnavailable}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:LanguageOption">
+                <TextBlock Text="{Binding Label}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+
+          <TextBlock Name="ApplicationLanguageNote" Classes="hint" TextWrapping="Wrap"
+                     Text="{Binding ApplicationLanguageUnavailable}" />
+
+        </StackPanel>
+
+        <!-- ══ E-MAIL ═══════════════════════════════════════════════════════════════════════════ -->
+        <StackPanel Name="EmailPage" VerticalAlignment="Top" IsVisible="{Binding IsEmailPage}">
+
+        <!-- ⭐ The first thing on screen is what the operator actually wants to know: what delivery is
+             possible with what is typed right now. It follows the FIELDS, not the saved file.
+
+             ⚠ `Border.card`, NOT `Border.message`: this is a standing description of state, not
+             something that happened. The message strip below is the one surface that reports outcomes,
+             and giving this one the same appearance would put two things that look identical on screen
+             saying two different kinds of thing. -->
+        <Border Classes="card" Margin="{DynamicResource Margin.SectionGap}">
+          <TextBlock Name="DeliverySummaryText" TextWrapping="Wrap" Text="{Binding DeliverySummary}" />
+        </Border>
+
+        <!-- ══ SENDER ═══════════════════════════════════════════════════════════════════════════ -->
+        <!-- ⚠ Above the server on purpose: a sender address alone is enough to compose and save an
+             .eml, so it is the one field that is never optional. -->
+        <TextBlock Classes="section" Text="Sender" />
+
+        <TextBlock Classes="field-label" Text="From address — what the customer replies to" />
+        <TextBox Name="FromAddressBox" Margin="{DynamicResource Margin.FieldGap}"
+                 PlaceholderText="licencje@twojafirma.pl"
+                 Text="{Binding FromAddress}" />
+
+        <TextBlock Classes="field-label" Text="From name (optional)" />
+        <TextBox Name="FromNameBox" Margin="{DynamicResource Margin.SectionGap}"
+                 PlaceholderText="EmberTern"
+                 Text="{Binding FromName}" />
+
+        <!-- ══ SERVER ═══════════════════════════════════════════════════════════════════════════ -->
+        <!-- ⭐ Every one of these is DATA. The L6 measurement was taken on a test mailbox and the
+             production one has not been measured yet, so moving to it must be four fields typed here
+             rather than a code change. ⛔ No provider name appears anywhere in this application. -->
+        <TextBlock Classes="section" Text="Server — leave empty to deliver by file only" />
+
+        <TextBlock Classes="field-label" Text="SMTP host" />
+        <TextBox Name="HostBox" Margin="{DynamicResource Margin.FieldGap}"
+                 Text="{Binding Host}" />
+
+        <TextBlock Classes="field-label" Text="Port" />
+        <TextBox Name="PortBox" Margin="{DynamicResource Margin.FieldGap}"
+                 Text="{Binding PortText}" />
+
+        <!-- ⚠ Two choices, not three: System.Net.Mail.SmtpClient implements STARTTLS only, so implicit
+             TLS (port 465) is deliberately absent rather than offered and inert — the defect that
+             removed ClientLibraryPath from EmberTern's connection dialog. See SmtpSettings. -->
+        <TextBlock Classes="field-label" Text="Transport security" />
+        <ComboBox Name="SecurityPicker" HorizontalAlignment="Stretch"
+                  Margin="{DynamicResource Margin.SectionGap}"
+                  ItemsSource="{Binding SecurityOptions}"
+                  SelectedItem="{Binding SelectedSecurity}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:SmtpSecurityOption">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <!-- ══ CREDENTIALS ══════════════════════════════════════════════════════════════════════ -->
+        <TextBlock Classes="section" Text="Sign-in" />
+
+        <!-- ⚠ Separate from the sender address on purpose: a relay commonly authenticates as one
+             identity and sends as another, and collapsing the two makes that unreachable. -->
+        <TextBlock Classes="field-label" Text="Username — the account that signs in" />
+        <TextBox Name="UsernameBox" Margin="{DynamicResource Margin.FieldGap}"
+                 Text="{Binding Username}" />
+
+        <TextBlock Classes="field-label"
+                   Text="Password — for a Gmail mailbox this is an app password, not the account password" />
+        <TextBox Name="PasswordBox" PasswordChar="•"
+                 Margin="{DynamicResource Margin.FieldGap}"
+                 Text="{Binding Password}" />
+
+        <!-- ⭐ DPAPI's non-portability is invisible until it bites, so it is said here rather than
+             discovered after a move to a new machine — the same warning EmberTern gives for
+             connection passwords. -->
+        <TextBlock Name="ProtectionNoteText" Classes="hint" TextWrapping="Wrap"
+                   Margin="{DynamicResource Margin.SectionGap}"
+                   Text="{Binding ProtectionNote}" />
+
+        <TextBlock Classes="field-label" Text="Stored in" />
+        <SelectableTextBlock Name="SettingsPathText" Classes="mono" TextWrapping="Wrap"
+                             Margin="{DynamicResource Margin.SectionGap}"
+                             Text="{Binding SettingsPath}" />
+
+        <TextBlock Classes="section" Text="Test the configuration" />
+
+        <!-- L6.3. The address is TYPED, and there is deliberately no picker that could offer a customer's:
+             a diagnostic that can be aimed at a customer by a mis-click eventually will be, and they would
+             receive an unexplained message from a licensing system. It is not stored either - it is a
+             scratch value for one attempt, not a setting. -->
+        <TextBlock Classes="field-label"
+                   Text="Send a test message to - your own address, never a customer's" />
+        <TextBox Name="TestRecipientBox" Margin="{DynamicResource Margin.FieldGap}"
+                 PlaceholderText="you@example.com"
+                 Text="{Binding TestRecipient}" />
+
+        <!-- The test uses what is ON THIS PAGE, saved or not: an operator who has just typed a host
+             expects the test to try THAT host, and requiring a Save first would mean persisting a
+             configuration in order to discover it is wrong. -->
+        <TextBlock Name="TestNoteText" Classes="hint" TextWrapping="Wrap"
+                   Margin="{DynamicResource Margin.FieldGap}"
+                   Text="It sends a real message through the settings on this page, whether or not they have been saved. No licence is attached and nothing is recorded against any customer." />
+
+        <Button Classes="flat" Name="SendTestEmail" Content="Send test email…"
+                HorizontalAlignment="Left" Margin="{DynamicResource Margin.SectionGap}"
+                ToolTip.Tip="Sends a test message to the address above, after a confirmation"
+                Command="{Binding SendTestEmailCommand}" />
+
+        <!-- ══ MESSAGE LANGUAGE ═════════════════════════════════════════════════════════════════ -->
+        <TextBlock Classes="section" Text="Message language" />
+
+        <TextBlock Classes="field-label" Text="The language a licence e-mail is written in" />
+        <ComboBox Name="MessageLanguagePicker" HorizontalAlignment="Stretch"
+                  Margin="{DynamicResource Margin.FieldGap}"
+                  ItemsSource="{Binding MessageLanguageOptions}"
+                  SelectedItem="{Binding MessageLanguage}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:LanguageOption">
+              <TextBlock Text="{Binding Label}" />
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <!-- ⚠ Both independences said out loud, because the pairing is the surprising part: the interface
+             language and the message language are two values, and this one applies to EVERY customer
+             (decision D‑4 declined a per-customer language column). -->
+        <TextBlock Name="MessageLanguageNote" Classes="hint" TextWrapping="Wrap"
+                   Margin="{DynamicResource Margin.SectionGap}"
+                   Text="It is independent of the interface language, and it applies to every customer — switch it before sending to a customer who reads the other language." />
+
+        <!-- ⭐ ONE message surface, and the LAST child: the body band's padding separates it from the
+             footer, so it carries no bottom margin of its own.
+
+             ⚠⚠ This is the FULL recipe — severity stripe, severity glyph, one `Pad.Cell` inset owned by
+             one container — the same markup `MainWindow` carries. It is spelled out rather than reduced
+             to a bare TextBlock because `Border.message` sets `Padding` to 0 SO THAT the stripe can
+             reach three edges: without the inner grid the text sits flush against the border and the
+             severity is carried by a hairline that is nearly invisible in Light. -->
+        <Border Classes="message" Classes.info="{Binding IsInfo}" Classes.success="{Binding IsSuccess}"
+                Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}"
+                IsVisible="{Binding HasMessage}">
+          <Grid ColumnDefinitions="3,*">
+            <Border Grid.Column="0" Classes="severity-stripe" />
+            <Grid Grid.Column="1" ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Space.Sm}"
+                  Margin="{DynamicResource Pad.Cell}">
+              <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center">
+                <Canvas Width="24" Height="24">
+                  <Path Data="{Binding MessageIconKey,
+                               Converter={x:Static lm:IconGeometryConverter.Instance}}" />
+                </Canvas>
+              </Viewbox>
+              <TextBlock Grid.Column="1" Name="EmailSettingsMessageText" VerticalAlignment="Center"
+                         TextWrapping="Wrap" Text="{Binding MessageText}" />
+            </Grid>
+          </Grid>
+        </Border>
+
+        </StackPanel>
+
+        </Panel>
+        </ScrollViewer>
+      </Border>
+
+    </Grid>
+
+    <!-- Footer ─────────────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⭐ ONE primary action, and it BELONGS TO THE E-MAIL PAGE — the rule StorageWindow established:
+         an action is never on screen beside a page it cannot act on. General carries no action at all
+         today, because its one row is a disabled placeholder that stores nothing (D‑8).
+         ⚠ Save covers the whole E-mail page, message language included; see SettingsViewModel.
+         Revert and Forget are `flat` because neither is what the operator opened this window to do, and
+         Forget is destructive in the smallest possible way — it deletes fields that can be retyped,
+         never anything signed. -->
+    <Border Grid.Row="2" Classes="dialog-footer">
+      <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Md}"
+                  IsVisible="{Binding IsEmailPage}">
+        <Button Classes="flat" Name="Forget" Content="Forget settings"
+                ToolTip.Tip="Deletes the stored e-mail configuration, including the password"
+                Command="{Binding ForgetCommand}" />
+        <Button Classes="flat" Name="Revert" Content="Revert"
+                ToolTip.Tip="Discards the edits and reloads what is saved"
+                Command="{Binding RevertCommand}" />
+        <Button Classes="primary" Name="SaveSettings" Content="Save"
+                IsDefault="True"
+                Command="{Binding SaveCommand}" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>

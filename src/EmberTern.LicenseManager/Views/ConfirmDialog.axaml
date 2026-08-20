@@ -1,0 +1,55 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
+        x:Class="EmberTern.LicenseManager.Views.ConfirmDialog"
+        x:DataType="vm:ConfirmViewModel"
+        Title="{Binding Title}"
+        Width="420"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- ⭐⭐ THE SAME CONFIRMATION EMBERTERN SHOWS, in this application's own dialog skeleton.
+
+       Width 420 and `SizeToContent="Height"` are EmberTern's numbers for this dialog, taken rather than
+       chosen: every confirmation in the product is that width, and a confirmation is the one window whose
+       height SHOULD follow its content — it holds one sentence, and there is no navigation whose page
+       could change underneath it. ⚠ That is the opposite call from `SettingsWindow`, and deliberately:
+       there, content-driven height was the defect.
+
+       ⭐ The three bands are `dialog-header` / `dialog-body` / `dialog-footer` — the classes `UnlockWindow`
+       and `StorageWindow` already use, whose own comments record that they came from EmberTern's
+       `ConfirmDialog` and `TextPromptDialog`. ⛔ No local colour, no local padding: the bands carry both.
+
+       ⭐ Button order and roles mirror EmberTern's: the way out is `flat` and first, the action is
+       `primary` and last, and the action's button NAMES THE ACTION rather than saying "OK". -->
+  <Grid RowDefinitions="Auto,Auto,Auto">
+
+    <Border Grid.Row="0" Classes="dialog-header">
+      <TextBlock Name="ConfirmTitle" Classes="h1" TextWrapping="Wrap" Text="{Binding Title}" />
+    </Border>
+
+    <Border Grid.Row="1" Classes="dialog-body">
+      <TextBlock Name="ConfirmMessage" TextWrapping="Wrap" Text="{Binding Message}" />
+    </Border>
+
+    <!-- ⚠⚠ `IsCancel` on the way out and `IsDefault` on the action are not decoration: Escape must leave
+         without doing anything, and that is the gesture a hesitating operator reaches for first. -->
+    <Border Grid.Row="2" Classes="dialog-footer">
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                  Spacing="{DynamicResource Space.Md}">
+        <Button Classes="flat" Name="ConfirmCancel"
+                Content="{Binding CancelLabel}"
+                IsCancel="True"
+                Command="{Binding CancelCommand}" />
+        <Button Classes="primary" Name="ConfirmAccept"
+                Content="{Binding ConfirmLabel}"
+                IsDefault="True"
+                Command="{Binding ConfirmCommand}" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>

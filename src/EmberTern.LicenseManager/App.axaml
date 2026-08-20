@@ -44,6 +44,11 @@
          side by DataGridStylesSplitTests. -->
     <StyleInclude Source="avares://EmberTern.LicenseManager/Themes/DataGridStyles.axaml" />
     <StyleInclude Source="avares://EmberTern.LicenseManager/Themes/LicenseManagerStyles.axaml" />
+    <!-- ⚠⚠ A REPRODUCTION of EmberTern's menu appearance, not a link — decision D‑7 = B, taken to keep
+         EmberTern.App closed during L6.1a. The file states the two deliberate differences and names the
+         guard that stops it drifting (`MenuStyleDriftTests`). ⛔ Without it a ContextMenu here falls back
+         to FluentTheme's own SystemAccentColor hover — the brown/orange the palette fights everywhere. -->
+    <StyleInclude Source="avares://EmberTern.LicenseManager/Themes/MenuStyles.axaml" />
   </Application.Styles>
 
 </Application>

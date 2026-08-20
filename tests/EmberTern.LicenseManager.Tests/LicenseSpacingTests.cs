@@ -91,7 +91,12 @@ public sealed class LicenseSpacingTests
         _session.Dispatch(() =>
         {
             using var manager = new ManagerFixture();
-            var window = Show(manager, out _);
+            var window = Show(manager, out var shell);
+
+            // L6.1a: Seats belongs to the licence FORM, which now lives on the customer's Licences page.
+            // The customer-form rows in this class are untouched and still measure on the page they were
+            // always on - only this one moved, so only this one activates a page.
+            ViewProbe.ShowLicencesPage(window, shell);
 
             AssertGaps(RowOf(window, "Seats"), Independent);
         }, default);

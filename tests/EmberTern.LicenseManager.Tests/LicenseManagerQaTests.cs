@@ -174,24 +174,44 @@ public sealed class LicenseManagerQaTests
             shell.SelectedLicense = shell.Licenses[0];
             window.UpdateLayout();
 
-            var values = window.GetVisualDescendants().OfType<SelectableTextBlock>()
-                .Where(v => v.Classes.Contains("value"))
-                .Select(v => v.Text)
-                .ToArray();
+            // ⚠⚠ L6.1a: the two generated identifiers now live on DIFFERENT pages of the customer detail
+            //    — the customer id on Customer, the licence id on Licences. ⛔ Neither assertion is
+            //    dropped: each is made on the page that owns its subject, and each page is REALISED
+            //    first, so both are still measured on a laid-out surface rather than on a declaration.
+            ViewProbe.ShowCustomerPage(window, shell);
+            AssertIsAValueWithACopyAction(window, customer.CustomerId);
 
-            Assert.Contains(customer.CustomerId, values);
-            Assert.Contains(shell.LicenseId, values);
-
-            // ⛔ And no read-only TextBox is left carrying either of them.
-            Assert.DoesNotContain(
-                window.GetVisualDescendants().OfType<TextBox>().Where(t => t.IsReadOnly),
-                t => t.Text == customer.CustomerId || t.Text == shell.LicenseId);
-
-            // Each value has a copy action beside it, wearing EmberTern's own copy glyph.
-            var copies = window.GetVisualDescendants().OfType<Path>()
-                .Count(p => ReferenceEquals(p.Data, Geometry("Icon.Copy")));
-            Assert.Equal(2, copies);
+            ViewProbe.ShowLicencesPage(window, shell);
+            AssertIsAValueWithACopyAction(window, shell.LicenseId);
         }, default);
+
+    /// <summary>
+    /// ⭐ A generated identifier is a VALUE with a copy action — never a disabled field. A read-only
+    /// <c>TextBox</c> states that by refusing input, which is the one way of saying it that still invites
+    /// the input.
+    /// </summary>
+    private static void AssertIsAValueWithACopyAction(Window window, string identifier)
+    {
+        var values = window.GetVisualDescendants().OfType<SelectableTextBlock>()
+            .Where(v => v.Classes.Contains("value"))
+            .Where(v => v.IsEffectivelyVisible)
+            .Select(v => v.Text)
+            .ToArray();
+
+        Assert.Contains(identifier, values);
+
+        // ⛔ And no read-only TextBox is left carrying it.
+        Assert.DoesNotContain(
+            window.GetVisualDescendants().OfType<TextBox>().Where(t => t.IsReadOnly),
+            t => t.Text == identifier);
+
+        // The value has a copy action beside it, wearing EmberTern's own copy glyph. ⚠ Counted among the
+        // EFFECTIVELY VISIBLE paths, so the other page's copy action cannot stand in for this one.
+        var copies = window.GetVisualDescendants().OfType<Path>()
+            .Where(p => p.IsEffectivelyVisible)
+            .Count(p => ReferenceEquals(p.Data, Geometry("Icon.Copy")));
+        Assert.Equal(1, copies);
+    }
 
     // ── QA-3 · the rail can be resized ──────────────────────────────────────────────────────────────
 

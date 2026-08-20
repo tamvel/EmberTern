@@ -208,6 +208,97 @@ public sealed partial class MainWindow : Window
 
     private StorageWindow? _storage;
 
+    /// <summary>
+    /// Opens the Send licence window for the selected licence.
+    ///
+    /// <para>⭐⭐ <b>Every refusal is decided in the view model</b> (<see cref="ShellViewModel.PrepareSendLicence"/>)
+    /// — no licence selected, e-mail not configured, the customer has no address, the licence was never
+    /// issued. This handler opens a window or opens nothing; when nothing opens, the reason is already on
+    /// the main window's message strip. ⛔ A window that opens and then says "actually, no" is a window the
+    /// operator has to close to learn nothing.</para>
+    ///
+    /// <para>⚠ Only one at a time, for the reason Storage and Settings are: two send windows would be two
+    /// previews of two compositions, and the operator could confirm the one they were not looking at.</para>
+    /// </summary>
+    private void OnSendLicence(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is not ShellViewModel shell)
+        {
+            return;
+        }
+
+        if (_send is { } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        if (shell.PrepareSendLicence() is not { } model)
+        {
+            return;
+        }
+
+        _send = new SendLicenceWindow { DataContext = model };
+        _send.Closed += (_, _) => _send = null;
+        _send.Show(this);
+    }
+
+    private SendLicenceWindow? _send;
+
+    /// <summary>
+    /// Opens the application menu under the hamburger.
+    ///
+    /// <para>⭐ A mirror of EmberTern's own handler, including the half that is easy to leave out: a
+    /// SECOND click on the button CLOSES the menu rather than re-opening it underneath itself. Without
+    /// that, the button reads as broken the moment anyone clicks it twice.</para>
+    /// </summary>
+    private void OnAppMenuClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is not Button { ContextMenu: { } menu } button)
+        {
+            return;
+        }
+
+        if (menu.IsOpen)
+        {
+            menu.Close();
+            return;
+        }
+
+        menu.Open(button);
+    }
+
+    /// <summary>
+    /// Opens the Settings window.
+    ///
+    /// <para>⭐ Owned by this window so it stays in front and closes with it, and only ever ONE — a
+    /// second would mean two half-typed passwords racing to be the one that is saved.</para>
+    ///
+    /// <para>⚠ Does nothing when the view model has no settings, which happens only off Windows. ⛔ Not a
+    /// disabled row: the PLATFORM decides whether the feature exists at all, and a control that is
+    /// present but permanently dead teaches the operator nothing. ⚠ Deliberately unlike the `About` row,
+    /// which IS a disabled placeholder — that one is disabled because nothing is behind it YET.</para>
+    /// </summary>
+    private void OnAppMenuSettingsClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (DataContext is not ShellViewModel { Settings: { } settings })
+        {
+            return;
+        }
+
+        if (_settings is { } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        _settings = new SettingsWindow { DataContext = settings };
+        _settings.Closed += (_, _) => _settings = null;
+        _settings.Show(this);
+    }
+
+    private SettingsWindow? _settings;
+
     private void OnToggleTheme(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         // ⭐ A single button switching one value, with nothing to route through a view model — and it is

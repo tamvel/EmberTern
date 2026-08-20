@@ -9,65 +9,68 @@
 > to paste a multi-paragraph "shipped" report here, you are recreating the defect that produced a
 > 6 849-line `CLAUDE.md` twice — see `docs/history/30-claude-md-current-state-archive.md`.
 
-**Last verified: 2026-08-18.**
+**Last verified: 2026-08-19.**
 
 ---
 
 ## 0. ⏭ HANDOFF — read this first
 
-> ⭐⭐ **L5 IS CLOSED (2026-08-18) and the branch is pushed.** L5.0 → L5.5 are all accepted, and the
-> License Manager now has its full V1 depth: search, filters, the licences grid, re-issue with an explicit
-> reason, batch renewal, and — as of L5.5 — an encrypted verified backup, two explicit restore modes and a
-> plain JSONL escape hatch. ⏭ **Next: L6 (e-mail).** ⛔ It does not start without the user's go-ahead, and
-> it begins in a NEW session. Standing facts a next session must not rediscover: §42.4, §46.11 and §47.6.
+> ⭐⭐ **L6 IS CLOSED (2026-08-19). ⏭ Next: L7 — the production key ceremony.** A licence now reaches a
+> customer by e-mail, from the artifact the register already holds. All five sub-stages are user-accepted:
+> **L6.1** SMTP settings + DPAPI secret · **L6.1a** hamburger, Settings Center, Customer/Licences split ·
+> **L6.2** message composition · **L6.3** two senders, the send window, `licence.sent` /
+> `licence.send-failed`, and **Send test email…** · **L6.3a** the message the customer actually reads.
+> **Authority: `design/licensing-system.md` §48–§52; §52 is the closure.**
 >
-> ⚠⚠ **Read `design/licensing-system.md` §47.6 before quoting L5.5 as verified.** The full License Manager
-> suite was last measured at **424/424 mid-stage**, BEFORE the tabbed Storage rewrite and the two-mode
-> restore; the **EmberTern suite was not run at all** in that session. Both were the user's explicit
-> instruction on proportionality grounds, and both are recorded rather than implied. ⏭ The first full run
-> of either suite belongs to the next session that touches this code.
+> ✅ **§32's exit criterion is SATISFIED for the first time**: the user ran the whole loop against a real
+> Gmail account — the configuration test arrived, then a real licence arrived with `EmberTern.etlic`
+> attached, and the audit log carried the send. PL and EN both accepted in the mailbox.
 >
-> **Earlier milestone history:** **Licensing system V1** — ✅ L1, L2, L3, L4a and **L4b accepted** (2026-08-15).
-> ⭐ **EmberTern now licenses itself end to end**: verdict at startup, activation window, Settings ▸ Licence,
-> About line, expiry banner, and every path that opens a database attachment gated through ONE seam, EN + PL.
-> ⭐ **L5.0 + L5.1 + both QA rounds accepted 2026-08-17** and committed as one logical commit on
-> `feat/licensing-system`. ⛔ **NOT pushed — the user holds the push.**
-> ⭐ **L5.2 accepted 2026-08-17** (issuing history + artifact preview) and committed on the branch;
-> ⛔ **not pushed — the user holds the push.**
-> ⭐ **L5.3 accepted 2026-08-17** and committed on the branch; ⛔ **not pushed — the user holds the push.**
-> Re-issue of a single licence with an EXPLICIT reason (D‑1…D‑8 ratified by the user before implementation).
-> ⭐⭐ It turned out to be a **repair**: the reason was being inferred from the artifact count, contradicting
-> `IssueRequest.Reason`'s own contract, and two of the four append-only vocabulary values had never been
-> written by any code path. Details: `design/licensing-system.md` §45.
-> ⛔ **"P2" was dropped as a stage, on measurement**: it was never enumerated anywhere, and of the four
-> carried-forward items three are explicitly NOT License Manager work (`Calendar*` and `Icon.Name` are
-> product-level; English-only is a stage of its own). The one real cosmetic — the `Seats` field's literal
-> width — was folded into L5.3, which was already editing that form (§45.5 point 6).
-> ⭐ **L5.4 accepted 2026-08-18** (user-verified visually in Debug, both themes) and committed on the branch;
-> ⛔ **not pushed — the user holds the push.** Bulk selection + batch renewal (D‑1…D‑5 ratified before
-> implementation), **and** the licences list rebuilt as EmberTern's own grid. Details: §46.
-> ⭐⭐ The grid is not a lookalike: EmberTern's grid standard was **split out** of `ControlStyles.axaml`
-> into `Themes/DataGridStyles.axaml` and is now **LINKED** into the License Manager, the same move as the
-> `IconGeometries.axaml` split. One grid appearance, two applications (§46.6).
-> ⭐ **L5.5 accepted 2026-08-18** (user-verified visually in Debug, over three review rounds) — §47.
-> Encrypted verified backup with its own passphrase, two explicit restore modes, the five-type JSONL escape
-> hatch, and the Storage window. D‑1…D‑7 ratified before implementation. ⭐⭐ Two of the review rounds found
-> defects the suite did not, both of the same family — a declared value is not a realised one: `Backup…`
-> was laid out past a fixed-width window's edge and clipped (#386), and eight `SelectableTextBlock`s had
-> never been monospace because a type selector does not match a subclass (#385, live since L5.1).
+> ⭐ **The four properties L6 must not lose** (§52.2): the attachment is the STORED artifact byte for byte
+> and sending signs nothing · the preview IS the message · every attempt is recorded, failures included ·
+> every fact comes from the SIGNED payload, and ⛔ no language may inflect such a value (gotcha #393).
 >
-> ⚠ **L7 still owns the production key ceremony** — and until it runs, `TrustedKeys.Production` is empty and
-> no real licence verifies as usable in any build. That is deliberate, and `Valid` / `Grace` are therefore
-> proven by tests rather than by hand (§38.6).
+> ⚠ **Two seams touched existing code and are the first things to review in the diff**:
+> `IssuingWorkflow.ArtifactBytes` (§50.2) and the licence action row becoming a `WrapPanel` after a fifth
+> button clipped it (§51.4).
+>
+> ⏭ **Bulk sending is ratified as its OWN stage** (user, at closure) — ⛔ deliberately not built in L6.
+> §14.1 already holds its design: the full recipient list plus one explicit confirmation, never a silent
+> bulk send.
+>
+> ⚠⚠ **The company mailbox is STILL UNMEASURED** — everything above was proved on a **Gmail** account with
+> an app password (§48.1). If the production tenant refuses basic auth, that is a NEW CLASS behind
+> `ILicenseEmailSender`, not a rebuild, and the `.eml` route works either way. ⛔ Not a reason to hold L6
+> open, and ⛔ not a defect.
+>
+> ⚠ **Two RED tests in `EmberTern.Tests` are pre-existing and were deliberately NOT touched** — they are
+> **not** L6 regressions. Both surfaced on the first run of those guards since L5.5, which is the gap
+> §47.6 recorded. Details and proof of provenance: §49.9.
+> · `CharsetGuardSeamTests.TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver` — matches a COMMENT
+> in the License Manager csproj; present at `702ffae` before L6.1. ⚠ Its own remedy text is wrong here.
+> · `DatePresentationTests.NoUserFacingSurface_FormatsADateInvariantly` — `RestoreWorkflow.cs:352`, an
+> L5.5 machine-readable timestamp; that file has no diff in this work.
+>
+> **Standing facts a next session must not rediscover:** §42.4, §46.11, §47.6, and now §48.1 (the Gmail /
+> company distinction), §49.4 (`WithCulture="false"`) and §49.9 (the two reds).
+>
+> **Earlier milestones:** L1–L4b delivered the offline licensing loop end to end (verdict at startup,
+> activation window, Settings ▸ Licence, About line, expiry banner, one connection SEAM, EN + PL) — §34–§38.
+> **L5 CLOSED 2026-08-18** and pushed: search, filters, the licences grid, re-issue with a reason, batch
+> renewal, encrypted backup, two restore modes, the JSONL escape hatch and the Storage window — §39–§47.
+>
+> ⚠ **L7 still owns the production key ceremony** — until it runs, `TrustedKeys.Production` is empty and
+> no real licence verifies as usable in any build. Deliberate; `Valid` / `Grace` are proven by tests
+> rather than by hand (§38.6).
 >
 > **Work lives on the branch `feat/licensing-system`**, cut from `master` at `2c3da45`.
-> ⚠ **On this machine the remotes differ from the CLAUDE.md table and that is deliberate** (user, 2026-08-15):
-> this clone is from the personal GitHub and has ONE remote, `origin` → `github.com/tamvel/EmberTern`. There is
-> no `private` here. ⛔ Do not add one and do not rename `origin`. The company Gitea is synced from the work
-> machine, by hand, later.
+> ⚠ **On this machine the remotes differ from the CLAUDE.md table and that is deliberate** (user,
+> 2026-08-15): this clone is from the personal GitHub and has ONE remote, `origin` →
+> `github.com/tamvel/EmberTern`. There is no `private` here. ⛔ Do not add one and do not rename `origin`.
+> The company Gitea is synced from the work machine, by hand, later.
 >
 > Authority for every licensing decision: [`design/licensing-system.md`](design/licensing-system.md) — §0
-> (ratified D1–D16), §32 (the L1–L7 plan), §34–§38 (as built).
+> (ratified D1–D16), §32 (the L1–L7 plan), §34–§52 (as built; §52 closes L6).
 
 ⭐ The **audit follow-up** etap that this file used to hand off is **closed, merged to `master` and pushed
 to both remotes** (`2c3da45`). Its two licensing-flavoured leftovers — NPOI's OSMF EULA and ImageSharp's
@@ -77,15 +80,18 @@ Split Licence — are now this etap's, see §3.
 
 ## 1. Entry state
 
+**Verified 2026-08-19, by running the commands rather than by recall.**
+
 | | |
 |---|---|
-| Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`), pushed to `origin` **through L5.5**. ⏭ Not merged to `master` — L6 and L7 continue on it |
-| HEAD | the **L5.5 closing commit** on `feat/licensing-system` — ⭐ **pushed**. L5 closed with it, and the four commits `e3c746c` (L5.2), `df02aab` (L5.3), `009ea13` (L5.4) and this one went to `origin` together |
-| Build | **0 warnings / 0 errors**, in **both `Release` and `Debug`**, in **both solutions** (`TreatWarningsAsErrors=true`) |
-| Tests | ⚠⚠ **Deliberately not re-measured at the L5.5 close, and that is a decision rather than an omission.** Last full numbers: EmberTern **9 092** (2026-08-18, L5.4 close) · License Manager **424** (mid-L5.5, BEFORE the tabbed Storage rewrite and the two-mode restore). L5.5's own suites were run targeted and green (7 · 20 · 18 · 30 · 21). The user directed on proportionality grounds that the full-suite ceremony and the injection harness stop running per stage — see `licensing-system.md` §47.6 and gotcha #383 as amended. ⏭ **The first full run of either suite belongs to the next session that touches this code, and its totals are the ones to quote.** |
-| Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ They are separate on purpose: the private key must never be reachable from a solution that ships |
+| Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`), pushed to `origin` **through L5.5** |
+| HEAD | **`702ffae`** — the L5.5 closing commit. ⚠⚠ **THE WHOLE OF L6 IS ACCEPTED BUT NOT COMMITTED**: L6.1 → L6.3a sit in the working tree, unstaged, by the user's instruction |
+| Working tree | ⚠ **DIRTY on purpose** — L6.1 / L6.1a / L6.2 / L6.3 / L6.3a only. Nothing else |
+| Build | **0 warnings / 0 errors** — License Manager **Debug** and **Release**, and **EmberTern** (Debug) |
+| Tests | ⭐ **License Manager: 619 / 619** (0 failed, 0 skipped, total 619 — 535 before L6.2). ⛔ **The EmberTern suite was NOT run in full**; its two pre-existing failures are unchanged and are listed in §0 |
+| Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ Separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
-| Remotes | ⚠ **On THIS clone there is ONE remote**, `origin` → personal GitHub (see §0). The CLAUDE.md two-remote table describes the work machine; ⛔ do not add a remote here |
+| Remotes | ⚠ **On THIS clone there is ONE remote**, `origin` → personal GitHub (see §0). ⛔ Do not add a remote here |
 
 ⚠⚠ **Build BOTH configurations before asking for a visual check.** `CLAUDE.md` runs the app from
 `bin\Debug\`, and an etap built only in `Release` left the user verifying a binary that predated the
@@ -139,6 +145,7 @@ reasoning lives.
 | **Audit follow-up — Phase 7: `ARCHITECTURE.md` as-built** | 2026-08-15 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) |
 | **Licensing L5.4** — bulk selection + batch renewal, licences list as EmberTern's grid ✅ user-verified | 2026-08-18 | `design/licensing-system.md` §46; gotchas #381–#383 |
 | **Licensing L5 — CLOSED.** L5.5: encrypted verified backup, two restore modes, JSONL escape hatch, Storage window ✅ user-verified | 2026-08-18 | `design/licensing-system.md` §47; gotchas #384–#387 |
+| **Licensing L6 — CLOSED.** E-mail delivery end to end: **L6.1** SMTP settings + own-entropy DPAPI `smtp.dat` with four load states · **L6.1a** hamburger, Settings Center, PL/EN message language, template resolver, Customer/Licences split · **L6.2** `LicenseMessage` + a pure composer, the attachment byte-identical to `SaveArtifact` · **L6.3** `ILicenseEmailSender` with the SMTP and `.eml` senders, the Send licence window, `licence.sent` / `licence.send-failed`, and **Send test email…** · **L6.3a** the message the customer actually reads. ✅ **Proved against a real Gmail account**, PL and EN | 2026-08-19 | `design/licensing-system.md` §48–§52 |
 
 ---
 
@@ -166,7 +173,7 @@ use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
 | **L4a** — mechanism: policy, location, store, service, text, clock, freshness, 4 gate guards | ⭐ **delivered, no UI** — §37 |
 | **L4b** — surfaces: activation window, Settings ▸ Licence, About, banner, the connection SEAM, EN + PL | ✅ **accepted** — §38; ⚠ read §38.5 before touching a licence message |
 | **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ✅ **CLOSED 2026-08-18**, all six sub-stages accepted and pushed. **L5.0** data layer — schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch (§39). **L5.1 + two QA rounds** — Licences view, search, three filters, own AppBar and title bar, the licence re-parenting defect, spacing and uniform control heights (§40–§43). **L5.2** — issuing history and artifact preview, current marked from the register's POINTER never from the ordering (§44). **L5.3** — re-issue with an operator-chosen reason, validated against a measured diff of the SIGNED payload (§45). **L5.4** — bulk selection and batch renewal, and the licences list rebuilt as EmberTern's own grid, LINKED rather than reproduced (§46). **L5.5** — encrypted verified backup with its own passphrase, two explicit restore modes with the previous register always preserved, the five-type JSONL escape hatch, and the Storage window (§47). ⚠ Read §47.6 before quoting L5.5's verification: it is deliberately narrower than earlier stages' |
-| **L6** — e-mail: `ILicenseEmailSender`, SMTP + `.eml`, DPAPI settings, template, send audit | ⏳ not started |
+| **L6** — e-mail | ✅ **CLOSED 2026-08-19**, all five sub-stages accepted. Delivery end to end: the SMTP settings and their own-entropy DPAPI secret with four load states (§48); the Settings Center, message language and Customer/Licences split (§49); a pure composer whose attachment is byte-identical to `SaveArtifact` (§50); `ILicenseEmailSender` with an SMTP and an `.eml` sender, the Send licence window whose preview IS the message, `licence.sent` / `licence.send-failed`, and **Send test email…** (§51); and the message the customer reads (§51.9). ⭐ **Proved against a real Gmail account** — §32's exit criterion satisfied. ⚠ The COMPANY mailbox is still unmeasured (§48.1) — a NEW CLASS behind the sender contract if it refuses basic auth, not a rebuild. ⛔ Bulk sending was deliberately NOT built; it is its own stage below. Closure: §52 |
 | **L7** — hardening and closing: ⭐ **the real key ceremony**, public key shipped, docs | ⏳ not started |
 
 ⚠ **`TrustedKeys.Production` is empty and the REAL key ceremony has not been performed** — deliberately
@@ -191,6 +198,7 @@ whether `NONE` should stay in `CharsetCatalog.Supported` (lossy and machine-depe
 
 | Item | Scope / why it waits | Reference |
 |---|---|---|
+| **Bulk sending of licences** | ⭐ Ratified as its OWN stage by the user at L6's closure — deliberately left out of L6. §14.1 already holds the design and it is the part that must not be softened: the FULL recipient list on screen, ONE explicit confirmation, then a per-message report. ⛔ No silent bulk send. ⚠ The pieces exist — `LicenceDelivery` records one line per attempt, and the composer is pure — so this is a surface plus a policy, not new plumbing. | `design/licensing-system.md` §14.1 |
 | **Spacing stage** | 969 local `Spacing`/`Padding`/`Margin` values app-wide; `Padding` reads a role **zero** times. Ratified as its own stage; a guard already prevents growth. | `design/product-polish-m5-next-session.md` |
 | **App-wide UX sprint** | Global control density (base controls sit on Fluent's 32 px) **+** monospace font consolidation — re-measured at **7 strings / 95 occurrences / 33 files**, so it decides `Cascadia Code` vs `Cascadia Mono` for every code surface at once. | `design/settings-center.md` §2.7, §7.1 |
 | **`KindLabel` / `SymbolKind`** | ~8 Quick Info fact *values* that are our own words. A **contract** decision on `QuickInfoFact` (Core should hand up `SymbolKind` as data), not cleanup. ⛔ Do not declare kind keys in Core — App already owns that vocabulary. Cost today: a Polish reader sees *"Rodzaj: Table"* while the tree says *"Tabela"*. | `history/28` (C2) |

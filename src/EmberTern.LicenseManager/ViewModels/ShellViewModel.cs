@@ -7,6 +7,7 @@ using CommunityToolkit.Mvvm.Input;
 using EmberTern.Licensing;
 using EmberTern.Licensing.Issuing;
 using EmberTern.LicenseManager.Data;
+using EmberTern.LicenseManager.Email;
 using EmberTern.LicenseManager.Services;
 
 namespace EmberTern.LicenseManager.ViewModels;
@@ -32,6 +33,10 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     private readonly IssuingWorkflow _workflow;
     private readonly SigningSession _session;
     private readonly Func<DateTimeOffset> _clock;
+
+    // ⚠ Null off Windows, where DPAPI does not exist — the same platform fact that leaves `Settings` null.
+    //   ⛔ Not a disabled button: the PLATFORM decides whether e-mail exists here at all.
+    private readonly SmtpSettingsStore? _smtpStore;
 
     /// <summary>
     /// Asks the platform where to save. Takes a suggested file name, returns the chosen path or
@@ -64,6 +69,14 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         BatchRenewal = new BatchRenewalViewModel(
             register, _workflow, session, Browser, message => Message = message);
         Storage = new StorageViewModel(register, paths, _clock);
+
+        // ⭐ Built here rather than when the window opens, for the same reason Storage is: the settings
+        //    are read ONCE, so re-opening the window shows what the operator last typed rather than
+        //    silently re-reading the file underneath them.
+        // ⚠ The OS check is the composition root's job, not the view model's: the whole application is
+        //    DPAPI-bound on Windows (LocalDpapiProtector), and this is where that is known.
+        _smtpStore = OperatingSystem.IsWindows() ? SmtpSettingsStore.At(paths) : null;
+        Settings = _smtpStore is null ? null : new SettingsViewModel(_smtpStore);
 
         ReloadCustomers();
         Message = StatusMessage.Info($"Signing with key {session.KeyId}.");
@@ -110,6 +123,20 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     /// should take a deliberate step to reach.</para>
     /// </summary>
     public StorageViewModel Storage { get; }
+
+    /// <summary>
+    /// The application's preferences: General, and E-mail.
+    ///
+    /// <para>⭐ Its OWN window (D‑5), reached from the hamburger menu exactly as EmberTern's is, and
+    /// deliberately not a tab in <see cref="Storage"/>: that window is about looking after the register of
+    /// record, and a preference — least of all a credential for an outside service — is not one of its
+    /// questions.</para>
+    ///
+    /// <para>⚠ <see langword="null"/> when not running on Windows, because the e-mail credential is
+    /// protected with DPAPI and there is nothing honest to show without it. ⛔ The window is simply not
+    /// opened — no disabled form promising a configuration this platform cannot keep.</para>
+    /// </summary>
+    public SettingsViewModel? Settings { get; }
 
     /// <summary>Which of the two views is showing.</summary>
     [ObservableProperty]
@@ -164,9 +191,51 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         }
 
         IsLicensesView = false;
+
+        // ⭐ …and onto the LICENCES tab of that customer, not their contact details. The operator asked to
+        //    open a LICENCE; landing on the Customer page would answer a question they did not ask and
+        //    would hide the very row they double-clicked. ⚠ A consequence of the Customer/Licences split,
+        //    and the one place where it is not enough to leave the tab where it was.
+        IsCustomerTab = false;
+
         SelectedCustomer = customer;
         SelectedLicense = Licenses.FirstOrDefaultById(summary.License.LicenseId);
     }
+
+    // ── The customer's two pages ────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Which page of the selected customer is showing: their DETAILS, or their LICENCES.
+    ///
+    /// <para>⭐⭐ <b>Two pages because there are two questions</b> — <i>"who is this customer?"</i> and
+    /// <i>"what licences do they have and what happened to them?"</i> They used to share one scrolling
+    /// column, so contact details ran into licence terms and then into the issuing history with no
+    /// boundary the eye could use. ⛔ Not a spacing problem: no amount of gutter makes "which of these
+    /// belongs to what I am looking at" answerable.</para>
+    ///
+    /// <para>⭐ The shape is <see cref="StorageViewModel"/>'s Backup/Restore switch, and the markup is the
+    /// same <c>Border.view-switch</c> + <c>Button.view-tab</c> the main view switch uses. ⛔ Not a
+    /// <c>TabControl</c>, for the reason §40.2 recorded: <c>ControlStyles.axaml</c> is not linkable here,
+    /// so a <c>TabItem</c> would fall back to Fluent's own chrome.</para>
+    ///
+    /// <para>⚠ <b>Selecting a different customer KEEPS the current page</b> (user decision). An operator
+    /// comparing licences across customers stays in licences; being thrown back to contact details on
+    /// every selection would make the switch feel like it undoes itself.</para>
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLicencesTab))]
+    private bool _isCustomerTab = true;
+
+    /// <summary>The customer's licences, their terms, and the history of what was issued.</summary>
+    public bool IsLicencesTab => !IsCustomerTab;
+
+    /// <summary>Shows the customer's own details.</summary>
+    [RelayCommand]
+    private void ShowCustomerTab() => IsCustomerTab = true;
+
+    /// <summary>Shows the customer's licences.</summary>
+    [RelayCommand]
+    private void ShowLicencesTab() => IsCustomerTab = false;
 
     // ── Customers ───────────────────────────────────────────────────────────────────────────────────
 
@@ -696,6 +765,102 @@ public sealed partial class ShellViewModel : MessageHostViewModel
 
         History.SelectCurrent();
         Message = VerdictText.Describe(_workflow.Inspect(_session, current));
+    }
+
+    /// <summary>
+    /// Prepares the <b>Send licence</b> window for the selected licence, or explains why it cannot open.
+    ///
+    /// <para>⭐⭐ <b>Everything that can refuse happens HERE, in the view model</b> — no licence selected,
+    /// e-mail not configured, settings unreadable, the customer has no address, the licence was never
+    /// issued. The window therefore only ever opens on a message that CAN be sent, and every refusal is
+    /// testable without a window. ⛔ A window that opens and then says "actually, no" is a window the
+    /// operator has to close to learn nothing.</para>
+    ///
+    /// <para>⭐⭐ <b>The attachment comes from <c>license_current_artifact</c></b> — the register's POINTER,
+    /// the same authority <see cref="InspectLatest"/> reads. ⛔ Never <c>Artifacts[0]</c>, and ⛔ nothing is
+    /// signed here: sending an e-mail must never mint a new <c>iat</c>, which the client would install as
+    /// a replacement for the licence the customer already holds (§16.4).</para>
+    ///
+    /// <para>⚠ The settings are read FRESH, not from the Settings window's in-memory copy: the operator
+    /// may have opened that window, typed, and not saved — and what gets sent must be what is saved.</para>
+    /// </summary>
+    public SendLicenceViewModel? PrepareSendLicence()
+    {
+        if (SelectedCustomer is not { } customer || SelectedLicense is not { } licence)
+        {
+            Message = StatusMessage.Warning("Select a licence to send.");
+            return null;
+        }
+
+        if (_smtpStore is null)
+        {
+            Message = StatusMessage.Warning(
+                "Sending e-mail is only available on Windows, because the SMTP password is protected " +
+                "with Windows DPAPI. Export the licence to a file instead.");
+            return null;
+        }
+
+        var current = _register.GetCurrentArtifact(licence.LicenseId);
+        if (current is null)
+        {
+            Message = StatusMessage.Warning(
+                "This licence has never been issued, so there is no artifact to send. Issue it first.");
+            return null;
+        }
+
+        SmtpSettingsLoad load;
+        try
+        {
+            load = _smtpStore.Load();
+        }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+        {
+            Message = StatusMessage.Error($"The e-mail settings could not be read: {e.Message}");
+            return null;
+        }
+
+        // ⭐ The store's four states, answered separately — the reason it reports them (§48.3).
+        switch (load.State)
+        {
+            case SmtpSettingsState.NotConfigured:
+                Message = StatusMessage.Warning(
+                    "E-mail is not configured yet. Open Settings ▸ E-mail and enter at least a sender " +
+                    "address.");
+                return null;
+
+            case SmtpSettingsState.Unreadable:
+                Message = StatusMessage.Error(
+                    load.Problem ?? "The e-mail settings could not be read, so nothing can be sent.");
+                return null;
+
+            default:
+                break;
+        }
+
+        var problems = LicenseMessageComposer.Problems(current, customer, load.Settings);
+        if (problems.Count > 0)
+        {
+            Message = StatusMessage.Warning(string.Join(" ", problems));
+            return null;
+        }
+
+        var model = new SendLicenceViewModel(
+            LicenseMessageComposer.Compose(current, customer, load.Settings),
+            load.Settings,
+            new LicenceDelivery(_register));
+
+        if (load.State == SmtpSettingsState.PasswordUnavailable)
+        {
+            // ⚠ Not a refusal: the message can be composed and saved as a file, and an attempt to send
+            //   will fail with the SERVER's own words rather than with our guess about them.
+            model.Message = StatusMessage.Warning(
+                load.Problem ??
+                "The stored SMTP password could not be read on this Windows account, so signing in will " +
+                "probably fail. Saving the message as an .eml file still works.");
+        }
+
+        Message = StatusMessage.None;
+        return model;
     }
 
     /// <summary>

@@ -190,18 +190,90 @@ public sealed class LicenseManagerThemeTests
 
         foreach (var file in Markup())
         {
+            var relative = Path.GetRelativePath(Root, file).Replace('\\', '/');
+
             foreach (Match match in pattern.Matches(ReadMarkup(file)))
             {
-                if (IsNothing(match.Groups["v"].Value))
+                var value = match.Groups["v"].Value;
+
+                if (IsNothing(value) || IsAllowed(relative, value))
                 {
                     continue;
                 }
 
-                offenders.Add($"{Path.GetRelativePath(Root, file)}: {match.Value.Trim()}");
+                offenders.Add($"{relative}: {match.Value.Trim()}");
             }
         }
 
         Assert.True(offenders.Count == 0, "Literal metrics: " + string.Join("; ", offenders));
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>The ONE allowance list, and every entry names a file, a value and a reason.</b>
+    ///
+    /// <para>It exists for exactly one file. <c>Themes/MenuStyles.axaml</c> reproduces EmberTern's menu
+    /// appearance (decision D‑7 = B), and this application's literal rule is STRICTER than the one
+    /// EmberTern applies to its own <c>ControlStyles.axaml</c> — which has a per-file allowance table of
+    /// its own — so a faithful reproduction cannot pass without one here too.</para>
+    ///
+    /// <para>⭐ Two of EmberTern's seven literals are NOT in this list, because they did not need to be:
+    /// <c>Pad.MenuItem</c> already names <c>10,3</c> and <c>Border.All</c> already names <c>1</c>, so the
+    /// reproduction writes the tokens and renders identically. ⛔ The five below have no token, and none
+    /// is invented for them: a <c>Thickness</c> role created for one element would be starting the
+    /// ratified spacing stage through the back door.</para>
+    ///
+    /// <para>⚠ Keyed by file AND value, so a sixth literal in the same file still fails. An allowance
+    /// that covered a whole file would be an exemption, and an exemption is how a guard becomes
+    /// decoration.</para>
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> AllowedLiterals =
+        new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["src/EmberTern.LicenseManager/Themes/MenuStyles.axaml"] =
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["4"] =
+                        "ContextMenu's corner radius. A floating surface, deliberately 4 where "
+                        + "Radius.Surface is 3 — EmberTern carries the identical note. ⛔ Not Radius.Chip "
+                        + "or Radius.Tab: both happen to be 4 today, and borrowing an unrelated role "
+                        + "because its number matches is how a role stops meaning anything.",
+                    ["0,4"] =
+                        "The menu's own top/bottom band, so the first and last row do not touch the "
+                        + "border. No Thickness role names it.",
+                    ["3,0"] =
+                        "The inset of a row's highlight inside the menu's border. No role names it.",
+                    ["0,0,4,0"] =
+                        "The gap between the icon column and the label. No role names it.",
+                    ["6,4"] =
+                        "The separator's air, above and below. No role names it.",
+                },
+        };
+
+    private static bool IsAllowed(string relativePath, string value) =>
+        AllowedLiterals.TryGetValue(relativePath, out var allowed) && allowed.ContainsKey(value.Trim());
+
+    /// <summary>
+    /// ⭐ An allowance stays a DECISION rather than becoming a hiding place: an entry that no longer
+    /// matches anything in its file is stale and must go, or it silently excuses a future literal.
+    /// </summary>
+    [Fact]
+    public void EveryAllowedLiteralIsStillActuallyPresent()
+    {
+        var stale = new List<string>();
+
+        foreach (var (relative, values) in AllowedLiterals)
+        {
+            var path = Path.Combine(Root, relative.Replace('/', Path.DirectorySeparatorChar));
+            Assert.True(File.Exists(path), $"The allowance names a file that does not exist: {relative}");
+
+            var markup = ReadMarkup(path);
+            foreach (var value in values.Keys.Where(v => !markup.Contains($"\"{v}\"", StringComparison.Ordinal)))
+            {
+                stale.Add($"{relative}: '{value}' is allowed but no longer written there");
+            }
+        }
+
+        Assert.True(stale.Count == 0, "Stale literal allowances: " + string.Join("; ", stale));
     }
 
     [Fact]
@@ -356,11 +428,27 @@ public sealed class LicenseManagerThemeTests
             "avares://EmberTern.LicenseManager/Assets/Branding/EmberTern.ico",
             styles, StringComparison.Ordinal);
 
+        // ⚠⚠ NARROWED TO THE `<Window>` ELEMENT (L6.1a), and the narrowing is a REPAIR rather than a
+        //    relaxation. This used to sweep each view for the raw substring "Icon=", which was the same
+        //    set only for as long as no markup here used any OTHER property called Icon. The hamburger
+        //    menu added `<MenuItem Icon="{lm:MenuIcon …}" />` — a different property on a different type,
+        //    with nothing to do with the window's OS icon — and the guard went red while reporting
+        //    nothing that was wrong.
+        // ⭐ The guard's domain was always "a WINDOW must not set its own icon", so it is now bounded by
+        //    that instead of by the text; it keeps its full strength (an `Icon=` on a Window opening tag
+        //    still fails) and stops depending on what else a view happens to contain. Same lesson as
+        //    gotcha #379: name the subject, do not describe it by what it looks like.
         foreach (var file in Markup().Where(f => f.Contains(
                      $"{Path.DirectorySeparatorChar}Views{Path.DirectorySeparatorChar}",
                      StringComparison.Ordinal)))
         {
-            Assert.DoesNotContain("Icon=", ReadMarkup(file), StringComparison.Ordinal);
+            var opening = Regex.Match(ReadMarkup(file), @"<Window\b[^>]*>", RegexOptions.Singleline);
+            if (!opening.Success)
+            {
+                continue;
+            }
+
+            Assert.DoesNotContain("Icon=", opening.Value, StringComparison.Ordinal);
         }
     }
 

@@ -224,6 +224,12 @@ public sealed class IssueReasonUiTests
 
         shell.SelectedCustomer = shell.Customers.First();
         shell.SelectedLicense = shell.Licenses.First();
+
+        // L6.1a: the licence domain moved onto the customer's LICENCES page, and a page that is not
+        // showing is not laid out — its controls report zero bounds and its lists realise no rows. So the
+        // page is activated BEFORE any measurement. The guards keep every assertion they had; they simply
+        // stop depending on both domains sharing one scrolling column.
+        ViewProbe.ShowLicencesPage(window, shell);
         window.UpdateLayout();
         return (window, shell);
     }

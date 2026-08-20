@@ -3178,3 +3178,773 @@ register and no pending-restore mechanism (D‑6). ⛔ No keystore backup — th
 §12.3 and §24.2 describe. ⛔ `Tokens.axaml`, `Typography.axaml` and `Colors.axaml` untouched — zero new
 tokens, zero new colours. ⛔ The License Manager is still English-only (§40.5). ⛔ `FluentBridge`'s missing
 `Calendar*` keys and `Icon.Name` still untouched — product work, for both applications at once.
+
+---
+
+## 48. L6.1 — as built (2026-08-19)
+
+⭐ **The SMTP settings, their secret, and the window that edits them.** No message is composed and nothing
+is sent: L6.1 is the credential and its store. ✅ **Accepted by the user after looking at the running
+application in both themes.**
+
+⛔ Not in this stage: `ILicenseEmailSender`, either sender, any message body, any send. That is L6.2/L6.3.
+
+### 48.1 D‑2 — the SMTP measurement, and exactly what it settled
+
+The plan required the auth question to be **measured before any SMTP code was written** (§32, risk #3).
+It was, on 2026-08-19, with a throwaway probe that spoke SMTP by hand and **ended at `AUTH` + `QUIT` —
+the `DATA` command was never issued, so no message could be sent even by accident**.
+
+| Question | Answer |
+|---|---|
+| `smtp.gmail.com:587`, STARTTLS | TLS 1.3, `TLS_AES_256_GCM_SHA384`, cert `CN=smtp.gmail.com` |
+| Mechanisms advertised after TLS | `LOGIN  PLAIN  XOAUTH2  PLAIN-CLIENTTOKEN  OAUTHBEARER  XOAUTH` |
+| Real `AUTH LOGIN` with an app password | ⭐ **`235 Accepted`** |
+
+⭐ **Consequences, both load-bearing:** `System.Net.Mail` suffices, so ⛔ **MailKit is not added**; and
+basic auth over STARTTLS is a working implementation, so `SmtpLicenseEmailSender` is viable.
+
+⚠⚠ **What it did NOT settle, stated so nobody over-reads it: the COMPANY mailbox is UNMEASURED.** Gmail
+was a test account, and the production mailbox is a company one the user will check later. Risk #3 is
+therefore **still open**, and §32's exit criterion ("a real message delivered and read") is **not**
+satisfied by this measurement. ⭐ The design absorbs a negative answer as a NEW CLASS behind the L6.3
+sender contract, not a rebuild — and the `.eml` path works regardless.
+
+⚠ A second measurement, made because the first would have been worthless without it: `SmtpClient`,
+`MailMessage`, `AlternateView`, `Attachment` and `SmtpDeliveryMethod.SpecifiedPickupDirectory` all compile
+**0 warnings / 0 errors** under this repository's exact settings. ⭐ That last one means the `.eml` sender
+needs no hand-written MIME and no package at all.
+
+### 48.2 The secret — decision D‑1 as built
+
+`Email/LocalDpapiProtector.cs` — Windows DPAPI, CurrentUser scope, ~110 lines, **local to this
+application**.
+
+⚠ **The design said "the same mechanism EmberTern uses (`DpapiSecretProtector`)", and that turned out to
+mean the same CONSTRUCTION, not the same code**: `DpapiSecretProtector` lives in `EmberTern.App` and
+reaches `EmberTern.Core.Security.SecretProtector` and `UiStrings`. ⛔ The License Manager references
+neither project and must not start to.
+
+- ⭐ **Its own entropy: `EmberTern.LicenseManager.v1.smtp`.** ⛔ Never `EmberTern.App`'s
+  `"EmberTern.v1.secret"` — one namespace shared by two applications would make their at-rest secrets
+  interchangeable, which is the opposite of what separate files with separate protection exist to
+  achieve. Pinned by `SmtpSettingsStoreTests.TheDpapiNamespaceIsThisApplicationsOwn`.
+- ⭐ `TryUnprotect` reports failure rather than throwing: a settings file carried to another Windows
+  account decrypts to nothing, and that is an ORDINARY state, not an error.
+- ⚠⚠ **The `OperatingSystem.IsWindows()` guards are compiler-mandated and must stay INLINE.** Measured
+  with a negative control: without them the platform analyzer raises **CA1416 on every `ProtectedData`
+  member**, and under `TreatWarningsAsErrors` that is four build ERRORS. ⚠ CA1416 **does not follow a call
+  into a helper**, so extracting the four lines into a `RequireWindows()` turns the build red again — and
+  the alternative, `[SupportedOSPlatform("windows")]`, propagates to every caller and then into every
+  test (measured: 20 errors). `EmberTern.App` writes it inline for exactly this reason.
+
+### 48.3 `smtp.dat` — four answers, not a bool and a shrug
+
+`ManagerPaths` gains a **third** file on the principle it already states: separate files, separate
+protection, separate decisions. ⛔ `smtp.dat` is **not** part of a register backup — a DPAPI CurrentUser
+blob would not survive the move anyway.
+
+⭐⭐ **`SmtpSettingsStore.Load` answers FOUR states, and that is the point of the class:**
+
+| State | Meaning |
+|---|---|
+| `NotConfigured` | No file yet — a first run, ⛔ not a failure |
+| `Loaded` | Read in full, password included |
+| `PasswordUnavailable` | Settings readable, password not — another Windows account or machine |
+| `Unreadable` | The file exists and could not be understood at all |
+
+⚠ **It exists because of a defect this project already carries**: `PreferencesService` turns a failed
+read into validated DEFAULTS, so a transient failure serves defaults for the session and the next save
+persists them as if the user had chosen them (`docs/current-state.md`, deferred debt). ⛔ A store that
+answers "here are your settings" to both *"there are none yet"* and *"I could not read them"* cannot avoid
+that class of bug however careful its callers are.
+
+⚠ **Deliberately different from `settings.dat`'s rule that a SAVE REFUSES over a file it cannot read.**
+That rule protects connection profiles, passwords and workspace — data the user cannot retype. This file
+holds six fields the operator is looking at while they save, so refusing would TRAP them: a corrupted
+`smtp.dat` could never be repaired from the window that exists to edit it. ⛔ The difference is the blast
+radius, not a relaxation of the principle. ⚠ An `Unreadable` file does **not** fill the form with recovered
+fragments, so a save cannot silently overwrite something half-understood.
+
+### 48.4 ⛔ Implicit TLS (port 465) is not offered, and that is the ClientLibraryPath lesson
+
+`System.Net.Mail.SmtpClient` implements **STARTTLS only** — its `EnableSsl` means "upgrade", not "connect
+encrypted". Offering the mode would offer the operator a decision that can have no effect, which is
+exactly the defect that removed `ClientLibraryPath` from EmberTern's connection dialog. So
+`SmtpSecurity` has **two** members and `SmtpSettingsValidationTests` pins that there are two and that
+neither is named `Implicit`. ⭐ If a mailbox ever needs it, that is a new sender class, not a new enum
+value.
+
+⛔ One combination is REFUSED rather than warned about: **a username without STARTTLS**, because a
+password on a connection that never becomes encrypted is a password on the wire.
+
+### 48.5 What only the user could judge
+
+✅ Accepted after a visual pass in both themes. ⚠ Every field is DATA — no host, port or provider name
+appears anywhere in this application's code — because the company mailbox is unmeasured and moving to it
+must be four fields typed into a window rather than a code change.
+
+---
+
+## 49. L6.1a — as built (2026-08-19)
+
+⭐ **A UX correction taken BEFORE L6.2, on the user's instruction, not a feature stage.** The gear icon
+became a hamburger, the e-mail settings became a Settings Center, and — in the same pass — the customer
+detail pane was split into two pages. ✅ **Accepted by the user after looking at the running application
+in both themes**, over three review rounds.
+
+### 49.1 The hamburger — decision D‑7 = B
+
+The application menu is EmberTern's pattern, taken rather than invented: a plain `Button Classes="icon"`
+carrying `Icon.Menu`, first in the action zone, **unfenced**, hosting a **`ContextMenu`** opened from
+code-behind, `Placement="BottomEdgeAlignedLeft"`, and a **second click closes it**. ⛔ NOT a `MenuFlyout`:
+that needs a second chrome variant for `MenuFlyoutPresenter` — the trap that grew `MessageBanner` six
+per-host variants. Rows: **`Settings…`** · separator · **`About`** (a deliberate disabled placeholder,
+⛔ no About window is built). ⚠ Storage and the theme toggle deliberately **stay in the title bar**.
+
+⚠⚠ **The License Manager had NO menu styling at all**, so a `ContextMenu` here would have fallen back to
+Fluent's own: 27 px rows, 14 pt type, and hover painted from `SystemAccentColor`. The block was measured
+type-free and token-only — i.e. splittable and linkable exactly as `IconGeometries.axaml` and
+`DataGridStyles.axaml` were — and **the split was offered and declined** (D‑7 = B) to keep
+`EmberTern.App` closed during this stage.
+
+⭐ **So the copy is guarded instead.** `Themes/MenuStyles.axaml` reproduces **11 of EmberTern's 12 menu
+selectors**, and `MenuStyleDriftTests` compares the two **setter by setter, after resolving tokens**,
+failing in three directions: a drifted value · EmberTern gains a selector this application has not
+decided about · this file invents one of its own.
+
+**Two deliberate differences, both recorded so the guard can allow exactly them:**
+
+1. ⛔ `TextBlock#PART_InputGestureText` is not reproduced — it styles the gesture column, and this
+   application has no command registry and no row that shows one (dead-surface trap, #233).
+2. ⭐ Two of EmberTern's literals are written here as **the tokens that already name them** —
+   `Pad.MenuItem` **is** `10,3` and `Border.All` **is** `1`. ⚠ Not cosmetic: this application's
+   `NoMetricIsWrittenAsALiteralWhereATokenNamesIt` has **no per-file allowance list and is therefore
+   STRICTER than the guard EmberTern applies to its own file**, so a verbatim copy would fail the build.
+   The five remaining literals have no token and deliberately gain none — inventing a `Thickness` role
+   for one element would start the ratified spacing stage through the back door. They sit in one
+   allowance table, keyed by file AND value, beside a guard that fails if an entry goes stale.
+
+⚠ `{lm:MenuIcon}` is the third mirror of an EmberTern helper in this application (after
+`IconGeometryConverter` and `ThemeToggleIconConverter`): EmberTern's builds an `SvgIcon`, a control this
+application does not have. ⭐ The GEOMETRIES are still shared. ⭐ The glyph's stroke binds to the
+**MenuItem's** foreground, so the disabled `About` row dims its icon with its text — EmberTern gets that
+free through inheritance; a bare `Path` does not.
+
+### 49.2 Settings Center — General and E-mail
+
+`SettingsWindow` / `SettingsViewModel` (renamed from `EmailSettings*`, ⛔ no transitional names, #195),
+shaped like EmberTern's own: a navigation column, a hairline, and **one page per category gated by
+`IsVisible`**.
+
+- **General** — *Application language* (English / Polski), ⛔ **DISABLED** (decision D‑8).
+- **E-mail** — everything L6.1 shipped, plus *Message language*.
+
+⭐⭐ **D‑8 as built: the row is SHOWN so the structure is real and L8 has a place to land, and it stores
+NOTHING.** The view model gives that picker **no setter at all**, so there is not even an accidental path
+to persisting a choice that would change nothing — which is the `ClientLibraryPath` defect again. The
+reason is on screen, not only in a tooltip. Precedent: EmberTern shipped its own `Settings…` row disabled
+for exactly this reason (hamburger design §4 A).
+
+⭐ `Settings/ManagerSettingsCatalog.cs` gathers every word the window says into ONE place — ~40 lines of
+**properties**, ⛔ never `const`, never `static readonly`, and never a table built in a static
+constructor. That last one is EmberTern's most expensive settings lesson: its `SettingsCatalog` froze the
+whole vocabulary to the language in force when the type was first touched. ⚠ This is the WHOLE of L6.1a's
+preparation for L8 — ⛔ no resource files, no `ResourceManager`, no culture plumbing.
+
+### 49.3 Message language, and `smtp.dat` v1 → v2
+
+`MessageLanguages` is the ONE list: `pl`, `en`, default **`pl`** (decision D‑9 — the customers are Polish
+companies). The settings picker, the store's validation and the template resolver all read it.
+
+⭐ **`smtp.dat` goes from v1 to v2**, adding `messageLanguage`. ⚠ This is the SETTINGS file's version;
+⛔ **the register schema is untouched and stays at 2.** Every stored field is nullable by design, so a v1
+file written by L6.1 reads cleanly and takes the default — **no migration step, no rewrite on read,
+nothing an operator has to do**. Pinned by a hand-built v1 file, because a file the current writer
+produced is not evidence about the previous one.
+
+⚠⚠ **The message language commits with the page's Save, NOT on selection — a deliberate narrowing of the
+approved plan.** It lives in the same file as the SMTP settings, so "apply on selection" would mean a
+read-modify-write of `smtp.dat` on every pick: it would either persist half-typed SMTP edits the operator
+had not committed, or re-read the file underneath them and lose those edits. The audit follow-up's item E
+is this project's own scar from that shape. ⭐ So the E-mail page has ONE Save, visible only on that page.
+
+⚠ The language is **global, not per-customer** — D‑4 declined a `language` column on `customers` — so
+sending to a customer who reads the other language means switching the setting first. Said in the window.
+
+### 49.4 The template resolver — mechanism only
+
+`Email/Templates/LicenceEmail.{pl,en}.{html,txt}`, embedded, resolved by `LicenseEmailTemplates`.
+⛔ **The four files are deliberately EMPTY**: L6.1a delivers the mechanism and the structure; the wording
+and the substitutions are L6.2's, by instruction. ⭐ **There is no `if` anywhere that picks a language** —
+a code plus a body kind NAME a resource, so a third language is two files plus one row.
+
+⚠⚠⚠ **`WithCulture="false"` is load-bearing, and without it the templates do not reach the assembly at
+all.** MSBuild reads the segment before the extension as a CULTURE, and `pl` and `en` are both real
+culture names — so all four were compiled into **satellite assemblies**:
+
+```
+Kultura 'pl' została przypisana do pliku 'Email\Templates\LicenceEmail.pl.html'.
+csc … /out:obj\Debug\net9.0\pl\EmberTern.LicenseManager.resources.dll
+```
+
+⚠ Every surface said it was fine — `msbuild -getItem` listed all four, the csc command line carried all
+four `/resource:` switches, the build reported 0/0 — and `GetManifestResourceNames()` returned only
+Avalonia's `!AvaloniaResources`. At run time that would surface as an **empty message body, not an
+error**. ⭐ `LicenseEmailTemplateTests` asserts embedding rather than trusting it, and caught this on its
+first run. Gotcha #388.
+
+### 49.5 The Settings window's size — user QA round 2
+
+The window first shipped with `SizeToContent="Height"` and `CanResize="False"`, so it **measured
+whichever page was showing**: General opened small, E-mail opened taller than the reporting screen, and
+switching resized the window under the operator.
+
+⭐ **The repair is EmberTern's own `SettingsWindow`, taken rather than invented**: a declared
+`Width`/`Height` with `Min*` floors, **no `SizeToContent`**, rows `Auto,*,Auto` so the body FILLS, and a
+`ScrollViewer` around the **content column only**. ⭐ The navigation and hairline are sibling COLUMNS and
+the heading and footer are sibling ROWS, so none of them can scroll **by construction**. ⛔ Nothing was
+shrunk: no control, no font, no description.
+
+⚠ Two things easy to miss, both found while doing it: `Border.dialog-body TextBox` is a **descendant**
+selector and is what gives every field its `Margin.FieldGap`, so the Border had to stay the pages'
+ancestor; and a `Panel` centres its children, so each page needs `VerticalAlignment="Top"` or the short
+one floats in the middle of the tall window.
+
+`SettingsWindow.axaml.cs` clamps to the screen's working area on open — ⭐ it only ever **shrinks**, it is
+not a fit-to-content mechanism, and the height still never depends on the page.
+
+### 49.6 `Forget settings` is confirmed — user QA round 3
+
+⚠⚠ **It shipped without a confirmation and the user refused it, correctly.** The original reasoning —
+"there is nothing here the operator cannot retype" — weighed the wrong thing: the cost of retyping is not
+the point, an irreversible act on a single click is, and the stored password is gone for good once the
+file is deleted.
+
+⭐ `ConfirmViewModel` / `ConfirmRequest` / `ConfirmDialog` mirror EmberTern's `ConfirmDialog` +
+`ConfirmDialogViewModel`: a request in, a boolean out, a `RequestClose` the window turns into
+`Close(result)`, `Width="420"`, `flat` Cancel first and `primary` action last, `IsCancel` / `IsDefault`.
+⛔ **Without** EmberTern's "do not ask again" checkbox — nothing asked for one, and the only thing it
+could suppress is a warning before a destructive act (#233).
+
+⭐⭐ **With no confirmer wired the action REFUSES rather than proceeding.** That is the half worth having:
+proceeding would mean a destructive action silently losing its guard the moment a view forgot to attach
+one, with every other test still green.
+
+### 49.7 ⭐⭐ Customer / Licences — the detail pane split
+
+The right-hand pane was ONE scrolling column in which contact details ran into licence terms and then into
+the issuing history, with no boundary the eye could use. ⛔ Not a spacing problem — no amount of gutter
+makes *"which of these belongs to what I am looking at"* answerable.
+
+**The accepted model, exactly as ratified:**
+
+| Page | Contents |
+|---|---|
+| **Customer** | Name · Identifier (+ Copy) · Address · First name · Last name · E-mail · Notes · **Save customer** |
+| **Licences** | the customer's licence list · licence terms (Seats · Valid from · Valid until · Licence id · Notes · Reason · Issue note) · **Inspect latest** · **Export latest…** · **Save terms** · **Issue and save…** · **Issuing history** · the artifact preview · **Export this issue…** |
+
+- ⛔⛔ **`Issuing history` is NOT a third tab.** It belongs to the Licences domain: it describes what was
+  issued for the licence selected right there, and separating them would put a question and its own
+  answer on two different screens.
+- ⭐ **The switch sits ABOVE the whole detail pane** (user decision), so it reads as "this switches the
+  main view of the selected customer" rather than as a divider between two cards of one form.
+  ⛔ Deliberately not between the cards.
+- ⭐ **Changing the selected customer KEEPS the active page** (user decision). An operator comparing
+  licences across customers stays in licences; being thrown back to contact details on every selection
+  would make the switch feel like it undoes itself.
+- ⭐⭐ **`OpenSelectedLicense` is the ONE exception and forces the Licences page.** It is navigation to a
+  specific LICENCE — landing on contact details would answer a question the operator did not ask and hide
+  the row they double-clicked.
+- ⭐ `Border.view-switch` + `Button.view-tab` with `.active`, the same markup the main view switch and
+  Storage's Backup/Restore switch use. ⛔ Not a `TabControl` (§40.2).
+- ⚠ ONE `ScrollViewer` around both pages: the scrolled surface is "the detail pane", and two viewers
+  would be two scroll positions for one column.
+- ⚠ The "no customer selected" semantics are **unchanged** — the existing `IsVisible` gating on
+  `SelectedCustomer` / `SelectedLicense` is untouched, and ⛔ no placeholder was invented for this change.
+- ⛔ Untouched: the customer rail, the `GridSplitter`, the data model, the register schema, the issuing
+  logic, and every existing action. Zero new tokens, zero new colours.
+
+### 49.8 ⛔ Verification — stated exactly
+
+- ✅ Builds **0 warnings / 0 errors**: License Manager **Debug** and **Release**, and **EmberTern**.
+- ✅ **Full License Manager suite: 535 / 535** — 0 failed, 0 skipped, total 535.
+- ✅ New suites: `SettingsWindowTests` **36** · `SmtpSettingsValidationTests` **19** ·
+  `SmtpSettingsStoreTests` **16** · `LicenseEmailTemplateTests` **13** · `CustomerPagesTests` **9** ·
+  `MenuStyleDriftTests` **4**. `LicenseManagerThemeTests` **14** (extended).
+- ⛔ **The EmberTern suite was NOT run in full** — the two guards that reach this application were run
+  targeted, and the two pre-existing failures below are unchanged.
+- ⛔ **No fault injection was run**, by standing directive.
+- ✅ **User-accepted after looking at the running application in both themes**, across three QA rounds
+  (Settings size · `Forget settings` confirmation · the Customer/Licences split).
+
+### 49.9 ⏭ Two pre-existing failures, NOT touched and NOT L6 regressions
+
+Both were found by the first run of the EmberTern guards since L5.5 — which is the gap §47.6 recorded —
+and both were left alone on the user's instruction.
+
+| Test | Cause | Provenance |
+|---|---|---|
+| `CharsetGuardSeamTests.TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver` | Matches the raw csproj text and hits a **comment** — `"⭐ Same arrangement EmberTern.Firebird already uses"` beside `InternalsVisibleTo` | Present at `702ffae` **before** L6.1 (line 96 of the committed csproj) |
+| `DatePresentationTests.NoUserFacingSurface_FormatsADateInvariantly` | `RestoreWorkflow.cs:352` formats `yyyyMMdd-HHmmss` invariantly for a preserved-copy FILENAME — a machine-readable path the guard's own message says to record | L5.5 code; `git diff HEAD` on that file is **empty** |
+
+⚠⚠ **The first guard's own remedy text is wrong here.** It says *"Remove them from
+OutsideTheFirebirdDomain"* — but the exclusion is TRUE, the License Manager genuinely cannot reach
+Firebird. Following that advice would **weaken** the charset guard. It is the same shape as the
+`LicenseManagerThemeTests` lesson: a guard firing on the documentation of its own rule.
+
+### 49.10 ⏭ What L6.1 / L6.1a deliberately did NOT do
+
+⛔ No `ILicenseEmailSender`, no SMTP sender, no `.eml` writer, no message body, no send, no send audit —
+all L6.2/L6.3. ⛔ No production key ceremony (L7). ⛔ No UI localization (L8) and no `language` column on
+`customers`. ⛔ No register schema change. ⛔ `EmberTern.Licensing`, `EmberTern.App` and `EmberTern.Core`
+untouched. ⛔ No MailKit and no OAuth2. ⛔ `Tokens.axaml`, `Typography.axaml`, `Colors.axaml` untouched —
+zero new tokens, zero new colours. ⛔ `FluentBridge`'s missing `Calendar*` keys and `Icon.Name` still
+untouched. ⛔ The two pre-existing EmberTern failures above, not repaired.
+
+
+---
+
+## 50. L6.2 — as built (2026-08-19)
+
+⭐⭐ **The message, composed — and nothing sent.** L6.2 turns a licence the register already holds into a
+finished EN/PL e-mail with the stored `.etlic` attached, as a pure value. ⛔ No sender, no SMTP, no `.eml`
+writer, no send audit, no UI — all L6.3, deliberately.
+
+✅ **ACCEPTED 2026-08-19**, together with L6.3 — a composed message reached a real mailbox with its
+artifact attached and readable. ⚠ L6.2 adds no surface of its own, so it was never judged on screen; what
+proved it is the delivered message.
+
+### 50.1 The three contracts, and how each one is actually proved
+
+| Contract | Proved by |
+|---|---|
+| **A — identical bytes** | `LicenseMessageArtifactTests.TheAttachmentIsByteForByteWhatSaveArtifactWrites` compares `message.AttachmentBytes` against the file `IssuingWorkflow.SaveArtifact` writes for the SAME artifact. ⛔ Not "the token re-composes to something equivalent" |
+| **B — the licence survives transport** | Composer → `MailMessage` → a real `.eml` on disk → the attachment decoded back out of base64 → `LicenseVerifier.Verify` answers `Valid`. ⛔ No string comparison stands in for it |
+| **C — Unicode** | `Żółć Sp. z o.o.` through **Subject**, **To** and **From** as RFC 2047 encoded words, each decoded back and compared to what was composed — plus both bodies, decoded after transport rather than asserted in memory |
+
+⚠ The transport in B and C is `SmtpDeliveryMethod.SpecifiedPickupDirectory`: a file is written, **no socket
+is opened**. ⭐ That is what lets L6.2 be finished while the company mailbox is still unmeasured (§48.1).
+
+### 50.2 ⭐⭐ The one seam — `IssuingWorkflow.ArtifactBytes`
+
+Contract A could not be met by the code as it stood: `SaveArtifact` **was** the definition of what
+`EmberTern.etlic` contains, inline in a `File.WriteAllText` call. A composer that wrapped the token itself
+would have been a **second answer to "what did we send them?"**, and the difference would have surfaced as a
+customer's file failing to verify — never as a failing test.
+
+⭐ So the expression became a function. `ArtifactBytes(artifact)` is now the ONE definition; `SaveArtifact`
+writes exactly what it returns (`File.WriteAllBytes`) and keeps its signature, its behaviour, its
+UTF-8-no-BOM guarantee and its `licence.exported` audit line. ⛔ Nothing else in the issuing path changed,
+and no second implementation exists to drift.
+
+⚠ **This is the only place L6.2 modified existing behaviour-bearing code**, and it is called out here so a
+QA pass can reject it as a unit rather than having to find it.
+
+### 50.3 Where the words come from — the token, not the row
+
+Every fact in the body is read out of the payload **decoded from `IssuedArtifactRecord.Token`**, the very
+bytes being attached — not from `LicenseRecord`, and not from the record's `PayloadJson` column.
+
+- ⛔ **Not the licence row**: saved-but-not-yet-issued terms are a legitimate state, and a message built from
+  them would describe a licence nobody holds. §14.2's rule — *"the e-mail body never repeats a claim it
+  could get wrong"* — implemented rather than promised.
+- ⚠ **Not `PayloadJson` either**, although the two hold the same bytes today. Reading the token is what keeps
+  that true **by construction**: one source, so nothing to drift.
+- ⭐ The greeting therefore carries the **signed** licensee name. A company renamed after issuing gets a
+  message that agrees with the licence it is holding — pinned by `TheNameItGreetsIsTheOneInsideTheArtifact`.
+- ⚠ The register supplies exactly one thing: the recipient's **address**. A licence payload deliberately
+  carries no contact details (§9), and the sender's name and address come from the SMTP settings.
+
+### 50.4 The subject lives in the plain-text template's first line
+
+`Subject: …` as line one, read by `LicenseEmailTemplates.LoadSubject` and stripped by `LoadBody`.
+
+⭐ The subject is a **header of the message**, and it has to be translated with the body. Both alternatives
+were worse: a fifth resource per language multiplies the file count the resolver exists to keep at two, and a
+subject in code is a string an `if` would have to pick a language for — exactly the branch §49.4 says must
+not exist. ⭐ The HTML template repeats it in `<title>`, where an HTML document's subject already belongs,
+and `TheHtmlTitleIsTheSubject` composes both and fails if the two ever drift.
+
+### 50.5 Placeholders — one catalogue, and a refusal rather than a leak
+
+`MessagePlaceholders` holds the nine substitutions and their values; templates spell `{{Name}}`.
+
+⭐⭐ **The composer THROWS on an unknown or unfilled placeholder.** The failure this design can actually have
+is a customer reading the literal text `{{Seats}}`, and no test asserting "a message was composed" would
+notice it. Three guards close it from both ends: every placeholder a template uses is one the build knows,
+every language's two bodies use the SAME set (so the plain-text alternative cannot quietly state less), and
+no composed part contains `{{` or `}}`.
+
+⚠⚠ **`WebUtility.HtmlEncode` was measured and rejected** — it encodes every non-ASCII character as a numeric
+entity, so `Żółć Sp. z o.o.` became `&#379;&#243;&#322;&#263; …`. It renders correctly and is still wrong:
+the source of a UTF-8 message stops containing its own subject matter. ⭐ `EncodeForHtml` encodes the four
+characters that can change the MARKUP and lets every letter travel as itself. **Gotcha #392.**
+
+### 50.6 What stops a message, and what does not
+
+`LicenseMessageComposer.Problems` is deliberately **narrower than `SmtpSettings.Validate`**: a recipient, a
+sender address, and a readable artifact. ⛔ A missing host or missing credentials stop a *send*, not a
+*message* — an `.eml` handed to Outlook needs neither — and an unrecognised message language must never fail
+anything, because `MessageLanguages.Resolve` answers it with the default on purpose (§49.3). Folding the
+settings' whole verdict in would have contradicted both. ⭐ `Compose` refuses outright when `Problems` is not
+empty, rather than composing a message with no recipient and letting a sender discover it later.
+
+### 50.7 Two smaller decisions worth not re-deriving
+
+- ⚠ **Templates are normalised to CRLF on load.** `.gitattributes` sets `text=auto`, so checked-out line
+  endings differ per clone — without normalisation two clones would compose two different messages from one
+  template. The same reasoning as `LicenseArmor.LineSeparator`.
+- ⚠ **Dates are UTC calendar days, formatted in the MESSAGE's culture.** `exp` is the last second of the
+  chosen day (`LicenseDay.EndOf`), so a local-time reading would move an expiry across midnight for half the
+  world; and *"15 sierpnia 2026"* / *"15 August 2026"* follows the customer's language, not the operator's.
+  ⛔ Not the culture's own long-date pattern — Polish prefixes a weekday there, which reads as an appointment
+  rather than as a contractual boundary.
+
+### 50.8 ⛔ Verification — stated exactly
+
+- ✅ Builds **0 warnings / 0 errors**: License Manager **Debug** and **Release**, and **EmberTern** (Debug).
+- ✅ **Full License Manager suite: 569 / 569** — 0 failed, 0 skipped, total 569 (535 before this stage).
+- ✅ Counted, not estimated: `LicenseMessageTests` **23** · `LicenseMessageArtifactTests` **6** ·
+  `LicenseEmailTemplateTests` **18** (13 before, +5 structural guards for the wording). 535 + 29 + 5 = 569.
+- ✅ **Gotcha #388 re-checked against the real assembly, not against MSBuild**: a byte search of
+  `EmberTern.LicenseManager.dll` finds the new Polish and English wording and the placeholder text, and the
+  build produces **zero** `*.resources.dll`. ⚠ The empty `pl` / `en` folders under `bin` are leftovers from
+  the pre-`WithCulture` build; nothing is written into them.
+- ⛔ **The EmberTern suite was NOT run in full.** The two guards that scan this application's sources were run
+  targeted: both still fail, both are the pre-existing failures recorded in §49.9, and
+  `NoUserFacingSurface_FormatsADateInvariantly` still names **only** `RestoreWorkflow.cs` — none of L6.2's
+  files appear in it.
+- ⛔ **Nothing was verified in a running application**, because L6.2 adds no surface.
+
+### 50.9 ⏭ What L6.2 deliberately did NOT do
+
+⛔ No `ILicenseEmailSender`, no `SmtpLicenseEmailSender`, no `EmlFileEmailSender`, no send, no send window,
+no `licence.sent` / `licence.send-failed` — all L6.3. ⛔ No MailKit and no OAuth2. ⛔ No register schema
+change, no `language` column on `customers`, no change to `smtp.dat`'s format. ⛔ `EmberTern.Licensing`,
+`EmberTern.Licensing.Issuing`, `EmberTern.App` and `EmberTern.Core` untouched. ⛔ No UI, no view model, no
+theme resource, no token. ⛔ The two pre-existing EmberTern failures, not repaired.
+
+---
+
+## 51. L6.3 — as built (2026-08-19)
+
+⭐⭐ **The licence now leaves the building.** Two senders, a send window that shows the exact message before
+it goes, `licence.sent` / `licence.send-failed` in the audit log, and — added in the same stage on the
+user's instruction — a **Send test email…** button that proves an SMTP configuration by using it.
+
+✅⭐⭐ **ACCEPTED 2026-08-19 — and this is the stage that CLOSED L6.** The user ran the whole loop against a
+real Gmail account: the configuration test arrived, then a real licence arrived with `EmberTern.etlic`
+attached, and the audit log carried the send. §32's exit criterion — *"a real message delivered and
+read"* — is therefore **satisfied**, for the first time in the plan.
+
+### 51.1 The shape — four types, one path
+
+```
+LicenseMessage  (L6.2, composed)          TestEmail.Compose(settings, recipient)
+        │                                            │
+        └──────────► OutgoingEmail ◄─────────────────┘        the transport's own shape
+                          │
+                   MailComposition                            the ONE MailMessage builder
+                          │
+              ┌───────────┴────────────┐
+     SmtpLicenseEmailSender     EmlFileEmailSender             ILicenseEmailSender
+                          │
+                    SendOutcome
+                          │
+                   LicenceDelivery                            the ONLY writer of send history
+```
+
+⭐⭐ **`OutgoingEmail` exists for exactly one reason, and it is the reason the test button is worth
+having:** the configuration test carries no attachment, and making `LicenseMessage.AttachmentBytes`
+optional to fit it would have weakened the one guarantee that matters most — *a licence e-mail always
+carries its artifact*. So both compose to one transport value, and there is **one** code path to the
+server. A test that took a different path would prove something about that path instead.
+⛔ It is not a "generic e-mail system": six fields and an optional file, no queue, no address book, no
+templating, no retries.
+
+⭐ `MailComposition` is the ONE place an `OutgoingEmail` becomes a `MailMessage` — so the `.eml` an
+operator opens in Outlook and the message a server receives are the same message, encodings included.
+⚠ UTF-8 throughout and **base64** for both bodies, stated rather than assumed, because the guards decode it.
+
+### 51.2 ⭐⭐ The audit — decision P‑2 as built
+
+`LicenceDelivery` is the only thing that writes send history, and it writes **exactly one line per
+attempt**:
+
+| Outcome | Action | Note |
+|---|---|---|
+| Delivered | `licence.sent` | recipient · host · message language |
+| Refused / unreachable | `licence.send-failed` | recipient · host · **the server's own words, verbatim** |
+| Written as `.eml` | `licence.exported` | the file name, and who the message was for |
+
+- ⭐⭐ **A failed attempt is recorded too.** The question support asks months later is *"did we try, and
+  what happened?"*, and a history that only shows successes cannot tell "we never sent it" from "we tried
+  four times and their server refused".
+- ⛔ **The `.eml` route is NOT `licence.sent`.** Nothing has reached the customer when a file is written;
+  claiming otherwise would put a false statement in an append-only history. It reuses `licence.exported`,
+  the action `SaveArtifact` already writes for *"a file carrying this artifact left the manager"* — ⛔ no
+  new vocabulary for something the register already has a word for.
+- ⭐ **The register write lives in `LicenceDelivery`, not in a sender and not in a view model.** A sender
+  may one day be MailKit or an HTTP API (§48.1) and history must not be a thing each transport remembers;
+  a view model would make the audit line depend on a window being open.
+- ⚠ **Recorded AFTER the attempt, never before.** A line written first would claim a send a crash could
+  prevent.
+- ⛔ **The configuration test writes nothing at all** — see §51.5.
+
+### 51.3 The send window
+
+`SendLicenceWindow` / `SendLicenceViewModel`, opened from **Send licence…** on the Licences page.
+
+- ⭐⭐ **THE PREVIEW IS THE MESSAGE.** The view model is handed one composed `LicenseMessage`, shows *that*
+  value, and hands *that* value to the sender. ⛔ Nothing is re-composed on the way out — a preview built
+  from one composition and a send built from another is a window that can lie.
+- ⭐ **Every refusal happens before the window opens** (`ShellViewModel.PrepareSendLicence`): no licence
+  selected · e-mail not configured · settings unreadable · the customer has no address · the licence was
+  never issued. ⛔ A window that opens and then says *"actually, no"* is a window the operator has to close
+  to learn nothing. ⚠ `PasswordUnavailable` is the one state that opens WITH a warning: the message can
+  still be saved as a file, and an attempt to send will fail in the server's own words rather than in ours.
+- ⭐⭐ The attachment comes from **`license_current_artifact`** — the register's pointer, the same authority
+  `InspectLatest` reads. ⛔ Never `Artifacts[0]`, and ⛔ **nothing is signed by sending**: a new `iat` is a
+  replacement the client would install over the licence the customer already holds (§16.4). Pinned by
+  `SendingSignsNothingAndMovesNoPointer`.
+- ⭐ **An explicit confirmation, always**, naming the recipient and the file — and ⛔ **with no confirmer
+  wired the action REFUSES rather than proceeding**, the rule L6.1a's `Forget settings` established.
+- ⭐⭐ **It cannot be sent twice**: success disables Send. The operator's own reason for clicking again is
+  usually that the first click gave no visible answer yet, and the cost is a duplicate delivery plus a
+  duplicate audit line.
+- ⭐ **`Save as .eml…` is always available, not a consolation prize** (§14.3): the answer when a mailbox
+  refuses basic auth, when a relay strips attachments, or when the operator simply wants the message in
+  their own Sent items. ⚠ It is what makes `EmlFileEmailSender` a real second implementation rather than a
+  rule-satisfying stub (Architecture rule 2).
+- ⚠ **The preview is the PLAIN-TEXT body, and the window says so.** Rendering HTML would need a browser
+  control this application does not have; a preview that silently showed one of two bodies would be worse.
+- ⛔ **One licence, one customer, one send.** No bulk path, no recipient list.
+
+### 51.4 ⚠ A fifth button clipped the row — the repair, and why it is not "make it smaller"
+
+Adding **Send licence…** to the licence card's action row made five buttons measure **1251 DIP in a
+1080-wide window**, and the last one — *Issue and save…* — was laid out past the edge: present, named,
+bound, working and invisible. ⭐ `CustomerPagesTests.NothingIsClippedOnEitherPage` caught it (gotcha #386);
+nothing else would have.
+
+⭐ **The row is now a `WrapPanel` that flows onto a second right-aligned line** — EmberTern's own
+`ChoiceDialog` footer solves the identical problem the identical way, so this is a pattern taken rather
+than invented. ⛔ No control was shrunk and no label was truncated, which the guard's own remedy note
+forbids. ⚠ The gap is `Margin.InlineGap` on each button rather than the `Spacing` it replaces: `WrapPanel`
+has none, and a literal would fail this application's stricter metric guard (§49.1).
+
+### 51.5 ⭐ Send test email… — the configuration test
+
+On **Settings ▸ E-mail**, below the credentials: an address field and one button.
+
+- ⭐⭐ **It sends a REAL message, down the same path a licence takes.** L6.1 recorded that a Test button
+  reporting success without sending would be worse than none; a handshake that stops before `DATA` proves
+  the credentials and nothing about whether mail arrives.
+- ⛔⛔ **The address is TYPED, and no control offers a customer's.** A diagnostic that can be aimed at a
+  customer by a mis-click eventually will be, and they would receive an unexplained message from a
+  licensing system. ⚠ It is not persisted either — a scratch value for one attempt, not a setting.
+- ⭐⭐ **It tests the FORM, not the saved file.** An operator who has just typed a host expects the test to
+  try THAT host; requiring a Save first would mean persisting a configuration in order to discover it is
+  wrong. Said in the window, and pinned by `ItTestsTheFormRatherThanTheSavedFile`.
+- ⛔ **No attachment, no licence, and NOTHING in the audit log.** `audit_log` answers questions about
+  licences and customers; this message concerns neither. ⭐ Structural rather than a rule to remember: the
+  settings view model holds no register at all, and a reflection guard says so.
+- ⚠ **English, and plain text only** — two deliberate choices. The reader is the OPERATOR, whose interface
+  is this application's, not the customer whose language `MessageLanguage` describes; and a diagnostic
+  needs no HTML alternative, which is exactly why `OutgoingEmail.HtmlBody` is optional rather than
+  speculative. ⛔ It is not a template resource: templates exist so a CUSTOMER can be written to in their
+  own language, and two files per language for a self-test would pay that price for nothing.
+- ⭐ The body states the configuration it proved — server, port, security, sign-in account, sender —
+  because "it worked" is only useful if the operator can see what it worked for. ⛔ The password is never
+  in a message, pinned by its own guard.
+- ⚠ The subject names the application and the reason: a person opening an unexplained message from a
+  licensing system reads it as phishing, and it may well be an administrator who did not send it.
+
+### 51.6 Two transport decisions worth not re-deriving
+
+- ⚠⚠ **`UseDefaultCredentials` is set BEFORE `Credentials`.** Setting it afterwards resets them to null
+  and the message goes out unauthenticated — a documented BCL ordering trap whose symptom is a `5.7.0` the
+  operator cannot explain.
+- ⚠ **A 30-second timeout**, against `SmtpClient`'s own default of 100. The operator is standing in front
+  of a modal window watching a button, and a mistyped host must not read as a frozen application.
+- ⭐ **The SMTP sender catches broadly and REPORTS**, deliberately, and it is the one place in this
+  application where a broad catch is right: the failure modes of socket + TLS + SMTP span six exception
+  types that differ by provider and by .NET version, and an escape would take down the window the operator
+  is standing in front of. ⛔ `OperationCanceledException` is re-thrown — cancellation is the caller's
+  decision, not a delivery failure, and must never become an audit line claiming a server refused
+  something. ⛔ The server's words are never interpreted (the `Legacy_Auth` mis-hint lesson).
+
+### 51.7 ⛔ Verification — stated exactly
+
+- ✅ Builds **0 warnings / 0 errors**: License Manager **Debug** and **Release**, and **EmberTern** (Debug).
+- ✅ **Full License Manager suite: 619 / 619** — 0 failed, 0 skipped, total 619 (569 before this stage).
+- ✅ New suites, counted rather than estimated: `SendLicenceViewModelTests` **12** ·
+  `SmtpTestSendTests` **9** · `TestEmailTests` **9** · `LicenceDeliveryTests` **7** ·
+  `EmailSenderTests` **7** · `SendLicenceWindowTests` **6** (headless). 569 + 50 = 619.
+- ✅ ⭐ **The headless guards were proved ALIVE** (gotchas #374 / #391): an assertion was inverted inside
+  one of them and the test went red, then was restored. A file whose `Task` is discarded cannot fail.
+- ✅ ⭐ **`MimeProbe` now writes through the PRODUCTION sender.** L6.2's round-trip guards built their own
+  `MailMessage`, so they proved something about the test's construction; they now watch the application's.
+- ⛔ **The SMTP sender itself is NOT proved here, and is not pretended to be.** A test that reached a real
+  server would be a test of that server's availability. What is asserted is everything decidable without
+  one; the real proof is the operator's end-to-end send, which is what L6.3 exists to enable.
+- ⛔ **The EmberTern suite was NOT run in full.** The two guards that scan this application's sources were
+  run targeted: both still fail, both are the pre-existing failures of §49.9, and
+  `NoUserFacingSurface_FormatsADateInvariantly` still names **only** `RestoreWorkflow.cs`.
+- ⛔ **Nothing was verified in a running application** — that is the QA this stage is waiting for.
+
+### 51.8 ⏭ What L6.3 deliberately did NOT do
+
+⛔ No bulk sending. ⛔ No MailKit and no OAuth2. ⛔ No implicit TLS (§48.4). ⛔ No register schema change,
+no new audit vocabulary, no `language` column. ⛔ No change to `smtp.dat`'s format. ⛔ `EmberTern.Licensing`,
+`EmberTern.Licensing.Issuing`, `EmberTern.App` and `EmberTern.Core` untouched. ⛔ No production key
+ceremony (L7). ⛔ No new colour and no new token. ⛔ The two pre-existing EmberTern failures, not repaired.
+⛔ **L6 is not closed** — §32's exit criterion needs the user's real delivery.
+
+### 51.9 L6.3a — the message itself, after the first real delivery
+
+⭐ **A wording-and-layout round, not a stage.** The mechanism was accepted end to end (a test message and a
+real licence both delivered through Gmail and read); what the user then judged was the *message*, which had
+been written for correctness rather than for a reader. ⛔ Nothing outside the four templates changed — no
+sender, no `OutgoingEmail`, no `MailComposition`, no audit, no attachment, no code at all.
+
+**What changed, and why each one:**
+
+| Before | Now |
+|---|---|
+| `Firma: Test` as a details row | ⛔ **Gone.** A licensee may be a private person; a row labelled *"company"* asserts a business. The name now appears once, naturally, in the opening sentence — ⛔ and it was NOT replaced by a "Licensee" row, which would be the same assumption wearing a neutral word. |
+| A paragraph describing what EmberTern is | ⛔ **Gone from the body.** Someone receiving a licence is already a customer and does not need the product explained. It survives as **one line in the footer** — `EmberTern — Firebird developer workbench`. |
+| `Numer licencji` | **`ID licencji` / `Licence ID`** — natural in both languages. ⚠ The VALUE is untouched. |
+| Bold document headings | Small, letter-spaced, grey **section labels** — `Szczegóły licencji` · `Jak aktywować` · `Załącznik` |
+| Details as plain rows | A quiet **card** (`#F7F9FC` on a hairline) holding four facts: seats · valid from · valid until · id, the id in monospace |
+| The attachment mentioned in a paragraph | Its **own section**: the file name in monospace, and why it is worth keeping |
+| No brand mark | A **typographic wordmark** and a 44×3 accent rule in the existing `#2D6BBF` |
+
+⭐⭐ **The wordmark is TEXT, and that was a decision rather than a shortcut** (user, decision D‑10 = A). A
+real logo in an e-mail has exactly three deliveries and two are dead ends here: a `data:` URI is **blocked
+by Gmail** and would leave the header empty in the very client this is tested in, and a remote URL needs a
+website we do not have and must not invent. The third — a `cid:` inline image — is correct, and it would
+have meant an optional inline-image list on `OutgoingEmail` plus `LinkedResource` in `MailComposition`,
+i.e. exactly the two files this round was told not to touch. ⭐ So the header is set in type, which renders
+in every client, survives blocked images, and adds no second attachment beside the `.etlic`. ⏭ The graphic
+mark returns with the real EmberTern banner, as ONE decision about inline images instead of two.
+
+⚠ **PL and EN are one design.** The English file is generated from the Polish one by replacing sentences —
+same markup, same table structure, same spacing, same nine placeholders — so a layout change is made once.
+⛔ Still no `if` picks a language: a code plus a body kind name a resource (§49.4).
+
+⚠ **The plain-text alternative was rewritten to the same hierarchy**, not left as prose: the same four
+sections, the same three steps, the same footer. A customer whose client strips HTML reads the same message
+in the same order.
+
+⭐ Kept deliberately: the offline sentence (still true — verification never touches a network), the
+`{{SenderAddress}}` contact that was already there, and `{{Product}}` reading from the SIGNED payload rather
+than being typed into the templates, so the wordmark and the footer name the product the licence is for.
+
+⛔ Not done: no banner or hero image, no new colour, no new token, no new asset, no new dependency, no
+change to the subject line, and ⛔ no bulk sending (its own stage, by the user's instruction).
+
+**Verification:** builds **0/0** Debug and Release; **License Manager 619 / 619** (0 failed, 0 skipped) —
+the template guards are the ones that matter here and they hold the shape: every placeholder is one the
+build can fill, the two bodies of a language state the SAME set of facts, both languages state the same
+set, no `{{` survives composition, and the HTML `<title>` still equals the subject.
+
+#### 51.9.1 The second pass — the user's own reference design
+
+⭐ The first L6.3a pass produced a *tidy* message, not a *product* message; the user answered it with two
+reference HTML files and the production templates were rebuilt from them. **The layout is theirs**: a dark
+`#202326` header band with the wordmark and a `LICENCJA` / `LICENCE` tag, a `#2D6BBF` rule under it, a card
+on `#EEF1F5`, an orange-ruled recipient block, a details card with right-aligned values, numbered
+`01 / 02 / 03` activation badges, an attachment card, and a dark footer carrying
+`Firebird developer workbench` and the contact.
+
+**Four things in that design collided with the mechanism, and each was resolved rather than worked around:**
+
+1. ⚠⚠ **The orange first letter of the wordmark cannot be a placeholder.** Substitution replaces
+   `{{Product}}` whole and cannot colour one letter of it. ⭐ So the header carries the literal
+   `<span …>E</span>mberTern` — and ONLY the header. It is safe by construction: `LicenseVerifier` refuses
+   any artifact whose `prod` is not `EmberTern`, so the mark cannot describe another product. ⛔ Everywhere
+   else the name still comes from the SIGNED payload.
+2. ⭐⭐ **The subject had the same grammar defect the user reported in the body.** *"Licencja EmberTern **dla**
+   {{Licensee}}"* needs the name declined — *"dla Jana Kowalskiego"* — and a value taken from a signed
+   payload may never be inflected. ⭐ The subject is now **`Licencja EmberTern — {{Licensee}}`** /
+   **`EmberTern licence — {{Licensee}}`**, and the HTML `<title>` follows it (the drift guard still holds).
+3. ⭐⭐ **The recipient is its own block, never part of a sentence** — `ODBIORCA LICENCJI` /
+   `LICENCE RECIPIENT` above the name. That is the general repair for the declension problem: a label and a
+   value need no grammar, in either language, for a person or a company.
+4. ⚠ **`border-radius` is ignored by Outlook's Word renderer**, so the card corners and the round step
+   badges render square there. Accepted as graceful degradation and stated rather than discovered — ⛔ no
+   images were added to avoid it.
+
+⭐ **Voice: first person singular, throughout.** The user sends these personally, so *"Przesyłamy"* /
+*"Pozdrawiamy"* were wrong. Now: **`Przesyłam licencję {{Product}}.`** · **`Pozdrawiam,`** ·
+**`I'm sending you the {{Product}} licence.`** · **`Kind regards,`**, and the whole text was swept for the
+same slip — *"Prosimy zachować"* became *"Zachowaj ten plik — możesz go wczytać ponownie…"*, instructions
+stay in the second-person imperative and courtesies stay impersonal.
+
+⚠ English dates needed no change: the day is formatted with the MESSAGE's culture, so `en` already renders
+`17 August 2026` (§50.7). ⛔ Still no code was touched in this round — four template files, and two test
+literals that pinned the old subject and the old section names.
+
+
+---
+
+## 52. ⭐⭐ L6 — CLOSED (2026-08-19)
+
+**A licence now reaches a customer by e-mail, from the artifact the register already holds.** Five
+sub-stages, all user-accepted: **L6.1** the SMTP settings and their DPAPI secret (§48) · **L6.1a** the
+hamburger, the Settings Center and the Customer/Licences split (§49) · **L6.2** message composition (§50) ·
+**L6.3** the senders, the send window and the send audit, plus the configuration test (§51) · **L6.3a** the
+message the customer actually reads (§51.9).
+
+### 52.1 What the exit criterion actually required, and what satisfied it
+
+§32 asked for **"a real message delivered and read"** — deliberately not "the code compiles and the tests
+pass", because every layer of this feature can be green while the message never leaves. ⭐ On 2026-08-19 the
+user ran the whole loop against a real Gmail account: **Send test email…** arrived, then a licence arrived
+with `EmberTern.etlic` attached, the attachment was the stored artifact, and the audit log carried the
+send. ⚠ Two rounds of wording followed, because *delivered* and *worth reading* are different questions —
+and only the second one is a judgement code cannot make.
+
+### 52.2 The four properties L6 must not lose
+
+Everything else in §48–§51 is detail; these are the load-bearing four.
+
+1. ⭐⭐ **The attachment is the STORED artifact, byte for byte.** One definition
+   (`IssuingWorkflow.ArtifactBytes`) feeds both the file on disk and the e-mail, and a guard compares them.
+   ⛔ Sending signs nothing: a new `iat` would be a REPLACEMENT the client installs over the licence the
+   customer already has (§16.4).
+2. ⭐⭐ **The preview is the message.** One composed value is shown, confirmed and sent — ⛔ never composed
+   twice.
+3. ⭐⭐ **Every attempt is recorded, including the failures** (`licence.sent` / `licence.send-failed`), and
+   an `.eml` is recorded as an EXPORT because nothing has reached anyone yet.
+4. ⭐⭐ **Every fact in the message comes from the SIGNED payload**, so the words and the licence cannot
+   disagree — and, since L6.3a, ⛔ no language may grammatically inflect such a value (gotcha #393).
+
+### 52.3 ⛔ What L6 deliberately never built
+
+⛔ **Bulk sending** — ratified as its own stage by the user at closure; §14.1's rule (the full recipient
+list plus one explicit confirmation) still stands as its design. ⛔ MailKit, OAuth2, implicit TLS 465.
+⛔ Any register schema change or new audit vocabulary. ⛔ A logo image in the message: the header is
+typography, and the graphic mark waits for the real EmberTern banner as ONE decision about inline images
+(§51.9). ⛔ Localization of the application itself (L8) and ⛔ a per-customer language — the message
+language stays one global setting.
+
+### 52.4 ⚠ The one thing L6 did NOT settle
+
+**The company mailbox is still unmeasured.** Everything proved above was proved on a **Gmail** account with
+an app password (§48.1). If the production tenant refuses basic auth, the answer is a **new class behind
+`ILicenseEmailSender`** — which is exactly why that interface exists — and the `.eml` route works either
+way. ⛔ Not a defect, not a rebuild, and not a reason to hold L6 open.
+
+### 52.5 Verification at closure
+
+- ✅ Builds **0 warnings / 0 errors**: License Manager **Debug** and **Release**, and **EmberTern** (Debug).
+- ✅ **License Manager suite: 619 / 619** — 0 failed, 0 skipped (535 before L6.2).
+- ✅ **User-accepted end to end against a real mail server**, in both languages, over three QA rounds.
+- ⛔ The EmberTern suite was not run in full; its two pre-existing failures (§49.9) are unchanged, and the
+  invariant-date guard still names only `RestoreWorkflow.cs`.
+
+⏭ **Next: L7** — the production key ceremony, the shipped public key, and the closing documentation. ⚠ Until
+it runs, `TrustedKeys.Production` is empty and no real licence verifies as usable in a Release build.

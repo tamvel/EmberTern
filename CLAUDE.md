@@ -693,6 +693,10 @@ sections, so a bare "#303" is ambiguous.
   form compiles while discarding it — so xUnit never awaits, and **no assertion in the body can fail the
   test**. Five such tests shipped in the License Manager and one stage's UI claims rested on them. Prove a
   headless file is alive by injecting `Assert.Fail` into one body. *(#374)*
+  ⚠⚠ **And `Dispatch(async () => …)` is the same defect one level deeper**: there is no `Func<Task>`
+  overload, so an async lambda with no `return` binds to `Action` — i.e. `async void` — and everything
+  after the first `await` detaches. Give it a return value so it binds to `Dispatch<T>(Func<Task<T>>, …)`.
+  *(#391)*
 - **A derived value that is typed by hand goes stale SILENTLY, and the guard against it must key on the
   value's SOURCE, not on the value.** A shortcut written into a string (`"Format SQL · Alt+F"`) survived the
   gesture being re-bound with a green build and green tests — a tooltip teaching a key that no longer existed.

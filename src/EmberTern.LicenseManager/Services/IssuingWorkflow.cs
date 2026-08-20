@@ -192,20 +192,40 @@ public sealed class IssuingWorkflow
     }
 
     /// <summary>
-    /// Writes an artifact to disk as <c>EmberTern.etlic</c>.
+    /// ⭐⭐ <b>THE ONE DEFINITION OF WHAT <c>EmberTern.etlic</c> CONTAINS.</b>
     ///
-    /// <para>⭐ Written from the STORED token, not from a fresh signature — which is what makes "the
-    /// customer lost their file" a five-second re-export rather than a re-issue with a new <c>iat</c>
-    /// that EmberTern would then treat as a replacement (§16.4).</para>
+    /// <para>Written from the STORED token, not from a fresh signature — which is what makes "the customer
+    /// lost their file" a five-second re-export rather than a re-issue with a new <c>iat</c> that
+    /// EmberTern would then treat as a replacement (§16.4).</para>
+    ///
+    /// <para>⭐ It is a separate function because the file on disk is no longer the only way an artifact
+    /// reaches a customer: since L6.2 it also travels as an e-mail attachment, and those two must be the
+    /// SAME BYTES. ⛔ A second place that wraps a token and encodes it would be a second answer to "what
+    /// did we send them?" — and the difference would be invisible until a customer's file failed to
+    /// verify. <see cref="SaveArtifact"/> writes exactly what this returns; a guard compares the two.</para>
+    ///
+    /// <para>⚠ UTF-8 with NO byte-order mark — the project's rule for every generated text file (gotcha
+    /// #178). The armored token is pure ASCII, so this is about the bytes we do NOT add.</para>
+    /// </summary>
+    public static byte[] ArtifactBytes(IssuedArtifactRecord artifact)
+    {
+        ArgumentNullException.ThrowIfNull(artifact);
+
+        return new System.Text.UTF8Encoding(false).GetBytes(LicenseArmor.Wrap(artifact.Token));
+    }
+
+    /// <summary>
+    /// Writes an artifact to disk as <c>EmberTern.etlic</c>, and records the export.
+    ///
+    /// <para>⭐ The bytes come from <see cref="ArtifactBytes"/> — see there for why that is a function
+    /// rather than a line inside this one.</para>
     /// </summary>
     public void SaveArtifact(IssuedArtifactRecord artifact, string path)
     {
         ArgumentNullException.ThrowIfNull(artifact);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        // UTF-8 with NO BOM — the project's rule for every generated text file (gotcha #178). The armored
-        // token is pure ASCII, so this is about the bytes we do NOT add.
-        File.WriteAllText(path, LicenseArmor.Wrap(artifact.Token), new System.Text.UTF8Encoding(false));
+        File.WriteAllBytes(path, ArtifactBytes(artifact));
 
         _register.Record("licence.exported", "licence", artifact.LicenseId, Path.GetFileName(path));
     }

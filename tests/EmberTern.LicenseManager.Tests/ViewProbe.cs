@@ -39,4 +39,32 @@ internal static class ViewProbe
     internal static T Named<T>(Window window, string name)
         where T : Control =>
         window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+
+    /// <summary>
+    /// Brings the selected customer's LICENCES page on screen and lays it out.
+    ///
+    /// <para>⭐⭐ <b>Required by every guard whose subject lives in the licence domain, since L6.1a split
+    /// the customer detail into Customer / Licences.</b> A page that is not showing is not laid out at
+    /// all — its controls report zero bounds and its lists realise no rows — so a geometry, spacing or
+    /// size assertion made without this would measure nothing and pass. ⚠ That is the failure this method
+    /// exists to make impossible, and it is why the guards were repaired by ACTIVATING the page rather
+    /// than by relaxing what they assert.</para>
+    ///
+    /// <para>⚠ It drives the view model's command rather than clicking the tab, deliberately: these tests
+    /// are about what is ON the page, not about the switch. The switch itself is exercised by a real
+    /// click in <c>CustomerPagesTests</c>, so the gesture is proved once rather than assumed everywhere.
+    /// </para>
+    /// </summary>
+    internal static void ShowLicencesPage(Window window, ViewModels.ShellViewModel shell)
+    {
+        shell.ShowLicencesTabCommand.Execute(null);
+        window.UpdateLayout();
+    }
+
+    /// <summary>Brings the selected customer's own DETAILS page on screen and lays it out.</summary>
+    internal static void ShowCustomerPage(Window window, ViewModels.ShellViewModel shell)
+    {
+        shell.ShowCustomerTabCommand.Execute(null);
+        window.UpdateLayout();
+    }
 }

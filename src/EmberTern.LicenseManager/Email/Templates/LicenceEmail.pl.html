@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Licencja EmberTern — {{Licensee}}</title>
+</head>
+<body style="margin:0;padding:0;background:#EEF1F5;color:#20242A;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EEF1F5">
+  <tr>
+    <td align="center" style="padding:30px 12px">
+
+      <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0"
+             style="width:640px;max-width:640px;background:#fff;border:1px solid #DCE1E8;border-radius:10px;overflow:hidden">
+
+        <!-- Nagłówek ─────────────────────────────────────────────────────────────────────────────
+             Wordmark jest LITERAŁEM, nie {{Product}}, i tylko tutaj: pomarańczowa pierwsza litera to
+             znak marki, a podstawienie działa na całym placeholderze i nie potrafi pokolorować jednej
+             litery. Bezpieczne z definicji - LicenseVerifier odrzuca artefakt, którego `prod` nie jest
+             `EmberTern`, więc ten nagłówek nie może opisywać innego produktu. W treści i w stopce
+             nazwa produktu jest już czytana z PODPISANEGO payloadu ({{Product}}). -->
+        <tr>
+          <td style="background:#202326;padding:26px 40px 24px">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="font-size:23px;line-height:28px;font-weight:600;color:#fff"><span style="color:#F28C28">E</span>mberTern</td>
+                <td align="right" style="font-size:10px;letter-spacing:.15em;color:#AEB6C2">LICENCJA</td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-top:18px"><div style="height:2px;background:#2D6BBF;font-size:0">&nbsp;</div></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Treść ────────────────────────────────────────────────────────────────────────────── -->
+        <tr>
+          <td style="padding:42px 48px 38px">
+
+            <p style="margin:0 0 12px;font-size:16px;line-height:26px">Dzień dobry,</p>
+            <p style="margin:0 0 30px;font-size:17px;line-height:28px">Przesyłam licencję {{Product}}.</p>
+
+            <!-- Odbiorca stoi OSOBNO, nie w zdaniu: polska odmiana nazwy zależy od tego, czy jest to
+                 osoba czy firma ("dla Jana Kowalskiego" vs "dla Acme Sp. z o.o."), a nazwa przychodzi
+                 z podpisanego payloadu i nie wolno jej odmieniać. Etykieta + wartość omijają problem
+                 gramatyczny w obu językach. -->
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:34px">
+              <tr>
+                <td style="border-left:3px solid #F28C28;padding:2px 0 3px 16px">
+                  <div style="font-size:10px;letter-spacing:.14em;font-weight:700;color:#788392">ODBIORCA LICENCJI</div>
+                  <div style="margin-top:5px;font-size:19px;line-height:27px;font-weight:600">{{Licensee}}</div>
+                </td>
+              </tr>
+            </table>
+
+            <div style="font-size:11px;letter-spacing:.14em;font-weight:700;color:#667180;margin-bottom:10px">SZCZEGÓŁY LICENCJI</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background:#F7F9FC;border:1px solid #DCE2E9;border-radius:8px">
+              <tr>
+                <td style="padding:18px 22px">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td style="padding:7px 10px 7px 0;color:#75808E;font-size:14px">Stanowiska</td>
+                      <td align="right" style="padding:7px 0;font-weight:600;font-size:14px">{{Seats}}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:7px 10px 7px 0;color:#75808E;font-size:14px">Ważna od</td>
+                      <td align="right" style="padding:7px 0;font-size:14px">{{ValidFrom}}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:7px 10px 7px 0;color:#75808E;font-size:14px">Ważna do</td>
+                      <td align="right" style="padding:7px 0;font-size:14px">{{ValidUntil}}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:7px 10px 7px 0;color:#75808E;font-size:14px">ID licencji</td>
+                      <td align="right" style="padding:7px 0;font-family:Consolas,'Courier New',monospace;font-size:13px">{{LicenceId}}</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <div style="margin:38px 0 12px;font-size:11px;letter-spacing:.14em;font-weight:700;color:#667180">AKTYWACJA</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td width="42" valign="top" style="padding-bottom:16px">
+                  <div style="width:28px;height:28px;line-height:28px;text-align:center;background:#EAF2FB;border-radius:50%;font-size:11px;font-weight:700;color:#2D6BBF">01</div>
+                </td>
+                <td valign="top" style="padding:3px 0 16px;font-size:14px;line-height:22px">Zapisz załączony plik <strong>{{FileName}}</strong> na dysku.</td>
+              </tr>
+              <tr>
+                <td width="42" valign="top" style="padding-bottom:16px">
+                  <div style="width:28px;height:28px;line-height:28px;text-align:center;background:#EAF2FB;border-radius:50%;font-size:11px;font-weight:700;color:#2D6BBF">02</div>
+                </td>
+                <td valign="top" style="padding:3px 0 16px;font-size:14px;line-height:22px">Uruchom {{Product}} i przeciągnij plik na okno aktywacji.</td>
+              </tr>
+              <tr>
+                <td width="42" valign="top">
+                  <div style="width:28px;height:28px;line-height:28px;text-align:center;background:#EAF2FB;border-radius:50%;font-size:11px;font-weight:700;color:#2D6BBF">03</div>
+                </td>
+                <td valign="top" style="padding:3px 0;font-size:14px;line-height:22px">Licencja jest gotowa do użycia.</td>
+              </tr>
+            </table>
+            <p style="margin:17px 0 0 42px;font-size:13px;line-height:21px;color:#788392">Aktywacja przebiega offline — połączenie z internetem nie jest potrzebne.</p>
+
+            <div style="margin-top:38px;background:#F7F9FC;border:1px solid #DCE2E9;border-radius:8px;padding:18px 20px">
+              <div style="font-size:10px;letter-spacing:.14em;font-weight:700;color:#788392;margin-bottom:7px">ZAŁĄCZNIK</div>
+              <div style="font-family:Consolas,'Courier New',monospace;font-size:14px;font-weight:600">{{FileName}}</div>
+              <p style="margin:9px 0 0;font-size:12px;line-height:19px;color:#788392">Zachowaj ten plik — możesz go wczytać ponownie w dowolnym momencie, na przykład po przeniesieniu programu na inny komputer.</p>
+            </div>
+
+            <p style="margin:34px 0 0;font-size:14px;line-height:23px">W razie pytań wystarczy odpowiedzieć na tę wiadomość.</p>
+            <p style="margin:22px 0 0;font-size:14px;line-height:23px">Pozdrawiam,<br /><strong>{{SenderName}}</strong></p>
+
+          </td>
+        </tr>
+
+        <!-- Stopka ───────────────────────────────────────────────────────────────────────────── -->
+        <tr>
+          <td style="background:#202326;padding:22px 48px 24px">
+            <div style="font-size:13px;font-weight:600;color:#fff">{{Product}}</div>
+            <div style="font-size:11px;line-height:18px;color:#AEB6C2">Firebird developer workbench</div>
+            <div style="padding-top:8px;font-size:11px"><a href="mailto:{{SenderAddress}}" style="color:#AEB6C2;text-decoration:underline">{{SenderAddress}}</a></div>
+          </td>
+        </tr>
+
+      </table>
+
+    </td>
+  </tr>
+</table>
+</body>
+</html>

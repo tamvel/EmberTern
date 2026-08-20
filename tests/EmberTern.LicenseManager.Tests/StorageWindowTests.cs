@@ -647,11 +647,24 @@ public sealed class StorageWindowTests
 
             Assert.NotNull(ViewProbe.Named<Button>(window, "StorageButton"));
 
-            // ⛔ Still exactly two view tabs.
-            Assert.Equal(
-                2,
+            // ⛔ Still exactly two MAIN view tabs, and they are still those two.
+            // ⚠⚠ NARROWED TO THE MAIN SWITCH BY NAME (L6.1a), and the narrowing is a repair rather than a
+            //    weakening. This used to count every button carrying `view-tab` ANYWHERE in the window,
+            //    which was the same set only while the window had exactly one switch. Splitting the
+            //    customer detail into Customer / Licences added a second switch — a different question,
+            //    inside one customer — and this went red reporting 4, while nothing it actually guards
+            //    had changed. Same lesson as gotcha #379: name the subject.
+            // ⭐ Full strength kept: a Storage tab added to the MAIN switch still fails this.
+            var mainTabs = window.GetVisualDescendants().OfType<Button>()
+                .Where(b => b.Classes.Contains("view-tab"))
+                .Where(b => b.Name is "CustomersTab" or "LicensesTab")
+                .ToList();
+
+            Assert.Equal(2, mainTabs.Count);
+            Assert.DoesNotContain(
                 window.GetVisualDescendants().OfType<Button>()
-                    .Count(b => b.Classes.Contains("view-tab")));
+                    .Where(b => b.Classes.Contains("view-tab")),
+                b => (b.Content as string)?.Contains("Storage", StringComparison.OrdinalIgnoreCase) == true);
         }, default);
 
     private static StorageWindow Show(ManagerFixture manager)
