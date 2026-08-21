@@ -4221,7 +4221,8 @@ can ever reach it — and all three call sites rely on the default.
 ⛔ **L8.2 still changes no user-visible word.** The English text moves onto the mechanism unchanged; the
 proof of zero change is the existing assertions staying green, not a re-reading of them.
 
-⏭ Then **L8.3** (146 XAML literals), **L8.4** (≈300 C# texts, the nine counted sentences, and §53.6's two
+⏭ Then **L8.3** (146 XAML literals — ⚠ **superseded: re-measured as 151 / 135 distinct, §55.12**),
+**L8.4** (≈300 C# texts, the nine counted sentences, and §53.6's two
 obligations), **L8.5** (the Polish, and the moment the Application-language picker is enabled), **L8.6**
 (QA in EN/PL × Dark/Light).
 
@@ -4388,9 +4389,33 @@ XAML-bound strings and belong to L8.3/L8.4; `LicenseMessageComposer.Compose`'s i
 
 ### 55.12 ⏭ Hand-off to L8.3
 
-**L8.3 is the 146 XAML literals.** ⭐ The mechanism it needs already exists and is proven: `{lm:Loc Key}`
+**L8.3 is the XAML literals.** ⭐ The mechanism it needs already exists and is proven: `{lm:Loc Key}`
 returns a real `Binding` (L8.1 §54.3), and this stage added no XAML at all — so L8.3 is a migration with no
 design left to settle.
+
+⚠⚠ **The scope was RE-MEASURED at the checkpoint and it is not 146.** That figure came from an earlier
+reconnaissance and had gone stale in the direction nobody re-checks. Measured 2026-08-21 over
+`Text` · `Content` · `ToolTip.Tip` · `Header` · `PlaceholderText` · `Title`, with XML comments stripped and a
+`(?<![\w.])` boundary so `SizeToContent="Height"` cannot masquerade as a `Content`:
+
+| | |
+|---|---|
+| Literal user-visible values | **151** |
+| Distinct texts among them | **135** |
+| Values already bound / markup-extension | **99** |
+
+| File | Literals |
+|---|---|
+| `MainWindow.axaml` | 81 |
+| `SettingsWindow.axaml` | 30 |
+| `StorageWindow.axaml` | 18 |
+| `SendLicenceWindow.axaml` | 12 |
+| `UnlockWindow.axaml` | 10 |
+| `ConfirmDialog.axaml` | **0** — ⭐ L8.2 already bound all of it |
+
+⚠ Two of the naive matches were **false positives** and both are worth knowing before writing the sweep:
+`SizeToContent="Height"` ends in `Content`, and one hit lived inside an XML comment. ⭐ A migration script
+that trusts a bare attribute-name match will rewrite both.
 
 ⚠ Two things L8.3 should know. **`Blocker` on a batch row is now a `LocalizedText`** projected to a string by
 the row view model; the preview grid is rebuilt on every tick, so it needs no notification — but a grid that

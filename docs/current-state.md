@@ -20,10 +20,13 @@
 > not priority: it touches many surfaces and is a UX change, so it closes before L7's security and
 > production finalisation. ⛔ **L7 is NOT STARTED**, and ⛔ do not prepare the key ceremony.
 >
-> ## ⏭ START HERE: **L8.3 — the 146 XAML literals.** NOT STARTED.
+> ## ⏭ START HERE: **L8.3 — the XAML literals.** NOT STARTED.
 >
 > ⭐ The mechanism L8.3 needs is built and proven — `{lm:Loc Key}` returns a real `Binding` (§54.3) — and
 > L8.2 added no XAML at all, so this is a migration with no design left to settle. **Brief: §55.12.**
+> ⚠⚠ **Scope re-measured 2026-08-21: 151 literal values, 135 distinct, in 5 files** — ⛔ **not the 146 that
+> earlier notes quote**, and `ConfirmDialog.axaml` is already fully bound. §55.12 carries the per-file split
+> and the two false positives a naive sweep would rewrite.
 >
 > ✅ **L8.2 — ACCEPTED** (user QA, 2026-08-21), committed and pushed to BOTH remotes. §55. `StatusMessage` is now
 > **key + arguments + severity** resolved at read time (D‑2 = B), so a standing message follows a language
@@ -57,17 +60,15 @@
 >
 > ### ⛔ Standing constraints for the rest of L8
 >
-> - ⛔ **The Application-language picker stays DISABLED**, decision D‑8 stands, and it is enabled **in
->   L8.5** — not before. Enabling it earlier recreates the exact defect D‑8 exists to prevent: a preference
->   the operator can set that changes nothing, because there is no Polish to show. `ui.json` is live on the
->   READ side today; its WRITER arrives with the picker.
+> - ⛔ **The Application-language picker stays DISABLED**, D‑8 stands, and it is enabled **in L8.5** — not
+>   before: enabling it earlier recreates the exact defect D‑8 prevents, a preference that changes nothing
+>   because there is no Polish to show. `ui.json` is live on the READ side; its WRITER arrives with the picker.
 > - ⛔ **`ApplicationLanguages` and `MessageLanguages` are INDEPENDENT catalogs** and must never be merged.
 >   The interface language is a fact about the OPERATOR; the message language a fact about the CUSTOMER.
 >   Defaults differ on purpose: **English** for the interface (D‑3), **Polish** for the message (D‑9).
 > - ⛔ **Nothing is localized that is a technical contract**: persisted values, audit actions AND audit
 >   notes, file names, ISO dates, branding. `design/terminology.md` §4.4 is the list.
-> - ⛔ **Nothing in `EmberTern.App` or the product** — L8 has touched no product file, which is why the
->   EmberTern suite is not run in these sub-stages.
+> - ⛔ **Nothing in `EmberTern.App` or the product** — no product file touched, so its suite is not run here.
 >
 > ---
 >
@@ -208,7 +209,7 @@ use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
 | **L4b** — surfaces: activation window, Settings ▸ Licence, About, banner, the connection SEAM, EN + PL | ✅ **accepted** — §38; ⚠ read §38.5 before touching a licence message |
 | **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ✅ **CLOSED 2026-08-18**, all six sub-stages accepted and pushed. **L5.0** data layer — schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch (§39). **L5.1 + two QA rounds** — Licences view, search, three filters, own AppBar and title bar, the licence re-parenting defect, spacing and uniform control heights (§40–§43). **L5.2** — issuing history and artifact preview, current marked from the register's POINTER never from the ordering (§44). **L5.3** — re-issue with an operator-chosen reason, validated against a measured diff of the SIGNED payload (§45). **L5.4** — bulk selection and batch renewal, and the licences list rebuilt as EmberTern's own grid, LINKED rather than reproduced (§46). **L5.5** — encrypted verified backup with its own passphrase, two explicit restore modes with the previous register always preserved, the five-type JSONL escape hatch, and the Storage window (§47). ⚠ Read §47.6 before quoting L5.5's verification: it is deliberately narrower than earlier stages' |
 | **L6** — e-mail | ✅ **CLOSED 2026-08-19**, all five sub-stages accepted. Delivery end to end: the SMTP settings and their own-entropy DPAPI secret with four load states (§48); the Settings Center, message language and Customer/Licences split (§49); a pure composer whose attachment is byte-identical to `SaveArtifact` (§50); `ILicenseEmailSender` with an SMTP and an `.eml` sender, the Send licence window whose preview IS the message, `licence.sent` / `licence.send-failed`, and **Send test email…** (§51); and the message the customer reads (§51.9). ⭐ **Proved against a real Gmail account** — §32's exit criterion satisfied. ⚠ The COMPANY mailbox is still unmeasured (§48.1) — a NEW CLASS behind the sender contract if it refuses basic auth, not a rebuild. ⛔ Bulk sending was deliberately NOT built; it is its own stage below. Closure: §52 |
-| ⭐ **L8** — **localization of the License Manager's interface (EN + PL)** — 🔒 runs BEFORE L7, by the user's decision | 🚧 **IN PROGRESS. ⏭ Next: L8.3, NOT STARTED** (§55.12). **L8.2 ✅ ACCEPTED 2026-08-21** (§55): `StatusMessage` as key + arguments, 104 call sites, 149 catalog entries, 8 injections / 8 reds, 145/153 values matched verbatim against `f72b7b0`, ⛔ zero visible change. **L8.1 ✅ implemented and committed** (§54): the mechanism, 6 injections / 6 reds, one catalog migrated byte-identically, ⛔ zero visible change. **L8.0/prep ✅ accepted** — seven option records took their identity back from their labels (gotcha #394), the interface and message languages got separate catalogs, 13 guards each proved by injection, and the EN → PL vocabulary was ratified into `design/terminology.md` §4 (`Issue` added to §1). ⏭ **L8.1 mechanism** → **L8.2** `StatusMessage` as key + arguments → **L8.3** 146 XAML literals → **L8.4** ≈300 C# texts, plurals, and the two obligations in §53.6 → **L8.5** the Polish → **L8.6** QA in 4 combinations. ⛔ **L8.1–L8.4 change no user-visible word.** Authority: §53 |
+| ⭐ **L8** — **localization of the License Manager's interface (EN + PL)** — 🔒 runs BEFORE L7, by the user's decision | 🚧 **IN PROGRESS. ⏭ Next: L8.3, NOT STARTED** (§55.12). **L8.2 ✅ ACCEPTED 2026-08-21** (§55): `StatusMessage` as key + arguments, 104 call sites, `Strings.resx` 11 → 164 entries, 8 injections / 8 reds, 145/153 values matched verbatim against `f72b7b0`, ⛔ zero visible change. **L8.1 ✅** (§54): the mechanism, 6 injections / 6 reds, one catalog migrated byte-identically. **L8.0/prep ✅** — seven option records took their identity back from their labels (gotcha #394), the interface and message languages got separate catalogs, 13 guards each proved by injection, and the EN → PL vocabulary was ratified into `design/terminology.md` §4 (`Issue` added to §1). ⏭ **L8.3** the XAML literals (⚠ **151**, re-measured — not the 146 older notes quote) → **L8.4** ≈300 C# texts, plurals, and the two obligations in §53.6 → **L8.5** the Polish → **L8.6** QA in 4 combinations. ⛔ **L8.1–L8.4 change no user-visible word.** Authority: §53 |
 | **L7** — hardening and closing: ⭐ **the real key ceremony**, public key shipped, docs | ⏳ not started — ⛔ **and deliberately after L8** |
 
 ⚠ **`TrustedKeys.Production` is empty and the REAL key ceremony has not been performed** — deliberately
