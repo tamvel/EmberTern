@@ -4588,3 +4588,199 @@ the strip can raise, so L8.4's subject is what is left: window-level helper text
 `ArtifactHistory` presentation strings and the `Describe`-style mappers that L8.2 did not reach because
 they never touch `StatusMessage`. And §53.6's obligations are still open and still owed: the **selected
 artifact must survive a language change**, and `LicenseListItem.Status = Capitalise(...)` must go.
+---
+
+## 57. L8.4 — the C# presentation text, as built (2026-08-21)
+
+**The stage's subject: every sentence a view model or a code-behind puts in front of the OPERATOR moves to
+the catalog, and every surface whose words are BUILT rather than bound learns that the language changed.**
+⛔ Not one user-visible word altered — L8.5 is the editorial stage.
+
+### 57.1 The numbers, as built
+
+| | |
+|---|---|
+| New catalog keys | **85** |
+| New `[StringCatalog]` classes | **12** (3 → 15) |
+| `Strings.resx` entries | 294 → **379** |
+| Pre-existing entries changed | **0** (the `.resx` diff is 255 insertions / 0 deletions) |
+| Sentence-shaped literals in `ViewModels` | 92 → **11** · in `Views` 8 → **0** |
+| Suite | **737 / 737** (from 709), 0 failed, 0 skipped, **two consecutive stable runs** |
+| Build | **0 / 0** in **Debug** and **Release** |
+
+⚠ **The "≈300" and the "161 / 19 / 142" of §56.9 are both unreproducible**, and the second was measured only
+a day earlier. A lexer-based count over the same criterion gave **240 / 36 / 204** before the stage and
+**151 / 36 / 115** after. ⭐ The lesson is one this project keeps relearning: a count kept in prose is a
+derived value typed by hand (#284). What is worth recording is the CLASSIFICATION, not the total — the 115
+that remain are SQL, JSON field names, persisted values, audit notes, e-mail templates in the customer's
+language, and the English diagnostic halves L8.2 deliberately left beside a `MessageKey`.
+
+### 57.2 ⭐⭐ How "not one word changed" was proved
+
+Three mechanical instruments, none of them a review:
+
+1. **Generation, not transcription.** All 85 values were written into `Strings.resx` by a script that
+   addresses literals as (path, line, occurrence) in the blob at `b012a0e` and normalises interpolation
+   holes to `{0}…{n}`. ⛔ No value was ever retyped. Two transformations were declared and named at their
+   use sites: the leading English `1` of a `one` arm becoming `{0}`, and a leading JOIN space being moved
+   out of a sentence into the join.
+2. **Classification against the pre-migration tree.** 56 values are byte-identical to a single literal
+   there, 14 are a run of consecutive literals joined, **15 are RESHAPED** — a plural-family arm or a
+   spliced whole sentence. **0 unaccounted.**
+3. **The 15 reshaped ones are pinned by RENDERING.** `MigratedTextTests` spells the expected English out in
+   full for each; ⛔ an expectation rebuilt by the code it checks proves nothing (§55.8).
+
+⭐ And the strongest evidence is free: **every pre-existing test that asserts a migrated English string is
+green without being touched** — `LicenseBrowserTests`, `ArtifactHistoryPresentationTests`,
+`SettingsWindowTests` and `BatchRenewalTests` among them.
+
+### 57.3 ⭐⭐ §53.6's two obligations, discharged — and the twin the brief did not name
+
+- **Obligation 2.** `LicenseListItem.Status = Capitalise(summary.License.Status)` is gone. The column reads
+  `LicenceStatusText.Describe(code)`; the persisted value is untouched, and a test asserts both that the
+  rendered word follows the language and that `LicenseStatuses.Active` is still what the register holds.
+  ⚠ `Capitalise` survives **only** in the unknown-value arm, because that is exactly what an unrecognised
+  status rendered as before — the vocabulary can only grow, and an older build must stay able to read it.
+- ⚠⚠ **The twin.** `ArtifactHistoryViewModel` printed `isCurrent ? "current" : "superseded"` — i.e.
+  `RegisterQueries.Current` / `.Superseded`, **persisted values** (`terminology.md` §4.4), straight to the
+  screen. The identical defect, one line long, named nowhere. Now `ArtifactStandingText`.
+  ⭐ The rule this makes explicit: **a persisted code and its presentation are two facts, and the
+  presentation needs an owner.** Two owners exist now, one per dictionary; ⛔ they are NOT merged, on the
+  user's own reasoning at acceptance — sharing would rest on the English words looking alike rather than on
+  the codes being the same fact.
+- **Obligation 1.** `ArtifactHistoryViewModel` subscribes weakly and calls `Reload()`, whose re-selection by
+  `Artifact.ArtifactId` is what keeps the operator on the same artifact.
+  `TheSelectedArtifactSurvivesALanguageChange` asserts BOTH halves: that the history really was rebuilt (the
+  `Standing` word changed) and that the same `ArtifactId` is still selected. ⛔ Asserting only the second
+  would pass on a surface that ignored the language change entirely.
+
+### 57.4 ⭐⭐ The finding: most of L8.4 is REFRESH, not translation
+
+Replacing a literal with a lookup makes the C# read live. It does **not** make the screen change. Four
+distinct classes, each needing its own answer:
+
+| Class | Why a lookup alone is not enough | The answer |
+|---|---|---|
+| Rows built once (`LicenseListItem`, `ArtifactListItem`) | `required … { get; init; }` strings a grid binds DIRECTLY | rebuild — `Refresh()` / `Reload()` on the language event |
+| Sentences captured into `[ObservableProperty]` | resolved once, then frozen | the rebuild overwrites them |
+| Computed properties | live in C#, but a binding only re-reads when told | `MessageHostViewModel.OnLanguageChanged()` is **`virtual`** now, and five hosts override it |
+| Option records in an `ItemTemplate` | ⚠⚠ **measured: a `ComboBox` bound to `{Binding Label}` does NOT re-read** | `LocalizedCaption`, and templates bind `Caption.Value` |
+
+⚠⚠ **The base class answered for the message strip and for nothing else** — that was the real gap. Without
+the override hook a window renders two languages at once, with no binding error and no exception: defect
+#353's shape, one layer earlier.
+
+### 57.5 ⭐ `LocalizedCaption` — and why the cheaper fix was refused
+
+`PickerLabelLivenessTests` put a real `ComboBox` over real `FilterOption`s in front of a two-culture catalog
+and read the text off the realised control, before and after. **It came back identical.** Every option
+record keeps its words out of its identity (#394), so `Label` is computed and the C# read is live — but the
+record raises no `PropertyChanged`, and nothing about switching languages touches it or its `ItemsSource`.
+
+⛔ **Rebuilding the `ItemsSource` was rejected.** It would work only because identity is code-only, and it
+puts a transient `SelectedItem` change in the path of three pickers that re-query on selection — the exact
+blanked-picker failure #394 exists to prevent, re-introduced to solve a rendering problem.
+
+⭐ `LocalizedCaption` is the notifying sibling of `LocalizedString`: same event, same moment, same resolver;
+the only difference is that its text comes from a decision rather than from a key. Nothing is rebuilt.
+⭐ **The rule is stated POSITIVELY — every option record exposes `Caption`, every picker template binds
+`Caption.Value`** — including `LanguageOption`, whose endonyms could not go stale. A rule shaped as
+"everything except the two that happen not to need it" leaks (`product-polish.md` M2b rule 11).
+
+⚠ **`SmtpSecurityOption` had been in this shape since L8.1**: a picker that would have frozen in the first
+language. Found by L8.4's measurement, not caused by L8.4's changes.
+
+### 57.6 ⭐ `RegisterIntegrityException` — the class §55.3 sorted into the wrong bucket
+
+Its sentences are OURS and they reach the strip **unframed** at two call sites: `StorageViewModel` through
+`StatusMessage.FromError`, and `BatchRenewalViewModel` as an argument. §55.3 classified the exception sites
+by the type each `catch` names, which put this one in the "catch-all, so the words are not ours" bucket.
+⭐ The words are ours. Measured by reading the two DISPLAY paths rather than the catch clauses.
+
+It is an `ILocalizedError` now: 7 throw sites, 8 new `Status.` keys, the English kept on
+`Exception.Message` for diagnostics only. ⭐ `BackupWorkflow`'s integrity refusal carries its problems as a
+single `LocalizedSentences` argument, so a variable number of our own live sentences nests inside a live
+sentence (§55.5's mechanism, unchanged).
+
+### 57.7 ⛔ Three `ArgumentException` sites deliberately left out — with the measurement
+
+🔒 The user's decision put them in scope; they are out, and the premise that changed is worth recording,
+because it came from my own reconnaissance being incomplete.
+
+- **Both sentences are guarded upstream in the view model** — `ShellViewModel.SaveCustomer` checks the name
+  and shows `StatusCatalog.CustomerNameRequired`; `BatchRenewalViewModel` checks `plan.IsEmpty` and shows
+  `TickAtLeastOneLicence`. From the UI they are unreachable.
+- ⚠⚠ **`new ArgumentException(text, nameof(x)).Message` returns `"…text… (Parameter 'x')"`.** Keying them
+  would either pull `(Parameter 'customer')` into the catalog to be translated, or drop it — and dropping it
+  CHANGES the rendered string, which rule 12 forbids in this stage.
+
+⭐ So they stay invariant guards, which is what §55.3's "5 catch-all" bucket is for. 🔒 Accepted by the user
+at QA. ⏭ If they are ever revisited, the open question is which of those two prices to pay.
+
+### 57.8 ⚠ Two corrections to the record
+
+1. **§49.9 undercounts `DatePresentationTests`.** It names one offender (`RestoreWorkflow.cs`). Running that
+   test's own regex against the blob at `b012a0e` finds **two** — the second is `StorageViewModel.cs:445`,
+   byte-identical today and absent from L8.4's diff. So the result is **9 / 10, with ONE red carrying TWO
+   pre-existing offenders**, and ⛔ L8.4 touched no date formatting.
+2. **The §56.9 measurement is not reproducible** — see §57.1.
+
+### 57.9 ⭐ `DisableTestParallelization` — a consequence, stated rather than hidden
+
+`Loc` is global static state by design, and `Loc.LanguageChanged` is a static event: two test classes running
+concurrently are two threads mutating one language. Measured on this stage's own run — the same command
+reported **1 failure and then 5**, from one cause with two faces: a test asserting English read a catalog
+another class had swapped mid-run, and a view model subscribed by one class was notified by another class's
+switch **after its own fixture had been disposed**, so a rebuild queried a closed SQLite connection.
+
+⭐ L8.4 is what made the second reachable — before it, no view model went to the database on a language
+change. ⛔ Not fixed by per-class collections (any pair where one writes the language and the other reads a
+localized string is a race, and that is most of the suite), and ⛔ not by making a refresh tolerate a closed
+register. `[assembly: CollectionBehavior(DisableTestParallelization = true)]`. ⚠ Cost: **~65 s → ~120 s**. A
+slow suite is worth more than one that is green four runs out of five. The same finding EmberTern's own suite
+carries as `IsolatesGlobalLanguageState`.
+
+### 57.10 Verification, and the injection campaign as it actually ran
+
+- ✅ Build **0 warnings / 0 errors** — **Debug** and **Release**.
+- ✅ **737 / 737**, 0 failed, 0 skipped, **twice in a row**.
+- ✅ `DatePresentationTests` **9 / 10** — the one red is §57.8's pre-existing pair.
+- ⛔ The EmberTern suite was not run: no product file was touched.
+- ⚠⚠ **The injection campaign was stopped by the user at 4 of 12** — 🔒 a deliberate scope call: the first
+  four cost about eight minutes, and L8.4 is a migration rather than a mutation-testing exercise.
+  **4 applied, 4 reds, each the intended guard, all reverted:** a migrated value reverted to a literal →
+  `NoUserFacingCSharpLiteral_IsUnaddressed`; `Capitalise` restored →
+  `TheStatusColumnIsALookupAndNotTheStoredValue`; the history's subscription removed →
+  `TheSelectedArtifactSurvivesALanguageChange`; the list's subscription removed →
+  `TheLicencesListRebuildsAndKeepsItsSelectionAndTicks`.
+- ⛔ **The remaining EIGHT were NOT run** — the picker's `Caption.Value` binding, the caption's own
+  invalidation, a mistyped catalog key, a drifted `.resx` value, a catalog missing from the tripwire, the
+  message-host hook, a stale exemption, and an emptied sweep. ⚠ Their guards exist and are green; what is
+  missing is the proof that each goes red on demand. Recorded so nobody reads this stage as fully
+  injection-verified.
+- ⚠ **The interruption left two residues on disk**, both removed: one applied injection, and a duplicated
+  pair of `switch` arms from a double revert — ⭐ the second was caught by the compiler, which is the case
+  for rebuilding before drawing any conclusion (#400).
+
+### 57.11 ⛔ What L8.4 deliberately did NOT do
+
+⛔ No Polish, no `Strings.pl.resx`. ⛔ The Application-language picker stays DISABLED (D‑8). ⛔ Not one
+English word re-worded. ⛔ No plural family where English had a single arm — `customer(s)`, `licence(s)`,
+`artifact(s)`, `row(s)` and `line(s)` keep their English shorthand, because `FormatCount` would render
+"1 customer" where the operator reads "1 customer(s)". ⛔ Nothing in `EmberTern.App`. ⛔ L7 untouched.
+⛔ No date formatting touched.
+
+### 57.12 ⏭ Hand-off to L8.5 — the editorial stage
+
+**L8.5 is where wording becomes a decision.** Carried over, each already located:
+
+- **Plural families** for the `(s)` forms above, and for `Licences.Detail*` / `Batch.*` (flat keys with a
+  `switch` today, because a family there would reorder the arguments).
+- **Wording**: `"— unreadable payload —"`, `"Settings ▸ E-mail"` embedded inside two sentences,
+  `"payload v"`, and `"bytes"` → *bajtów*.
+- **Enable the Application-language picker** — and write its writer, since `ui.json` is live only on the
+  read side.
+- ⚠ The 11 literals still in `ViewModels` are all technical and each carries its reason in
+  `CSharpLocalizationTests.TechnicalLiterals`: three date formats, four separator-only shapes,
+  `"{0}, payload v{1}"`, and `"EmberTern licence"` as a default FILE NAME. ⭐ That last reads identically to
+  `FileType.Licence` and is deliberately not the same fact (§56.3).

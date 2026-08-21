@@ -558,8 +558,8 @@ by keyword the moment a bug "feels familiar". Each line is a one-sentence summar
 reference for the full explanation and the failure it prevents.
 
 ⛔ **The entry count is deliberately NOT written down here.** Three separate counters used to carry it
-and all three disagreed while every one of them was wrong. **Measure it** (last check 2026-08-18:
-**376 entry lines, max #387**):
+and all three disagreed while every one of them was wrong. **Measure it** (last check 2026-08-21:
+**393 entry lines, max #404**):
 
 ```bash
 grep -cE "^[0-9]+\. \*\*" docs/gotchas.md
