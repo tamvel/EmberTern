@@ -83,7 +83,7 @@
              second owner of one action — EmberTern cut exactly that row for exactly that reason (§4 B). -->
         <Button Grid.Column="3" Classes="icon" Name="AppMenuButton" Click="OnAppMenuClick"
                 VerticalAlignment="Center"
-                ToolTip.Tip="Application menu">
+                ToolTip.Tip="{lm:Loc Main.ApplicationMenu}">
           <Viewbox Classes="icon">
             <Canvas Width="24" Height="24">
               <Path Data="{DynamicResource Icon.Menu}" />
@@ -94,7 +94,7 @@
                  pointer where a right-click menu belongs. -->
             <ContextMenu Name="AppMenu" Placement="BottomEdgeAlignedLeft">
               <MenuItem Name="AppMenuSettings"
-                        Header="Settings…"
+                        Header="{lm:Loc Main.Settings}"
                         Icon="{lm:MenuIcon Icon.Settings}"
                         Click="OnAppMenuSettingsClick" />
               <Separator />
@@ -105,10 +105,10 @@
                    MenuStyles.axaml is what keeps it legible rather than a ghost.
                    ⛔ No About window is built in this stage. -->
               <MenuItem Name="AppMenuAbout"
-                        Header="About"
+                        Header="{lm:Loc Main.About}"
                         Icon="{lm:MenuIcon Icon.Info}"
                         IsEnabled="False"
-                        ToolTip.Tip="Not available yet" />
+                        ToolTip.Tip="{lm:Loc Main.NotAvailableYet}" />
             </ContextMenu>
           </Button.ContextMenu>
         </Button>
@@ -120,7 +120,7 @@
              it should take a deliberate step to reach rather than sit beside the daily work. -->
         <Button Grid.Column="4" Classes="icon" Name="StorageButton" Click="OnOpenStorage"
                 VerticalAlignment="Center"
-                ToolTip.Tip="Storage — backup, restore, JSONL export and the data folder">
+                ToolTip.Tip="{lm:Loc Main.StorageBackupRestoreJsonlExportData}">
           <Viewbox Classes="icon">
             <Canvas Width="24" Height="24">
               <Path Data="{DynamicResource Icon.Folder}" />
@@ -129,7 +129,7 @@
         </Button>
 
         <Button Grid.Column="5" Classes="icon" Name="ThemeToggle" Click="OnToggleTheme"
-                VerticalAlignment="Center" ToolTip.Tip="Switch between the light and dark theme">
+                VerticalAlignment="Center" ToolTip.Tip="{lm:Loc Main.SwitchBetweenLightDarkTheme}">
           <Viewbox Classes="icon">
             <Canvas Width="24" Height="24">
               <Path Data="{Binding ActualThemeVariant, ElementName=RootWindow,
@@ -142,7 +142,7 @@
         <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Stretch"
 >
           <Button Classes="caption" Name="MinimizeButton" Click="OnMinimizeClick"
-                  ToolTip.Tip="Minimise">
+                  ToolTip.Tip="{lm:Loc Main.Minimise}">
             <Viewbox Classes="icon">
               <Canvas Width="24" Height="24">
                 <Path Data="{DynamicResource Icon.WindowMinimize}" />
@@ -150,14 +150,14 @@
             </Viewbox>
           </Button>
           <Button Classes="caption" Name="MaxRestoreButton" Click="OnMaxRestoreClick"
-                  ToolTip.Tip="Maximise or restore">
+                  ToolTip.Tip="{lm:Loc Main.MaximiseRestore}">
             <Viewbox Classes="icon">
               <Canvas Width="24" Height="24">
                 <Path Name="MaxRestoreGlyph" Data="{DynamicResource Icon.WindowMaximize}" />
               </Canvas>
             </Viewbox>
           </Button>
-          <Button Classes="caption close" Name="CloseButton" Click="OnCloseClick" ToolTip.Tip="Close">
+          <Button Classes="caption close" Name="CloseButton" Click="OnCloseClick" ToolTip.Tip="{lm:Loc Common.Close}">
             <Viewbox Classes="icon">
               <Canvas Width="24" Height="24">
                 <Path Data="{DynamicResource Icon.WindowClose}" />
@@ -173,10 +173,10 @@
          "who lapses next month?". The second one has no customer to start from. -->
     <Border Classes="view-switch" DockPanel.Dock="Top">
       <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
-        <Button Classes="view-tab" Name="CustomersTab" Content="Customers"
+        <Button Classes="view-tab" Name="CustomersTab" Content="{lm:Loc Main.Customers}"
                 Classes.active="{Binding IsCustomersView}"
                 Command="{Binding ShowCustomersCommand}" />
-        <Button Classes="view-tab" Name="LicensesTab" Content="Licences"
+        <Button Classes="view-tab" Name="LicensesTab" Content="{lm:Loc Main.Licences}"
                 Classes.active="{Binding IsLicensesView}"
                 Command="{Binding ShowLicensesCommand}" />
       </StackPanel>
@@ -240,8 +240,8 @@
         <DockPanel Margin="{DynamicResource Pad.Panel}">
           <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}"
                 Margin="{DynamicResource Margin.PanelCaption}">
-            <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center" Text="Customers" />
-            <Button Grid.Column="1" Classes="flat" Content="New"
+            <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center" Text="{lm:Loc Main.Customers}" />
+            <Button Grid.Column="1" Classes="flat" Content="{lm:Loc Main.New}"
                     Command="{Binding NewCustomerCommand}" />
           </Grid>
 
@@ -283,10 +283,10 @@
 
         <Border Grid.Row="0" Classes="view-switch">
           <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
-            <Button Classes="view-tab" Name="CustomerTab" Content="Customer"
+            <Button Classes="view-tab" Name="CustomerTab" Content="{lm:Loc Main.Customer}"
                     Classes.active="{Binding IsCustomerTab}"
                     Command="{Binding ShowCustomerTabCommand}" />
-            <Button Classes="view-tab" Name="LicencesTab" Content="Licences"
+            <Button Classes="view-tab" Name="LicencesTab" Content="{lm:Loc Main.Licences}"
                     Classes.active="{Binding IsLicencesTab}"
                     Command="{Binding ShowLicencesTabCommand}" />
           </StackPanel>
@@ -306,15 +306,15 @@
           <!-- Customer ───────────────────────────────────────────────────────────────────────── -->
           <Border Classes="card">
             <StackPanel Spacing="{DynamicResource Space.Sm}">
-              <TextBlock Classes="section" Text="Customer" />
+              <TextBlock Classes="section" Text="{lm:Loc Main.Customer}" />
 
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
                 <StackPanel Grid.Column="0">
-                  <TextBlock Classes="field-label" Text="Name — required, and this is what gets signed" />
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.NameRequiredWhatGetsSigned}" />
                   <TextBox Text="{Binding CustomerName}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1">
-                  <TextBlock Classes="field-label" Text="Identifier" />
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.Identifier}" />
                   <!-- ⛔ Read-only, exactly like the licence id below, and for a stronger reason: the
                        identifier is the PRIMARY KEY the save writes against. Editing it and saving
                        would not rename this customer, it would silently create a second one and leave
@@ -326,7 +326,7 @@
                     <SelectableTextBlock Grid.Column="0" Classes="mono value"
                                          Text="{Binding CustomerId}" />
                     <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
-                            Tag="{Binding CustomerId}" ToolTip.Tip="Copy the identifier">
+                            Tag="{Binding CustomerId}" ToolTip.Tip="{lm:Loc Main.CopyIdentifier}">
                       <Viewbox Classes="icon">
                         <Canvas Width="24" Height="24">
                           <Path Data="{DynamicResource Icon.Copy}" />
@@ -337,28 +337,28 @@
                 </StackPanel>
               </Grid>
 
-              <TextBlock Classes="field-label" Text="Address" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.Address}" />
               <TextBox Classes="multiline" Text="{Binding CustomerAddress}" />
 
               <Grid ColumnDefinitions="*,*,*" ColumnSpacing="{DynamicResource Space.Md}">
                 <StackPanel Grid.Column="0">
-                  <TextBlock Classes="field-label" Text="First name" />
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.FirstName}" />
                   <TextBox Text="{Binding CustomerFirstName}" />
                 </StackPanel>
                 <StackPanel Grid.Column="1">
-                  <TextBlock Classes="field-label" Text="Last name" />
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.LastName}" />
                   <TextBox Text="{Binding CustomerLastName}" />
                 </StackPanel>
                 <StackPanel Grid.Column="2">
-                  <TextBlock Classes="field-label" Text="E-mail" />
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.EMail}" />
                   <TextBox Text="{Binding CustomerEmail}" />
                 </StackPanel>
               </Grid>
 
-              <TextBlock Classes="field-label" Text="Notes — administrative only, never travel in a licence" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.NotesAdministrativeOnlyNeverTravelLicence}" />
               <TextBox Classes="multiline" Text="{Binding CustomerNotes}" />
 
-              <Button Classes="primary" Content="Save customer" HorizontalAlignment="Right"
+              <Button Classes="primary" Content="{lm:Loc Main.SaveCustomer}" HorizontalAlignment="Right"
                       Command="{Binding SaveCustomerCommand}" />
             </StackPanel>
           </Border>
@@ -379,8 +379,8 @@
           <Border Classes="card" IsVisible="{Binding SelectedCustomer, Converter={x:Static ObjectConverters.IsNotNull}}">
             <StackPanel Spacing="{DynamicResource Space.Sm}">
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
-                <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center" Text="Licences" />
-                <Button Grid.Column="1" Classes="flat" Content="New licence"
+                <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center" Text="{lm:Loc Main.Licences}" />
+                <Button Grid.Column="1" Classes="flat" Content="{lm:Loc Main.NewLicence}"
                         Command="{Binding NewLicenseCommand}" />
               </Grid>
 
@@ -415,7 +415,7 @@
                    an Auto column plus a stretching child is a control with no width at all. -->
               <Grid ColumnDefinitions="*,*,*" ColumnSpacing="{DynamicResource Space.Md}">
                 <StackPanel Grid.Column="0">
-                  <TextBlock Classes="field-label" Text="Seats" />
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.Seats}" />
                   <TextBox Text="{Binding LicenseSeats}" HorizontalAlignment="Stretch" />
                 </StackPanel>
                 <StackPanel Grid.Column="1">
@@ -426,24 +426,24 @@
                        Known and accepted: the calendar FLYOUT is not repinned to our palette, because
                        FluentBridge carries no Calendar* keys — EmberTern's own two date pickers have
                        the same gap. Recorded as its own design-system item; not fixed here. -->
-                  <TextBlock Classes="field-label" Text="Valid from" />
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.ValidFrom}" />
                   <CalendarDatePicker Name="LicenseNotBefore" SelectedDate="{Binding LicenseNotBefore}"
                                       SelectedDateFormat="Custom" CustomDateFormatString="yyyy-MM-dd"
                                       HorizontalAlignment="Stretch" />
                 </StackPanel>
                 <StackPanel Grid.Column="2">
-                  <TextBlock Classes="field-label" Text="Valid until (inclusive)" />
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.ValidUntilInclusive}" />
                   <CalendarDatePicker Name="LicenseExpiresAt" SelectedDate="{Binding LicenseExpiresAt}"
                                       SelectedDateFormat="Custom" CustomDateFormatString="yyyy-MM-dd"
                                       HorizontalAlignment="Stretch" />
                 </StackPanel>
               </Grid>
 
-              <TextBlock Classes="field-label" Text="Licence id" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.LicenceId}" />
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Xs}">
                 <SelectableTextBlock Grid.Column="0" Classes="mono value" Text="{Binding LicenseId}" />
                 <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
-                        Tag="{Binding LicenseId}" ToolTip.Tip="Copy the licence id">
+                        Tag="{Binding LicenseId}" ToolTip.Tip="{lm:Loc Main.CopyLicenceId}">
                   <Viewbox Classes="icon">
                     <Canvas Width="24" Height="24">
                       <Path Data="{DynamicResource Icon.Copy}" />
@@ -452,7 +452,7 @@
                 </Button>
               </Grid>
 
-              <TextBlock Classes="field-label" Text="Notes — administrative only" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.NotesAdministrativeOnly}" />
               <TextBox Classes="multiline" Text="{Binding LicenseNotes}" />
 
               <!-- ⭐⭐ L5.3. WHY THIS ARTIFACT IS BEING ISSUED — chosen, never inferred.
@@ -461,7 +461,7 @@
                    append-only and therefore uncorrectable. The four values are fixed (D-3) and the picker
                    offers only the ones that could be TRUE right now: before the first issue there is
                    exactly one, so the field states it instead of asking. -->
-              <TextBlock Classes="field-label" Text="Reason for this issue" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.ReasonIssue}" />
               <ComboBox Name="IssueReason" HorizontalAlignment="Stretch"
                         ItemsSource="{Binding IssueReasonChoices}"
                         SelectedItem="{Binding SelectedIssueReason}"
@@ -483,15 +483,12 @@
               <Border Name="ReissueLostAdvice" Classes="card"
                       IsVisible="{Binding IsReissueLostSelected}">
                 <TextBlock Classes="hint" TextWrapping="Wrap"
-                           Text="The customer already has this exact file. Prefer “Export this issue…” in
-                                 the issuing history below — it re-sends the artifact that was delivered,
-                                 byte for byte, without signing a new one. Issue only if they need a
-                                 freshly signed replacement." />
+                           Text="{lm:Loc Main.TheCustomerAlreadyHasExactFile}" />
               </Border>
 
               <!-- ⭐ D-4. Optional, and it rides on the audit line that is written for every issue
                    anyway — no new column, no new model, nothing extra to back up or migrate. -->
-              <TextBlock Classes="field-label" Text="Issue note — optional, recorded in the audit log" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.IssueNoteOptionalRecordedAuditLog}" />
               <TextBox Text="{Binding IssueNote}" />
 
               <!-- WrapPanel, not StackPanel, since L6.3 added a fifth action: at 1080 DIP the five
@@ -509,18 +506,18 @@
                     <Setter Property="Margin" Value="{DynamicResource Margin.InlineGap}" />
                   </Style>
                 </WrapPanel.Styles>
-                <Button Classes="flat" Content="Inspect latest"
+                <Button Classes="flat" Content="{lm:Loc Main.InspectLatest}"
                         Command="{Binding InspectLatestCommand}" />
-                <Button Classes="flat" Content="Export latest…"
+                <Button Classes="flat" Content="{lm:Loc Main.ExportLatest}"
                         Command="{Binding ExportLatestCommand}" />
                 <!-- L6.3. A WINDOW, not an inline action: what is about to leave for a customer is shown
                      in full before it goes, and the send is confirmed there (14.1). One licence, one
                      customer, one send - there is deliberately no bulk path. -->
-                <Button Classes="flat" Name="SendLicenceButton" Content="Send licence…"
-                        ToolTip.Tip="Shows the message that will be sent, with the stored licence attached"
+                <Button Classes="flat" Name="SendLicenceButton" Content="{lm:Loc Main.SendLicence}"
+                        ToolTip.Tip="{lm:Loc Main.ShowsMessageWillSentStoredLicence}"
                         Click="OnSendLicence" />
-                <Button Classes="flat" Content="Save terms" Command="{Binding SaveLicenseCommand}" />
-                <Button Classes="primary" Content="Issue and save…"
+                <Button Classes="flat" Content="{lm:Loc Main.SaveTerms}" Command="{Binding SaveLicenseCommand}" />
+                <Button Classes="primary" Content="{lm:Loc Main.IssueSave}"
                         Command="{Binding IssueAndSaveCommand}" />
               </WrapPanel>
             </StackPanel>
@@ -541,8 +538,8 @@
             <StackPanel Spacing="{DynamicResource Space.Sm}">
               <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
                 <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center"
-                           Text="Issuing history" />
-                <Button Grid.Column="1" Classes="flat" Content="Export this issue…"
+                           Text="{lm:Loc Main.IssuingHistory}" />
+                <Button Grid.Column="1" Classes="flat" Content="{lm:Loc Main.ExportIssue}"
                         Command="{Binding ExportSelectedArtifactCommand}" />
               </Grid>
 
@@ -589,46 +586,46 @@
                      `VerdictText` — the same one the message strip uses when "Inspect latest" runs, so
                      the strip and this panel can never describe one artifact two different ways.
                      ⛔ Nothing here recomputes a verdict from the dates below (§41.4). -->
-                <TextBlock Classes="field-label" Text="What EmberTern would say about it today" />
+                <TextBlock Classes="field-label" Text="{lm:Loc Main.WhatEmberternWouldSayAboutToday}" />
                 <TextBlock Text="{Binding History.Verdict}" />
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="{DynamicResource Space.Md}">
                   <StackPanel Grid.Column="0">
                     <!-- ⭐ The name SIGNED into this artifact, which is not necessarily the customer's
                          name today — that difference is exactly what a support call is about. -->
-                    <TextBlock Classes="field-label" Text="Licensed to" />
+                    <TextBlock Classes="field-label" Text="{lm:Loc Main.LicensedTo}" />
                     <SelectableTextBlock Classes="value" Text="{Binding History.Licensee}" />
                   </StackPanel>
                   <StackPanel Grid.Column="1">
-                    <TextBlock Classes="field-label" Text="Seats" />
+                    <TextBlock Classes="field-label" Text="{lm:Loc Main.Seats}" />
                     <SelectableTextBlock Classes="value" Text="{Binding History.Seats}" />
                   </StackPanel>
                 </Grid>
 
                 <Grid ColumnDefinitions="*,*" ColumnSpacing="{DynamicResource Space.Md}">
                   <StackPanel Grid.Column="0">
-                    <TextBlock Classes="field-label" Text="Valid" />
+                    <TextBlock Classes="field-label" Text="{lm:Loc Main.Valid}" />
                     <SelectableTextBlock Classes="mono value" Text="{Binding History.Validity}" />
                   </StackPanel>
                   <StackPanel Grid.Column="1">
-                    <TextBlock Classes="field-label" Text="Product" />
+                    <TextBlock Classes="field-label" Text="{lm:Loc Main.Product}" />
                     <SelectableTextBlock Classes="value" Text="{Binding History.Product}" />
                   </StackPanel>
                 </Grid>
 
-                <TextBlock Classes="field-label" Text="Signed with" />
+                <TextBlock Classes="field-label" Text="{lm:Loc Main.SignedWith}" />
                 <SelectableTextBlock Classes="mono value" Text="{Binding History.SignedWith}" />
 
                 <!-- ⚠ The token is the licence itself and is long. Shown as ONE trimmed line plus its
                      delivered size, with the whole of it on the copy action — a 700-character blob
                      rendered in full is not "readable", it is just present. -->
-                <TextBlock Classes="field-label" Text="Token" />
+                <TextBlock Classes="field-label" Text="{lm:Loc Main.Token}" />
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Xs}">
                   <SelectableTextBlock Grid.Column="0" Classes="mono value"
                                        Text="{Binding History.Token}"
                                        TextTrimming="CharacterEllipsis" />
                   <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
-                          Tag="{Binding History.Token}" ToolTip.Tip="Copy the whole token">
+                          Tag="{Binding History.Token}" ToolTip.Tip="{lm:Loc Main.CopyWholeToken}">
                     <Viewbox Classes="icon">
                       <Canvas Width="24" Height="24">
                         <Path Data="{DynamicResource Icon.Copy}" />
@@ -640,14 +637,14 @@
 
                 <!-- ⭐ The exact JSON that was signed, as stored. The labelled fields above are the
                      readable form; this is the authoritative one, and support asks for it verbatim. -->
-                <TextBlock Classes="field-label" Text="Signed payload" />
+                <TextBlock Classes="field-label" Text="{lm:Loc Main.SignedPayload}" />
                 <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Xs}">
                   <SelectableTextBlock Grid.Column="0" Classes="mono value"
                                        Text="{Binding History.PayloadJson}"
                                        TextWrapping="Wrap" />
                   <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
                           VerticalAlignment="Top"
-                          Tag="{Binding History.PayloadJson}" ToolTip.Tip="Copy the signed payload">
+                          Tag="{Binding History.PayloadJson}" ToolTip.Tip="{lm:Loc Main.CopySignedPayload}">
                     <Viewbox Classes="icon">
                       <Canvas Width="24" Height="24">
                         <Path Data="{DynamicResource Icon.Copy}" />
@@ -675,17 +672,17 @@
            between them. -->
       <Border DockPanel.Dock="Top" Classes="card" Margin="{DynamicResource Margin.SectionGap}">
         <StackPanel Spacing="{DynamicResource Space.Sm}">
-          <TextBlock Classes="section" Text="Find a licence" />
+          <TextBlock Classes="section" Text="{lm:Loc Main.FindLicence}" />
 
           <Grid ColumnDefinitions="2*,*,*,*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
             <StackPanel Grid.Column="0">
-              <TextBlock Classes="field-label" Text="Search" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.Search}" />
               <TextBox Text="{Binding Browser.SearchText}"
-                       PlaceholderText="Customer, e-mail, identifier, licence id or notes" />
+                       PlaceholderText="{lm:Loc Main.CustomerEMailIdentifierLicenceId}" />
             </StackPanel>
 
             <StackPanel Grid.Column="1">
-              <TextBlock Classes="field-label" Text="Status" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.Status}" />
               <ComboBox Name="StatusFilter" HorizontalAlignment="Stretch"
                         ItemsSource="{Binding Browser.StatusFilters}"
                         SelectedItem="{Binding Browser.SelectedStatus}"
@@ -693,7 +690,7 @@
             </StackPanel>
 
             <StackPanel Grid.Column="2">
-              <TextBlock Classes="field-label" Text="Expiry" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.Expiry}" />
               <ComboBox Name="ExpiryFilter" HorizontalAlignment="Stretch"
                         ItemsSource="{Binding Browser.ExpiryFilters}"
                         SelectedItem="{Binding Browser.SelectedExpiry}"
@@ -701,7 +698,7 @@
             </StackPanel>
 
             <StackPanel Grid.Column="3">
-              <TextBlock Classes="field-label" Text="Issuing" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.Issuing}" />
               <!-- ⚠ A dropdown rather than a checkbox, and the reason has CHANGED — the surviving half is
                    the one that was always the stronger. It used to read "a checkbox here would fall back
                    to Fluent's own, because ControlThemes.axaml is not linkable"; that is no longer true
@@ -715,7 +712,7 @@
                         ItemTemplate="{StaticResource FilterOptionTemplate}" />
             </StackPanel>
 
-            <Button Grid.Column="4" Classes="flat" Content="Clear" VerticalAlignment="Bottom"
+            <Button Grid.Column="4" Classes="flat" Content="{lm:Loc Main.Clear}" VerticalAlignment="Bottom"
                     Command="{Binding Browser.ClearFiltersCommand}" />
           </Grid>
 
@@ -732,14 +729,14 @@
       <Border DockPanel.Dock="Top" Classes="card" Name="BatchRenewalCard"
               Margin="{DynamicResource Margin.SectionGap}">
         <StackPanel Spacing="{DynamicResource Space.Sm}">
-          <TextBlock Classes="section" Text="Extend selected licences" />
+          <TextBlock Classes="section" Text="{lm:Loc Main.ExtendSelectedLicences}" />
 
           <!-- ⭐ `command-row` is what makes every control here stand at one height — see the style's
                own comment in LicenseManagerStyles.axaml for why this row is the ACTION ladder. -->
           <Grid Classes="command-row" ColumnDefinitions="Auto,Auto,Auto,*,Auto"
                 ColumnSpacing="{DynamicResource Space.Md}">
             <StackPanel Grid.Column="0">
-              <TextBlock Classes="field-label" Text="Extend to (inclusive)" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.ExtendInclusive}" />
               <!-- ⚠ Read as a UTC calendar day running to the END of it, through the same LicenseDay
                    owner the licence form uses — so the two surfaces cannot differ by a day. -->
               <CalendarDatePicker Name="BatchTargetDate" Width="150"
@@ -748,25 +745,25 @@
             </StackPanel>
 
             <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
-              <Button Classes="flat" Name="SelectAllShown" Content="Select all shown"
+              <Button Classes="flat" Name="SelectAllShown" Content="{lm:Loc Main.SelectAllShown}"
                       Command="{Binding Browser.CheckAllShownCommand}" />
             </StackPanel>
 
             <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
-              <Button Classes="flat" Name="ClearSelection" Content="Clear selection"
+              <Button Classes="flat" Name="ClearSelection" Content="{lm:Loc Main.ClearSelection}"
                       Command="{Binding Browser.ClearChecksCommand}" />
             </StackPanel>
 
             <StackPanel Grid.Column="3">
-              <TextBlock Classes="field-label" Text="Note (optional)" />
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.NoteOptional}" />
               <TextBox Text="{Binding BatchRenewal.Note}"
-                       PlaceholderText="Ticket, who asked, why now — stored on the batch's audit line" />
+                       PlaceholderText="{lm:Loc Main.TicketWhoAskedWhyNowStored}" />
             </StackPanel>
 
             <!-- ⭐ D‑3: gated by the command's own CanExecute, which is false while ANY selected licence
                  is blocked — including when the other nineteen are fine. -->
             <Button Grid.Column="4" Classes="primary" Name="ExtendSelected" VerticalAlignment="Bottom"
-                    Content="Extend and issue"
+                    Content="{lm:Loc Main.ExtendIssue}"
                     Command="{Binding BatchRenewal.ExtendCommand}" />
           </Grid>
 
@@ -774,7 +771,7 @@
                a licence that has one before it, and `initial` is what the register proves about one that
                does not — so a list of four here would invite an untruth, which is the trap L5.3 closed. -->
           <TextBlock Classes="hint"
-                     Text="Recorded as Renewal — or as Initial issue for a licence that has never been issued." />
+                     Text="{lm:Loc Main.RecordedAsRenewalAsInitialIssue}" />
 
           <TextBlock Classes="hint" Name="BatchSelectionSummary" Text="{Binding Browser.CheckSummary}" />
           <TextBlock Name="BatchPreviewSummary" TextWrapping="Wrap"
@@ -783,7 +780,7 @@
           <!-- ⭐ D‑3 made visible: the blockers are named, and the operation is held rather than trimmed. -->
           <Border Classes="card" Name="BatchBlockerBox" IsVisible="{Binding BatchRenewal.HasBlockers}">
             <StackPanel Spacing="{DynamicResource Space.Xs}">
-              <TextBlock Classes="section" Text="Held" />
+              <TextBlock Classes="section" Text="{lm:Loc Main.Held}" />
               <TextBlock Name="BatchBlockerSummary" TextWrapping="Wrap"
                          Text="{Binding BatchRenewal.BlockerSummary}" />
             </StackPanel>
@@ -827,7 +824,7 @@
           </StackPanel>
           <!-- ⭐ Without this, search is a dead end: the operator finds the licence that lapses on
                Friday and has nowhere to go with it. -->
-          <Button Grid.Column="1" Classes="primary" Content="Open in Customers"
+          <Button Grid.Column="1" Classes="primary" Content="{lm:Loc Main.OpenCustomers}"
                   VerticalAlignment="Center"
                   Command="{Binding OpenSelectedLicenseCommand}" />
         </Grid>
@@ -880,7 +877,7 @@
                 <DataTemplate x:DataType="vm:LicenseListItem">
                   <CheckBox Name="RowTick" HorizontalAlignment="Center" VerticalAlignment="Center"
                             IsChecked="{Binding IsChecked, Mode=TwoWay}"
-                            ToolTip.Tip="Include this licence in a batch operation" />
+                            ToolTip.Tip="{lm:Loc Main.IncludeLicenceBatchOperation}" />
                 </DataTemplate>
               </DataGridTemplateColumn.CellTemplate>
             </DataGridTemplateColumn>
@@ -888,35 +885,35 @@
             <!-- ⚠ The two wide columns are the only STAR ones, and both are capped. A star column with no
                  ceiling is a column that eats a wide window; a fixed one is a column that cannot use it.
                  The floors keep a narrow window from squeezing a name down to two characters. -->
-            <DataGridTextColumn Header="Customer" Binding="{Binding CustomerName}"
+            <DataGridTextColumn Header="{lm:Loc Main.Customer}" Binding="{Binding CustomerName}"
                                 SortMemberPath="CustomerName"
                                 Width="2*" MinWidth="140" MaxWidth="440" />
 
             <!-- ⭐ QA-5. The contact person: an operator looking for "the licence Kowalski called about"
                  has a person, not a company. Searchable too. -->
-            <DataGridTextColumn Header="Contact" Binding="{Binding Contact}"
+            <DataGridTextColumn Header="{lm:Loc Main.Contact}" Binding="{Binding Contact}"
                                 SortMemberPath="Contact"
                                 Width="*" MinWidth="110" MaxWidth="300" />
 
             <!-- ⚠ Sorts on the FULL id, shows the short one — see `LicenseListItem.LicenseId`. -->
-            <DataGridTextColumn Header="Licence id" Binding="{Binding ShortId}"
+            <DataGridTextColumn Header="{lm:Loc Main.LicenceId}" Binding="{Binding ShortId}"
                                 SortMemberPath="LicenseId"
                                 FontFamily="{DynamicResource Font.Code}"
                                 Width="140" MinWidth="110" />
 
             <!-- ⚠ Sorts on the COUNT, not on the sentence: as text, "10 seats" comes before "3 seats". -->
-            <DataGridTextColumn Header="Seats" Binding="{Binding Seats}"
+            <DataGridTextColumn Header="{lm:Loc Main.Seats}" Binding="{Binding Seats}"
                                 SortMemberPath="SeatsValue"
                                 Width="80" MinWidth="64" />
 
             <!-- ⛔ The REGISTER's status, presented — never a verdict this view computed. The client
                  verdict (Valid / Grace / Expired …) comes from LicenseVerifier and stays on the selection,
                  where Inspect latest runs it for real. -->
-            <DataGridTextColumn Header="Status" Binding="{Binding Status}"
+            <DataGridTextColumn Header="{lm:Loc Main.Status}" Binding="{Binding Status}"
                                 SortMemberPath="Status"
                                 Width="90" MinWidth="72" />
 
-            <DataGridTextColumn Header="Expiry" Binding="{Binding Expiry}"
+            <DataGridTextColumn Header="{lm:Loc Main.Expiry}" Binding="{Binding Expiry}"
                                 SortMemberPath="ExpiresAtValue"
                                 Width="110" MinWidth="92" />
 
@@ -924,7 +921,7 @@
                  about the expiry date ("Expires in 12 days", "Never issued"): sorted as text it would
                  order by the letter E, and sorted by date it would be a second Expiry column wearing a
                  different name. The operator who wants that order has the Expiry column beside it. -->
-            <DataGridTextColumn Header="Standing" Binding="{Binding Standing}"
+            <DataGridTextColumn Header="{lm:Loc Main.Standing}" Binding="{Binding Standing}"
                                 CanUserSort="False"
                                 Width="170" MinWidth="130" />
           </DataGrid.Columns>

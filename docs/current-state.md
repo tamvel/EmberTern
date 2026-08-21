@@ -9,7 +9,7 @@
 > to paste a multi-paragraph "shipped" report here, you are recreating the defect that produced a
 > 6 849-line `CLAUDE.md` twice — see `docs/history/30-claude-md-current-state-archive.md`.
 
-**Last verified: 2026-08-20.**
+**Last verified: 2026-08-21.**
 
 ---
 
@@ -20,39 +20,39 @@
 > not priority: it touches many surfaces and is a UX change, so it closes before L7's security and
 > production finalisation. ⛔ **L7 is NOT STARTED**, and ⛔ do not prepare the key ceremony.
 >
-> ## ⏭ START HERE: **L8.3 — the XAML literals.** NOT STARTED.
+> ## ⏭ START HERE: **L8.4 — the remaining C# texts.** NOT STARTED.
 >
-> ⭐ The mechanism L8.3 needs is built and proven — `{lm:Loc Key}` returns a real `Binding` (§54.3) — and
-> L8.2 added no XAML at all, so this is a migration with no design left to settle. **Brief: §55.12.**
-> ⚠⚠ **Scope re-measured 2026-08-21: 151 literal values, 135 distinct, in 5 files** — ⛔ **not the 146 that
-> earlier notes quote**, and `ConfirmDialog.axaml` is already fully bound. §55.12 carries the per-file split
-> and the two false positives a naive sweep would rewrite.
+> ≈300 by the standing estimate, plus the nine counted sentences and §53.6's two obligations (the selected
+> artifact surviving a language change; `LicenseListItem.Status = Capitalise(...)` must go).
+> ⚠⚠ **RE-MEASURE the ≈300 before planning** — this stage has now caught two stale counts in a row (the XAML
+> figure was 151 not 146; L8.2's exception classification was wrong by more). **Brief: §56.9.**
 >
-> ✅ **L8.2 — ACCEPTED** (user QA, 2026-08-21), committed and pushed to BOTH remotes. §55. `StatusMessage` is now
-> **key + arguments + severity** resolved at read time (D‑2 = B), so a standing message follows a language
-> change. ⭐ The safety came from making the old shape UNCOMPILABLE: `MessageKey` has no implicit conversion
-> from `string`, which turned 104 call sites into **226 compiler errors** instead of 104 sentences quietly
-> sitting where keys belong — `Loc.Text` answers a missing key WITH THE KEY, so they would all have rendered
-> perfectly while nothing was localized. **145 of 153 catalog values matched a `f72b7b0` literal verbatim**;
-> the other 8 are run-time-assembled and pinned by test. **8 injections, 8 reds.** ⚠ Two findings:
-> `RestoreRefusedException` needed its own key because its `RestoreRefusal` enum **collides** (an enum→key
-> map would have changed what the operator reads); and the catalog guards filter on `typeof(string)`, so the
-> new `MessageKey` catalogs were **silently unswept** until `KeyProperties` was added.
+> ✅ **L8.3 — ACCEPTED** (user QA, 2026-08-21), committed and pushed to BOTH remotes. §56. **147** attribute values became
+> `{lm:Loc Key}`, **130** entries added and **3 reused**, `Strings.resx` 164 → 294; **4 branding literals kept
+> as named, guarded exemptions**; `ConfirmDialog` untouched. **133/133** values matched what the
+> pre-migration XAML *rendered*. **5 injections, 5 reds.** ⚠ Two findings: an XML parser normalises the line
+> ending BEFORE the attribute value, so the first attempt added one space per line break (#399 — caught only
+> by the mechanical comparison); and `NoLocKeyInXaml_IsMissingFromTheCatalog`, cited by name in three source
+> files as the guard compensating for `{lm:Loc}`'s lost compile-time check, **did not exist** until now.
+>
+> ✅ **L8.2 — ACCEPTED** (QA 2026-08-21), committed and pushed to both remotes. §55. `StatusMessage` = key +
+> arguments + severity, resolved at read time (D‑2 = B). ⭐ Its safety came from making the old shape
+> UNCOMPILABLE — `MessageKey` has no conversion from `string`, so 104 call sites became 226 compiler errors
+> rather than 104 sentences sitting where keys belong and rendering perfectly. 145/153 matched verbatim;
+> 8 injections, 8 reds.
 >
 > ⭐⭐ **THE RULE THAT GOVERNS L8.1 → L8.4: NOT ONE USER-VISIBLE WORD CHANGES.** The mechanism is built and
 > the existing ENGLISH text is migrated onto it; the application must look identical throughout. If L8.4
 > changes what the operator reads, something is wrong. **L8.5 is the editorial stage** — the Polish, and the
 > only sub-stage where wording is a decision. **L8.6** is visual QA in EN/PL × Dark/Light.
 >
-> ✅ **L8.0 / prep — CLOSED, committed and PUSHED** (`133ab73` + `56ad35d`, both on `origin`). §53. Seven
-> option records took their identity back from their labels (gotcha #394); `ApplicationLanguages` was split
-> from `MessageLanguages`; 13 guards; and the EN → PL vocabulary was ratified into `design/terminology.md`
-> §4, with `Issue` added to the action norm (§1, §1.1a).
+> ✅ **L8.0 / prep — CLOSED** (`133ab73` + `56ad35d`). §53. Seven option records took their identity back
+> from their labels (#394); `ApplicationLanguages` split from `MessageLanguages`; 13 guards; the EN → PL
+> vocabulary ratified into `design/terminology.md` §4.
 >
-> ✅ **L8.1 — the mechanism. ⛔ NOT "L8 closed".** §54. `Loc` as the ONE resolver · `{lm:Loc Key}` returning
-> a real `Binding` · `LocalizationSource` notifying **per key** (⛔ never an indexer) · `PluralRules`
-> (grammar-named) · `StringCatalogAttribute` so guards DISCOVER catalogs · **`ui.json`, the FOURTH
-> preferences file** · `Strings.resx` as the English base set. **6 injections, 6 reds.**
+> ✅ **L8.1 — the mechanism.** §54. `Loc` as the ONE resolver · `{lm:Loc Key}` as a real `Binding` ·
+> `LocalizationSource` notifying **per key** (⛔ never an indexer) · `PluralRules` · `StringCatalogAttribute`
+> so guards DISCOVER catalogs · **`ui.json`, the FOURTH preferences file**. **6 injections, 6 reds.**
 >
 > ⚠⚠ **Two L8.1 findings worth not rediscovering:** a UTF-8 **BOM** in `ui.json` made `System.Text.Json`
 > throw and the forgiving `catch` served DEFAULTS (gotcha **#395**); and a guard went red against **its own
@@ -118,11 +118,11 @@
 | | |
 |---|---|
 | Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`), pushed to `origin` **through L6** |
-| HEAD | *feat(licensing): L8.2 StatusMessage jako klucz + argumenty* — L8.2 in ONE commit (code + tests + docs). ⛔ A commit cannot name its own hash, so this row names it by SUBJECT; `git log -1` gives the SHA. Beneath it: **`f72b7b0`** *L8.1*, **`56ad35d`** + **`133ab73`** *L8.0/prep*, **`94ff665`** *L6 closed* |
+| HEAD | *feat(licensing): L8.3 literaly XAML na {lm:Loc}* — L8.3 in ONE commit (views + resx + guard). ⛔ A commit cannot name its own hash, so this row names it by SUBJECT; `git log -1` gives the SHA. Beneath it: **`5ac1add`** *checkpoint po L8.2*, **`2d30fcf`** *L8.2*, **`f72b7b0`** *L8.1*, **`94ff665`** *L6 closed* |
 | Sync | ⭐ **HEAD == `origin/feat/licensing-system` == `private/feat/licensing-system`** — pushed to BOTH on 2026-08-21; see the Remotes row |
 | Working tree | ✅ **CLEAN** |
 | Build | **0 warnings / 0 errors** — License Manager **Debug** and **Release**. ⛔ EmberTern not rebuilt: L8 has touched no product file |
-| Tests | ⭐ **License Manager: 705 / 705** (0 failed, 0 skipped — 685 after L8.1, 632 after L8.0/prep, 619 before it). ⛔ **The EmberTern suite was NOT run**: L8 has touched no file of the product. Its two pre-existing failures (§49.9) are unchanged |
+| Tests | ⭐ **License Manager: 709 / 709** (0 failed, 0 skipped — 705 after L8.2, 685 after L8.1, 632 after L8.0/prep). ⛔ **The EmberTern suite was NOT run**: L8 has touched no file of the product. Its two pre-existing failures (§49.9) are unchanged |
 | Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ Separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | ⭐ **TWO, and both are kept on the same SHA** (user's decision, 2026-08-21): `origin` → the company Gitea, `private` → the personal GitHub. ⚠ This REVERSES the one-remote note L8.0–L8.1 carried — that described the *other* machine. See §0 |
@@ -209,7 +209,7 @@ use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
 | **L4b** — surfaces: activation window, Settings ▸ Licence, About, banner, the connection SEAM, EN + PL | ✅ **accepted** — §38; ⚠ read §38.5 before touching a licence message |
 | **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ✅ **CLOSED 2026-08-18**, all six sub-stages accepted and pushed. **L5.0** data layer — schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch (§39). **L5.1 + two QA rounds** — Licences view, search, three filters, own AppBar and title bar, the licence re-parenting defect, spacing and uniform control heights (§40–§43). **L5.2** — issuing history and artifact preview, current marked from the register's POINTER never from the ordering (§44). **L5.3** — re-issue with an operator-chosen reason, validated against a measured diff of the SIGNED payload (§45). **L5.4** — bulk selection and batch renewal, and the licences list rebuilt as EmberTern's own grid, LINKED rather than reproduced (§46). **L5.5** — encrypted verified backup with its own passphrase, two explicit restore modes with the previous register always preserved, the five-type JSONL escape hatch, and the Storage window (§47). ⚠ Read §47.6 before quoting L5.5's verification: it is deliberately narrower than earlier stages' |
 | **L6** — e-mail | ✅ **CLOSED 2026-08-19**, all five sub-stages accepted. Delivery end to end: the SMTP settings and their own-entropy DPAPI secret with four load states (§48); the Settings Center, message language and Customer/Licences split (§49); a pure composer whose attachment is byte-identical to `SaveArtifact` (§50); `ILicenseEmailSender` with an SMTP and an `.eml` sender, the Send licence window whose preview IS the message, `licence.sent` / `licence.send-failed`, and **Send test email…** (§51); and the message the customer reads (§51.9). ⭐ **Proved against a real Gmail account** — §32's exit criterion satisfied. ⚠ The COMPANY mailbox is still unmeasured (§48.1) — a NEW CLASS behind the sender contract if it refuses basic auth, not a rebuild. ⛔ Bulk sending was deliberately NOT built; it is its own stage below. Closure: §52 |
-| ⭐ **L8** — **localization of the License Manager's interface (EN + PL)** — 🔒 runs BEFORE L7, by the user's decision | 🚧 **IN PROGRESS. ⏭ Next: L8.3, NOT STARTED** (§55.12). **L8.2 ✅ ACCEPTED 2026-08-21** (§55): `StatusMessage` as key + arguments, 104 call sites, `Strings.resx` 11 → 164 entries, 8 injections / 8 reds, 145/153 values matched verbatim against `f72b7b0`, ⛔ zero visible change. **L8.1 ✅** (§54): the mechanism, 6 injections / 6 reds, one catalog migrated byte-identically. **L8.0/prep ✅** — seven option records took their identity back from their labels (gotcha #394), the interface and message languages got separate catalogs, 13 guards each proved by injection, and the EN → PL vocabulary was ratified into `design/terminology.md` §4 (`Issue` added to §1). ⏭ **L8.3** the XAML literals (⚠ **151**, re-measured — not the 146 older notes quote) → **L8.4** ≈300 C# texts, plurals, and the two obligations in §53.6 → **L8.5** the Polish → **L8.6** QA in 4 combinations. ⛔ **L8.1–L8.4 change no user-visible word.** Authority: §53 |
+| ⭐ **L8** — **localization of the License Manager's interface (EN + PL)** — 🔒 runs BEFORE L7, by the user's decision | 🚧 **IN PROGRESS. ⏭ Next: L8.4, NOT STARTED** (§56.9). **L8.3 ✅ ACCEPTED 2026-08-21** (§56): 147 XAML values on `{lm:Loc}`, 130 keys added + 3 reused, 4 branding exemptions, 5 injections / 5 reds, 133/133 rendered values unchanged. **L8.2 ✅ ACCEPTED 2026-08-21** (§55): `StatusMessage` as key + arguments, 104 call sites, `Strings.resx` 11 → 164 entries, 8 injections / 8 reds, 145/153 values matched verbatim against `f72b7b0`, ⛔ zero visible change. **L8.1 ✅** (§54): the mechanism, 6 injections / 6 reds, one catalog migrated byte-identically. **L8.0/prep ✅** — seven option records took their identity back from their labels (gotcha #394), the interface and message languages got separate catalogs, 13 guards each proved by injection, and the EN → PL vocabulary was ratified into `design/terminology.md` §4 (`Issue` added to §1). ⏭ **L8.4** ≈300 C# texts (⚠ re-measure — two counts in a row proved stale), plurals, and the two obligations in §53.6 → **L8.5** the Polish → **L8.6** QA in 4 combinations. ⛔ **L8.1–L8.4 change no user-visible word.** Authority: §53 |
 | **L7** — hardening and closing: ⭐ **the real key ceremony**, public key shipped, docs | ⏳ not started — ⛔ **and deliberately after L8** |
 
 ⚠ **`TrustedKeys.Production` is empty and the REAL key ceremony has not been performed** — deliberately

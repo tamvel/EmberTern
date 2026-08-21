@@ -4421,3 +4421,141 @@ that trusts a bare attribute-name match will rewrite both.
 the row view model; the preview grid is rebuilt on every tick, so it needs no notification — but a grid that
 ever stops rebuilding does. And **`ProtectionNote` is already on the catalog** (it was a fallback message as
 well as a bound label), so it is one fewer literal than the count suggests.
+
+---
+
+## 56. L8.3 — the XAML literals, as built (2026-08-21)
+
+> **State: ✅ ACCEPTED — the user's QA, 2026-08-21.** ⛔ L8 as a whole is NOT closed: L8.4 … L8.6 remain.
+> ⚠ Like L8.1 and L8.2, the visible effect is deliberately *zero*; acceptance rested on the mechanical proof
+> in §56.5, not on a screen.
+
+⭐ **147 attribute values became `{lm:Loc Key}`, 130 catalog entries were added, and 3 reused.** No design
+decisions were left: L8.1 built the markup extension and proved it re-reads on a language change, so this
+sub-stage is a migration and nothing else.
+
+### 56.1 The numbers, and how they land
+
+| | |
+|---|---|
+| Literal user-visible values found | **151** (as §55.12 predicted) |
+| → migrated to `{lm:Loc}` | **147** |
+| → **branding, left as literals** | **4** |
+| Distinct keys | **133** — 130 new, **3 reusing an existing entry** |
+| `Strings.resx` | **164 → 294** entries |
+
+| File | Rewritten |
+|---|---|
+| `MainWindow.axaml` | 79 |
+| `SettingsWindow.axaml` | 29 |
+| `StorageWindow.axaml` | 18 |
+| `SendLicenceWindow.axaml` | 12 |
+| `UnlockWindow.axaml` | 9 |
+| `ConfirmDialog.axaml` | **0** — ⛔ out of scope by instruction, and already fully bound by L8.2 |
+
+### 56.2 ⛔ Branding stays a literal — and the exemption is itself guarded
+
+`terminology.md` §4.4: a brand is a technical contract, not a word. Four occurrences stay as written —
+`EmberTern License Manager` (the main window's title and header, the unlock window's title) and `EmberTern`
+(the sender-name placeholder, which shows the brand as an example).
+
+⭐ They are **named exemptions, not silent skips**, and `EveryBrandingExemption_IsActuallyPresent` fails if
+one of them stops matching anything. ⚠ Without that, an exemption outlives the literal it excused and
+quietly widens the hole it was meant to be a narrow exception to — the `MenuStyleDriftTests` trap.
+
+### 56.3 ⭐ Three keys REUSED, three deliberately not — a shared English word is not a reason to share a key
+
+Six planned values already existed in the catalog. Each was judged, not batched:
+
+| Value | Decision |
+|---|---|
+| `Application language`, `Message language` | ⭐ **REUSE** `Settings.*` — the same label on the same page, already read from C# by L8.1. A second entry would be a duplicate resx key. |
+| `Settings` (the window's `Title`) | ⭐ **REUSE** `Settings.WindowTitle` — that key *is* this window's title. |
+| `E-mail` | ⛔ **Separate.** `Settings.Email` is the settings **page name**; `Main.EMail` is a customer **field label**. |
+| `Send` | ⛔ **Separate.** A window button vs `Confirm.SendLicenceAction`, a dialog's action label. |
+| `Forget settings` | ⛔ **Separate**, same shape. |
+
+⚠ Coupling those three would let a change to one surface silently rewrite another — the opposite of the
+"one home for a shared sentence" rule, which is about ONE sentence in one role, not about spelling.
+
+### 56.4 ⚠⚠ The defect the verification caught in the migration itself
+
+⭐⭐ **An XML parser normalises a line ending BEFORE it normalises an attribute value**, and getting that
+order wrong cost three characters. The rule is: `\r\n` collapses to `\n` first, and only then does each
+remaining `#xA`/`#x9` become a single space. The migration script mapped every whitespace character
+independently, so a four-line attribute produced **three extra spaces** against what Avalonia actually
+rendered.
+
+⚠ It matters in exactly one place — MainWindow's re-issue warning is the only multi-line attribute in the
+application — and it was invisible to every other check: the build passed, all 705 tests passed, and the
+text differed only in run length. **The mechanical comparison found it** (132/133), which is the whole
+argument for running one.
+
+⏭ **Recorded for L8.5, not fixed here:** that sentence renders with a long run of spaces mid-paragraph,
+because XAML attribute whitespace is preserved rather than collapsed. It looks like a defect and probably
+is one — but shortening it CHANGES what is on screen, which L8.3 may not do.
+
+### 56.5 ⭐⭐ How "not one word changed" was proved
+
+Every value the migration wrote was compared against what the **pre-migration XAML would have RENDERED**,
+harvested from `git show 5ac1add:` — not against the source text, because the two differ for any multi-line
+attribute (§56.4).
+
+**133 / 133 matched.** ⚠ And the number that matters more: the 709-test suite includes headless tests that
+read text off realised controls (`SettingsWindowTests` asserts `"E-mail"` and `"later stage"`,
+`TheDeliverySummaryFollowsWhatIsTyped` asserts three phrases) — all green without being touched.
+
+### 56.6 The guards, and the one that had been PROMISED but never written
+
+⚠⚠ **`NoLocKeyInXaml_IsMissingFromTheCatalog` did not exist.** `LocMarkup`, `Loc` and `LocalizationSource`
+all cite it BY NAME as the thing that compensates for `{lm:Loc}` losing the compile-time key check that
+`{x:Static}` had — three documents describing coverage nobody had written (gotcha #370's shape, met again
+in this repository). It exists now. ⭐ Without it a mistyped key is completely silent:
+`LocalizedString.Value` falls back to the KEY, so the window renders `Main.Custmoers` and nothing fails.
+
+| Injection | Red |
+|---|---|
+| a migrated value reverted to a literal | `NoUserFacingXamlLiteral_IsUnaddressed` |
+| a typo in a `{lm:Loc}` key | `NoLocKeyInXaml_IsMissingFromTheCatalog` |
+| `xmlns:lm` removed from a view that uses it | `EveryViewUsingTheMarkup_DeclaresItsNamespace` |
+| a branding exemption that matches nothing | `EveryBrandingExemption_IsActuallyPresent` |
+| ⭐ the `(?<![\w.])` boundary removed from the sweep | `NoUserFacingXamlLiteral_IsUnaddressed` reports three `SizeToContent="Height"` |
+
+⭐ The last one is a **negative control**: it proves the defence against §55.12's false positive is
+load-bearing rather than decorative.
+
+⚠⚠ **One injection first appeared NOT to fire, and the cause was a stale test assembly** — not a weak
+guard. The XAML-driven sweeps read files at run time and went red immediately, while the exemption list is
+COMPILED IN, so the two disagreed until a real rebuild. ⭐ L8.2 met the opposite case (an injection that
+stayed green because the guard was genuinely too narrow), so the two causes must be told apart: **rebuild
+before concluding anything about a green injection.** Gotcha **#400**.
+
+### 56.7 ⛔ What L8.3 deliberately did NOT do
+
+⛔ No Polish (L8.5). ⛔ The Application-language picker stays DISABLED — D‑8 stands. ⛔ `ConfirmDialog`
+untouched, by instruction. ⛔ No C# text migration (L8.4) — this stage touched **no `.cs` file of the
+product at all**, only XAML and the resx. ⛔ No catalog CLASSES for the new keys: nothing in C# reads them,
+and a class nobody calls is the dead-surface trap (#233). ⛔ Nothing in `EmberTern.App`, the cryptography,
+SMTP, the audit log or the `.etlic` format. ⛔ L7 untouched.
+
+### 56.8 Verification
+
+- ✅ Build **0 warnings / 0 errors** — **Debug** and **Release**.
+- ✅ **709 / 709** — 0 failed, 0 skipped (**705** after L8.2, **+4** new guards).
+- ✅ **Five injections, five reds**, all reverted and re-verified green.
+- ✅ **133 / 133** catalog values matched what the pre-migration XAML rendered.
+- ✅ L8.2's own proof re-run and unchanged: 145 / 153 against `f72b7b0`.
+- ✅ Seven files changed, all inside `src/EmberTern.LicenseManager` and its test project.
+- ⚠ **Not seen running** — the visible effect is deliberately nothing. Visual QA is **L8.6**.
+
+### 56.9 ⏭ Hand-off to L8.4
+
+**L8.4 is the remaining C# texts** (≈300 by the standing estimate — ⚠ **re-measure it; the XAML figure was
+stale by 5 and the L8.2 exception counts were wrong by more**), the nine counted sentences, and §53.6's two
+obligations.
+
+⭐ Two things L8.4 inherits ready-made. The `Status.` catalog and `MessageKey` already carry every message
+the strip can raise, so L8.4's subject is what is left: window-level helper text, `ReasonText`,
+`ArtifactHistory` presentation strings and the `Describe`-style mappers that L8.2 did not reach because
+they never touch `StatusMessage`. And §53.6's obligations are still open and still owed: the **selected
+artifact must survive a language change**, and `LicenseListItem.Status = Capitalise(...)` must go.

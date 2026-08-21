@@ -1,10 +1,10 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
         xmlns:lm="using:EmberTern.LicenseManager"
         x:Class="EmberTern.LicenseManager.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
-        Title="Settings"
+        Title="{lm:Loc Settings.WindowTitle}"
         Width="760" Height="620"
         MinWidth="640" MinHeight="420"
         ShowInTaskbar="False"
@@ -102,9 +102,9 @@
         <!-- ══ GENERAL ══════════════════════════════════════════════════════════════════════════ -->
         <StackPanel Name="GeneralPage" VerticalAlignment="Top" IsVisible="{Binding IsGeneralPage}">
 
-          <TextBlock Classes="section" Text="Language" />
+          <TextBlock Classes="section" Text="{lm:Loc Settings.Language}" />
 
-          <TextBlock Classes="field-label" Text="Application language" />
+          <TextBlock Classes="field-label" Text="{lm:Loc Settings.ApplicationLanguage}" />
           <!-- ⭐⭐ DISABLED ON PURPOSE (decision D‑8). The row is here so the structure is the structure it
                will keep and the later localization stage has a place to land — but it stores NOTHING.
                A preference the operator can set and that then changes nothing is the exact defect that
@@ -145,14 +145,14 @@
         <!-- ══ SENDER ═══════════════════════════════════════════════════════════════════════════ -->
         <!-- ⚠ Above the server on purpose: a sender address alone is enough to compose and save an
              .eml, so it is the one field that is never optional. -->
-        <TextBlock Classes="section" Text="Sender" />
+        <TextBlock Classes="section" Text="{lm:Loc Settings.Sender}" />
 
-        <TextBlock Classes="field-label" Text="From address — what the customer replies to" />
+        <TextBlock Classes="field-label" Text="{lm:Loc Settings.FromAddressWhatCustomerReplies}" />
         <TextBox Name="FromAddressBox" Margin="{DynamicResource Margin.FieldGap}"
-                 PlaceholderText="licencje@twojafirma.pl"
+                 PlaceholderText="{lm:Loc Settings.LicencjeTwojafirmaPl}"
                  Text="{Binding FromAddress}" />
 
-        <TextBlock Classes="field-label" Text="From name (optional)" />
+        <TextBlock Classes="field-label" Text="{lm:Loc Settings.FromNameOptional}" />
         <TextBox Name="FromNameBox" Margin="{DynamicResource Margin.SectionGap}"
                  PlaceholderText="EmberTern"
                  Text="{Binding FromName}" />
@@ -161,20 +161,20 @@
         <!-- ⭐ Every one of these is DATA. The L6 measurement was taken on a test mailbox and the
              production one has not been measured yet, so moving to it must be four fields typed here
              rather than a code change. ⛔ No provider name appears anywhere in this application. -->
-        <TextBlock Classes="section" Text="Server — leave empty to deliver by file only" />
+        <TextBlock Classes="section" Text="{lm:Loc Settings.ServerLeaveEmptyDeliverByFile}" />
 
-        <TextBlock Classes="field-label" Text="SMTP host" />
+        <TextBlock Classes="field-label" Text="{lm:Loc Settings.SmtpHost}" />
         <TextBox Name="HostBox" Margin="{DynamicResource Margin.FieldGap}"
                  Text="{Binding Host}" />
 
-        <TextBlock Classes="field-label" Text="Port" />
+        <TextBlock Classes="field-label" Text="{lm:Loc Settings.Port}" />
         <TextBox Name="PortBox" Margin="{DynamicResource Margin.FieldGap}"
                  Text="{Binding PortText}" />
 
         <!-- ⚠ Two choices, not three: System.Net.Mail.SmtpClient implements STARTTLS only, so implicit
              TLS (port 465) is deliberately absent rather than offered and inert — the defect that
              removed ClientLibraryPath from EmberTern's connection dialog. See SmtpSettings. -->
-        <TextBlock Classes="field-label" Text="Transport security" />
+        <TextBlock Classes="field-label" Text="{lm:Loc Settings.TransportSecurity}" />
         <ComboBox Name="SecurityPicker" HorizontalAlignment="Stretch"
                   Margin="{DynamicResource Margin.SectionGap}"
                   ItemsSource="{Binding SecurityOptions}"
@@ -187,16 +187,16 @@
         </ComboBox>
 
         <!-- ══ CREDENTIALS ══════════════════════════════════════════════════════════════════════ -->
-        <TextBlock Classes="section" Text="Sign-in" />
+        <TextBlock Classes="section" Text="{lm:Loc Settings.SignIn}" />
 
         <!-- ⚠ Separate from the sender address on purpose: a relay commonly authenticates as one
              identity and sends as another, and collapsing the two makes that unreachable. -->
-        <TextBlock Classes="field-label" Text="Username — the account that signs in" />
+        <TextBlock Classes="field-label" Text="{lm:Loc Settings.UsernameAccountSigns}" />
         <TextBox Name="UsernameBox" Margin="{DynamicResource Margin.FieldGap}"
                  Text="{Binding Username}" />
 
         <TextBlock Classes="field-label"
-                   Text="Password — for a Gmail mailbox this is an app password, not the account password" />
+                   Text="{lm:Loc Settings.PasswordGmailMailboxAppPasswordNot}" />
         <TextBox Name="PasswordBox" PasswordChar="•"
                  Margin="{DynamicResource Margin.FieldGap}"
                  Text="{Binding Password}" />
@@ -208,21 +208,21 @@
                    Margin="{DynamicResource Margin.SectionGap}"
                    Text="{Binding ProtectionNote}" />
 
-        <TextBlock Classes="field-label" Text="Stored in" />
+        <TextBlock Classes="field-label" Text="{lm:Loc Settings.StoredIn}" />
         <SelectableTextBlock Name="SettingsPathText" Classes="mono" TextWrapping="Wrap"
                              Margin="{DynamicResource Margin.SectionGap}"
                              Text="{Binding SettingsPath}" />
 
-        <TextBlock Classes="section" Text="Test the configuration" />
+        <TextBlock Classes="section" Text="{lm:Loc Settings.TestConfiguration}" />
 
         <!-- L6.3. The address is TYPED, and there is deliberately no picker that could offer a customer's:
              a diagnostic that can be aimed at a customer by a mis-click eventually will be, and they would
              receive an unexplained message from a licensing system. It is not stored either - it is a
              scratch value for one attempt, not a setting. -->
         <TextBlock Classes="field-label"
-                   Text="Send a test message to - your own address, never a customer's" />
+                   Text="{lm:Loc Settings.SendTestMessageYourOwnAddress}" />
         <TextBox Name="TestRecipientBox" Margin="{DynamicResource Margin.FieldGap}"
-                 PlaceholderText="you@example.com"
+                 PlaceholderText="{lm:Loc Settings.YouExampleCom}"
                  Text="{Binding TestRecipient}" />
 
         <!-- The test uses what is ON THIS PAGE, saved or not: an operator who has just typed a host
@@ -230,17 +230,17 @@
              configuration in order to discover it is wrong. -->
         <TextBlock Name="TestNoteText" Classes="hint" TextWrapping="Wrap"
                    Margin="{DynamicResource Margin.FieldGap}"
-                   Text="It sends a real message through the settings on this page, whether or not they have been saved. No licence is attached and nothing is recorded against any customer." />
+                   Text="{lm:Loc Settings.ItSendsRealMessageThroughSettings}" />
 
-        <Button Classes="flat" Name="SendTestEmail" Content="Send test email…"
+        <Button Classes="flat" Name="SendTestEmail" Content="{lm:Loc Settings.SendTestEmail}"
                 HorizontalAlignment="Left" Margin="{DynamicResource Margin.SectionGap}"
-                ToolTip.Tip="Sends a test message to the address above, after a confirmation"
+                ToolTip.Tip="{lm:Loc Settings.SendsTestMessageAddressAboveAfter}"
                 Command="{Binding SendTestEmailCommand}" />
 
         <!-- ══ MESSAGE LANGUAGE ═════════════════════════════════════════════════════════════════ -->
-        <TextBlock Classes="section" Text="Message language" />
+        <TextBlock Classes="section" Text="{lm:Loc Settings.MessageLanguage}" />
 
-        <TextBlock Classes="field-label" Text="The language a licence e-mail is written in" />
+        <TextBlock Classes="field-label" Text="{lm:Loc Settings.TheLanguageLicenceEMailWritten}" />
         <ComboBox Name="MessageLanguagePicker" HorizontalAlignment="Stretch"
                   Margin="{DynamicResource Margin.FieldGap}"
                   ItemsSource="{Binding MessageLanguageOptions}"
@@ -257,7 +257,7 @@
              (decision D‑4 declined a per-customer language column). -->
         <TextBlock Name="MessageLanguageNote" Classes="hint" TextWrapping="Wrap"
                    Margin="{DynamicResource Margin.SectionGap}"
-                   Text="It is independent of the interface language, and it applies to every customer — switch it before sending to a customer who reads the other language." />
+                   Text="{lm:Loc Settings.ItIndependentInterfaceLanguageAppliesEvery}" />
 
         <!-- ⭐ ONE message surface, and the LAST child: the body band's padding separates it from the
              footer, so it carries no bottom margin of its own.
@@ -305,13 +305,13 @@
     <Border Grid.Row="2" Classes="dialog-footer">
       <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Md}"
                   IsVisible="{Binding IsEmailPage}">
-        <Button Classes="flat" Name="Forget" Content="Forget settings"
-                ToolTip.Tip="Deletes the stored e-mail configuration, including the password"
+        <Button Classes="flat" Name="Forget" Content="{lm:Loc Settings.ForgetSettings}"
+                ToolTip.Tip="{lm:Loc Settings.DeletesStoredEMailConfigurationIncluding}"
                 Command="{Binding ForgetCommand}" />
-        <Button Classes="flat" Name="Revert" Content="Revert"
-                ToolTip.Tip="Discards the edits and reloads what is saved"
+        <Button Classes="flat" Name="Revert" Content="{lm:Loc Settings.RevertAction}"
+                ToolTip.Tip="{lm:Loc Settings.DiscardsEditsReloadsWhatSaved}"
                 Command="{Binding RevertCommand}" />
-        <Button Classes="primary" Name="SaveSettings" Content="Save"
+        <Button Classes="primary" Name="SaveSettings" Content="{lm:Loc Settings.SaveAction}"
                 IsDefault="True"
                 Command="{Binding SaveCommand}" />
       </StackPanel>

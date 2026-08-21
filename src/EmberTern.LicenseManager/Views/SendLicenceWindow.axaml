@@ -1,10 +1,10 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
         xmlns:lm="using:EmberTern.LicenseManager"
         x:Class="EmberTern.LicenseManager.Views.SendLicenceWindow"
         x:DataType="vm:SendLicenceViewModel"
-        Title="Send licence"
+        Title="{lm:Loc Send.SendLicence}"
         Width="720" Height="640"
         MinWidth="560" MinHeight="440"
         ShowInTaskbar="False"
@@ -31,7 +31,7 @@
 
     <!-- Header ─────────────────────────────────────────────────────────────────────────────────── -->
     <Border Grid.Row="0" Classes="dialog-header">
-      <TextBlock Classes="h1" VerticalAlignment="Center" Text="Send licence" />
+      <TextBlock Classes="h1" VerticalAlignment="Center" Text="{lm:Loc Send.SendLicence}" />
     </Border>
 
     <!-- Body ───────────────────────────────────────────────────────────────────────────────────── -->
@@ -46,21 +46,21 @@
                 ColumnSpacing="{DynamicResource Space.Md}"
                 RowSpacing="{DynamicResource Space.Sm}">
 
-            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" Text="To" />
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" Text="{lm:Loc Send.To}" />
             <SelectableTextBlock Grid.Row="0" Grid.Column="1" Name="RecipientText"
                                  Classes="value" TextWrapping="Wrap" Text="{Binding Recipient}" />
 
-            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" Text="From" />
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" Text="{lm:Loc Send.From}" />
             <SelectableTextBlock Grid.Row="1" Grid.Column="1" Name="SenderText"
                                  Classes="value" TextWrapping="Wrap" Text="{Binding Sender}" />
 
-            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" Text="Subject" />
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" Text="{lm:Loc Send.Subject}" />
             <SelectableTextBlock Grid.Row="2" Grid.Column="1" Name="SubjectText"
                                  Classes="value" TextWrapping="Wrap" Text="{Binding Subject}" />
 
             <!-- ⭐ Name, type and SIZE. The size is the cheapest signal that the attachment is a real
                  artifact — an operator who reads "0 bytes" stops before sending. -->
-            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" Text="Attached" />
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" Text="{lm:Loc Send.Attached}" />
             <SelectableTextBlock Grid.Row="3" Grid.Column="1" Name="AttachmentText"
                                  Classes="value mono" TextWrapping="Wrap" Text="{Binding Attachment}" />
           </Grid>
@@ -68,7 +68,7 @@
 
         <!-- ══ THE MESSAGE ═══════════════════════════════════════════════════════════════════════ -->
         <StackPanel Grid.Row="1">
-          <TextBlock Classes="section" Text="Message" />
+          <TextBlock Classes="section" Text="{lm:Loc Send.Message}" />
           <!-- ⚠ Says what the preview IS: the plain-text body. The HTML alternative travels with it and
                is not rendered here — that would need a browser control this application does not have,
                and a preview that silently showed one of two bodies would be the more dangerous choice. -->
@@ -124,13 +124,13 @@
     <Border Grid.Row="2" Classes="dialog-footer">
       <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Md}"
                   HorizontalAlignment="Right">
-        <Button Classes="flat" Name="CloseSend" Content="Close"
+        <Button Classes="flat" Name="CloseSend" Content="{lm:Loc Common.Close}"
                 IsCancel="True" Command="{Binding CloseCommand}" />
-        <Button Classes="flat" Name="SaveEml" Content="Save as .eml…"
-                ToolTip.Tip="Writes this exact message as a file you can open and send from your own mail client"
+        <Button Classes="flat" Name="SaveEml" Content="{lm:Loc Send.SaveAsEml}"
+                ToolTip.Tip="{lm:Loc Send.WritesExactMessageAsFileYou}"
                 IsEnabled="{Binding CanSaveFile}" Command="{Binding SaveFileCommand}" />
-        <Button Classes="primary" Name="SendLicence" Content="Send"
-                ToolTip.Tip="Sends this message and its attachment, after a confirmation"
+        <Button Classes="primary" Name="SendLicence" Content="{lm:Loc Send.Send}"
+                ToolTip.Tip="{lm:Loc Send.SendsMessageItsAttachmentAfterConfirmation}"
                 IsEnabled="{Binding CanSend}" Command="{Binding SendCommand}" />
       </StackPanel>
     </Border>

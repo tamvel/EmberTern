@@ -527,4 +527,394 @@
   <data name="Status.LicenceSavedShort" xml:space="preserve">
     <value>Saved licence {0}….</value>
   </data>
+  <data name="Main.Customers" xml:space="preserve">
+    <value>Customers</value>
+  </data>
+  <data name="Main.Customer" xml:space="preserve">
+    <value>Customer</value>
+  </data>
+  <data name="Main.NameRequiredWhatGetsSigned" xml:space="preserve">
+    <value>Name — required, and this is what gets signed</value>
+  </data>
+  <data name="Main.Identifier" xml:space="preserve">
+    <value>Identifier</value>
+  </data>
+  <data name="Main.Address" xml:space="preserve">
+    <value>Address</value>
+  </data>
+  <data name="Main.FirstName" xml:space="preserve">
+    <value>First name</value>
+  </data>
+  <data name="Main.LastName" xml:space="preserve">
+    <value>Last name</value>
+  </data>
+  <data name="Main.EMail" xml:space="preserve">
+    <value>E-mail</value>
+  </data>
+  <data name="Main.NotesAdministrativeOnlyNeverTravelLicence" xml:space="preserve">
+    <value>Notes — administrative only, never travel in a licence</value>
+  </data>
+  <data name="Main.Licences" xml:space="preserve">
+    <value>Licences</value>
+  </data>
+  <data name="Main.Seats" xml:space="preserve">
+    <value>Seats</value>
+  </data>
+  <data name="Main.ValidFrom" xml:space="preserve">
+    <value>Valid from</value>
+  </data>
+  <data name="Main.ValidUntilInclusive" xml:space="preserve">
+    <value>Valid until (inclusive)</value>
+  </data>
+  <data name="Main.LicenceId" xml:space="preserve">
+    <value>Licence id</value>
+  </data>
+  <data name="Main.NotesAdministrativeOnly" xml:space="preserve">
+    <value>Notes — administrative only</value>
+  </data>
+  <data name="Main.ReasonIssue" xml:space="preserve">
+    <value>Reason for this issue</value>
+  </data>
+  <data name="Main.TheCustomerAlreadyHasExactFile" xml:space="preserve">
+    <value>The customer already has this exact file. Prefer “Export this issue…” in                                  the issuing history below — it re-sends the artifact that was delivered,                                  byte for byte, without signing a new one. Issue only if they need a                                  freshly signed replacement.</value>
+  </data>
+  <data name="Main.IssueNoteOptionalRecordedAuditLog" xml:space="preserve">
+    <value>Issue note — optional, recorded in the audit log</value>
+  </data>
+  <data name="Main.IssuingHistory" xml:space="preserve">
+    <value>Issuing history</value>
+  </data>
+  <data name="Main.WhatEmberternWouldSayAboutToday" xml:space="preserve">
+    <value>What EmberTern would say about it today</value>
+  </data>
+  <data name="Main.LicensedTo" xml:space="preserve">
+    <value>Licensed to</value>
+  </data>
+  <data name="Main.Valid" xml:space="preserve">
+    <value>Valid</value>
+  </data>
+  <data name="Main.Product" xml:space="preserve">
+    <value>Product</value>
+  </data>
+  <data name="Main.SignedWith" xml:space="preserve">
+    <value>Signed with</value>
+  </data>
+  <data name="Main.Token" xml:space="preserve">
+    <value>Token</value>
+  </data>
+  <data name="Main.SignedPayload" xml:space="preserve">
+    <value>Signed payload</value>
+  </data>
+  <data name="Main.FindLicence" xml:space="preserve">
+    <value>Find a licence</value>
+  </data>
+  <data name="Main.Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Main.Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Main.Expiry" xml:space="preserve">
+    <value>Expiry</value>
+  </data>
+  <data name="Main.Issuing" xml:space="preserve">
+    <value>Issuing</value>
+  </data>
+  <data name="Main.ExtendSelectedLicences" xml:space="preserve">
+    <value>Extend selected licences</value>
+  </data>
+  <data name="Main.ExtendInclusive" xml:space="preserve">
+    <value>Extend to (inclusive)</value>
+  </data>
+  <data name="Main.NoteOptional" xml:space="preserve">
+    <value>Note (optional)</value>
+  </data>
+  <data name="Main.RecordedAsRenewalAsInitialIssue" xml:space="preserve">
+    <value>Recorded as Renewal — or as Initial issue for a licence that has never been issued.</value>
+  </data>
+  <data name="Main.Held" xml:space="preserve">
+    <value>Held</value>
+  </data>
+  <data name="Main.New" xml:space="preserve">
+    <value>New</value>
+  </data>
+  <data name="Main.SaveCustomer" xml:space="preserve">
+    <value>Save customer</value>
+  </data>
+  <data name="Main.NewLicence" xml:space="preserve">
+    <value>New licence</value>
+  </data>
+  <data name="Main.InspectLatest" xml:space="preserve">
+    <value>Inspect latest</value>
+  </data>
+  <data name="Main.ExportLatest" xml:space="preserve">
+    <value>Export latest…</value>
+  </data>
+  <data name="Main.SendLicence" xml:space="preserve">
+    <value>Send licence…</value>
+  </data>
+  <data name="Main.SaveTerms" xml:space="preserve">
+    <value>Save terms</value>
+  </data>
+  <data name="Main.IssueSave" xml:space="preserve">
+    <value>Issue and save…</value>
+  </data>
+  <data name="Main.ExportIssue" xml:space="preserve">
+    <value>Export this issue…</value>
+  </data>
+  <data name="Main.Clear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Main.SelectAllShown" xml:space="preserve">
+    <value>Select all shown</value>
+  </data>
+  <data name="Main.ClearSelection" xml:space="preserve">
+    <value>Clear selection</value>
+  </data>
+  <data name="Main.ExtendIssue" xml:space="preserve">
+    <value>Extend and issue</value>
+  </data>
+  <data name="Main.OpenCustomers" xml:space="preserve">
+    <value>Open in Customers</value>
+  </data>
+  <data name="Main.ApplicationMenu" xml:space="preserve">
+    <value>Application menu</value>
+  </data>
+  <data name="Main.NotAvailableYet" xml:space="preserve">
+    <value>Not available yet</value>
+  </data>
+  <data name="Main.StorageBackupRestoreJsonlExportData" xml:space="preserve">
+    <value>Storage — backup, restore, JSONL export and the data folder</value>
+  </data>
+  <data name="Main.SwitchBetweenLightDarkTheme" xml:space="preserve">
+    <value>Switch between the light and dark theme</value>
+  </data>
+  <data name="Main.Minimise" xml:space="preserve">
+    <value>Minimise</value>
+  </data>
+  <data name="Main.MaximiseRestore" xml:space="preserve">
+    <value>Maximise or restore</value>
+  </data>
+  <data name="Common.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Main.CopyIdentifier" xml:space="preserve">
+    <value>Copy the identifier</value>
+  </data>
+  <data name="Main.CopyLicenceId" xml:space="preserve">
+    <value>Copy the licence id</value>
+  </data>
+  <data name="Main.ShowsMessageWillSentStoredLicence" xml:space="preserve">
+    <value>Shows the message that will be sent, with the stored licence attached</value>
+  </data>
+  <data name="Main.CopyWholeToken" xml:space="preserve">
+    <value>Copy the whole token</value>
+  </data>
+  <data name="Main.CopySignedPayload" xml:space="preserve">
+    <value>Copy the signed payload</value>
+  </data>
+  <data name="Main.IncludeLicenceBatchOperation" xml:space="preserve">
+    <value>Include this licence in a batch operation</value>
+  </data>
+  <data name="Main.Settings" xml:space="preserve">
+    <value>Settings…</value>
+  </data>
+  <data name="Main.About" xml:space="preserve">
+    <value>About</value>
+  </data>
+  <data name="Main.Contact" xml:space="preserve">
+    <value>Contact</value>
+  </data>
+  <data name="Main.Standing" xml:space="preserve">
+    <value>Standing</value>
+  </data>
+  <data name="Main.CustomerEMailIdentifierLicenceId" xml:space="preserve">
+    <value>Customer, e-mail, identifier, licence id or notes</value>
+  </data>
+  <data name="Main.TicketWhoAskedWhyNowStored" xml:space="preserve">
+    <value>Ticket, who asked, why now — stored on the batch's audit line</value>
+  </data>
+  <data name="Send.SendLicence" xml:space="preserve">
+    <value>Send licence</value>
+  </data>
+  <data name="Send.To" xml:space="preserve">
+    <value>To</value>
+  </data>
+  <data name="Send.From" xml:space="preserve">
+    <value>From</value>
+  </data>
+  <data name="Send.Subject" xml:space="preserve">
+    <value>Subject</value>
+  </data>
+  <data name="Send.Attached" xml:space="preserve">
+    <value>Attached</value>
+  </data>
+  <data name="Send.Message" xml:space="preserve">
+    <value>Message</value>
+  </data>
+  <data name="Send.SaveAsEml" xml:space="preserve">
+    <value>Save as .eml…</value>
+  </data>
+  <data name="Send.Send" xml:space="preserve">
+    <value>Send</value>
+  </data>
+  <data name="Send.WritesExactMessageAsFileYou" xml:space="preserve">
+    <value>Writes this exact message as a file you can open and send from your own mail client</value>
+  </data>
+  <data name="Send.SendsMessageItsAttachmentAfterConfirmation" xml:space="preserve">
+    <value>Sends this message and its attachment, after a confirmation</value>
+  </data>
+  <data name="Settings.Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="Settings.Sender" xml:space="preserve">
+    <value>Sender</value>
+  </data>
+  <data name="Settings.FromAddressWhatCustomerReplies" xml:space="preserve">
+    <value>From address — what the customer replies to</value>
+  </data>
+  <data name="Settings.FromNameOptional" xml:space="preserve">
+    <value>From name (optional)</value>
+  </data>
+  <data name="Settings.ServerLeaveEmptyDeliverByFile" xml:space="preserve">
+    <value>Server — leave empty to deliver by file only</value>
+  </data>
+  <data name="Settings.SmtpHost" xml:space="preserve">
+    <value>SMTP host</value>
+  </data>
+  <data name="Settings.Port" xml:space="preserve">
+    <value>Port</value>
+  </data>
+  <data name="Settings.TransportSecurity" xml:space="preserve">
+    <value>Transport security</value>
+  </data>
+  <data name="Settings.SignIn" xml:space="preserve">
+    <value>Sign-in</value>
+  </data>
+  <data name="Settings.UsernameAccountSigns" xml:space="preserve">
+    <value>Username — the account that signs in</value>
+  </data>
+  <data name="Settings.PasswordGmailMailboxAppPasswordNot" xml:space="preserve">
+    <value>Password — for a Gmail mailbox this is an app password, not the account password</value>
+  </data>
+  <data name="Settings.StoredIn" xml:space="preserve">
+    <value>Stored in</value>
+  </data>
+  <data name="Settings.TestConfiguration" xml:space="preserve">
+    <value>Test the configuration</value>
+  </data>
+  <data name="Settings.SendTestMessageYourOwnAddress" xml:space="preserve">
+    <value>Send a test message to - your own address, never a customer's</value>
+  </data>
+  <data name="Settings.ItSendsRealMessageThroughSettings" xml:space="preserve">
+    <value>It sends a real message through the settings on this page, whether or not they have been saved. No licence is attached and nothing is recorded against any customer.</value>
+  </data>
+  <data name="Settings.TheLanguageLicenceEMailWritten" xml:space="preserve">
+    <value>The language a licence e-mail is written in</value>
+  </data>
+  <data name="Settings.ItIndependentInterfaceLanguageAppliesEvery" xml:space="preserve">
+    <value>It is independent of the interface language, and it applies to every customer — switch it before sending to a customer who reads the other language.</value>
+  </data>
+  <data name="Settings.SendTestEmail" xml:space="preserve">
+    <value>Send test email…</value>
+  </data>
+  <data name="Settings.ForgetSettings" xml:space="preserve">
+    <value>Forget settings</value>
+  </data>
+  <data name="Settings.RevertAction" xml:space="preserve">
+    <value>Revert</value>
+  </data>
+  <data name="Settings.SaveAction" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Settings.SendsTestMessageAddressAboveAfter" xml:space="preserve">
+    <value>Sends a test message to the address above, after a confirmation</value>
+  </data>
+  <data name="Settings.DeletesStoredEMailConfigurationIncluding" xml:space="preserve">
+    <value>Deletes the stored e-mail configuration, including the password</value>
+  </data>
+  <data name="Settings.DiscardsEditsReloadsWhatSaved" xml:space="preserve">
+    <value>Discards the edits and reloads what is saved</value>
+  </data>
+  <data name="Settings.LicencjeTwojafirmaPl" xml:space="preserve">
+    <value>licencje@twojafirma.pl</value>
+  </data>
+  <data name="Settings.YouExampleCom" xml:space="preserve">
+    <value>you@example.com</value>
+  </data>
+  <data name="Storage.Storage" xml:space="preserve">
+    <value>Storage</value>
+  </data>
+  <data name="Storage.RegisterRecord" xml:space="preserve">
+    <value>Register of record</value>
+  </data>
+  <data name="Storage.SigningKeystoreSeparateFileNotIncluded" xml:space="preserve">
+    <value>Signing keystore — a separate file, NOT included in a backup</value>
+  </data>
+  <data name="Storage.WhatBackupWillCarry" xml:space="preserve">
+    <value>What a backup will carry</value>
+  </data>
+  <data name="Storage.EncryptedBackup" xml:space="preserve">
+    <value>Encrypted backup</value>
+  </data>
+  <data name="Storage.TheWholeRegisterCustomersLicencesEvery" xml:space="preserve">
+    <value>The whole register — customers, licences, every artifact ever issued, the current-artifact pointers and the complete audit log — encrypted with AES-256-GCM under a passphrase of its own, and verified row for row against the live register before it is written.</value>
+  </data>
+  <data name="Storage.BackupPassphraseItsOwnSecretNot" xml:space="preserve">
+    <value>Backup passphrase — its own secret, not the keystore's</value>
+  </data>
+  <data name="Storage.BackupPassphraseAgain" xml:space="preserve">
+    <value>Backup passphrase again</value>
+  </data>
+  <data name="Storage.PassphraseBackupBeingRestored" xml:space="preserve">
+    <value>Passphrase of the backup being restored</value>
+  </data>
+  <data name="Storage.WhatRestoreWillDo" xml:space="preserve">
+    <value>What this Restore will do</value>
+  </data>
+  <data name="Storage.ExportJsonl" xml:space="preserve">
+    <value>Export JSONL…</value>
+  </data>
+  <data name="Storage.OpenDataFolder" xml:space="preserve">
+    <value>Open data folder</value>
+  </data>
+  <data name="Storage.BackupTab" xml:space="preserve">
+    <value>Backup</value>
+  </data>
+  <data name="Storage.RestoreTab" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="Storage.BackupAction" xml:space="preserve">
+    <value>Backup…</value>
+  </data>
+  <data name="Storage.RestoreAction" xml:space="preserve">
+    <value>Restore…</value>
+  </data>
+  <data name="Storage.AReadableUnencryptedCopyEveryRow" xml:space="preserve">
+    <value>A readable, UNENCRYPTED copy of every row. A diagnostic escape hatch, not a backup.</value>
+  </data>
+  <data name="Unlock.NoSigningKeyFoundCreateOne" xml:space="preserve">
+    <value>No signing key was found. Create one to start issuing licences.</value>
+  </data>
+  <data name="Unlock.ThePassphraseCannotResetIfLost" xml:space="preserve">
+    <value>The passphrase cannot be reset. If it is lost, no licence can ever be renewed — back up the keystore to two offline media and verify the restore from each.</value>
+  </data>
+  <data name="Unlock.KeyId" xml:space="preserve">
+    <value>Key id</value>
+  </data>
+  <data name="Unlock.Passphrase" xml:space="preserve">
+    <value>Passphrase</value>
+  </data>
+  <data name="Unlock.PassphraseAgain" xml:space="preserve">
+    <value>Passphrase again</value>
+  </data>
+  <data name="Unlock.UnlockKeystoreIssueLicences" xml:space="preserve">
+    <value>Unlock the keystore to issue licences.</value>
+  </data>
+  <data name="Unlock.CreateSigningKey" xml:space="preserve">
+    <value>Create signing key</value>
+  </data>
+  <data name="Unlock.Unlock" xml:space="preserve">
+    <value>Unlock</value>
+  </data>
 </root>

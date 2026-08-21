@@ -1,5 +1,6 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:lm="clr-namespace:EmberTern.LicenseManager"
         xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
         x:Class="EmberTern.LicenseManager.Views.UnlockWindow"
         x:DataType="vm:UnlockViewModel"
@@ -32,28 +33,28 @@
         <!-- Ceremony ─────────────────────────────────────────────────────────────────────────── -->
         <StackPanel IsVisible="{Binding !HasKeyStore}">
           <TextBlock Margin="{DynamicResource Margin.FieldGap}"
-                     Text="No signing key was found. Create one to start issuing licences." />
+                     Text="{lm:Loc Unlock.NoSigningKeyFoundCreateOne}" />
 
           <Border Classes="message warning" Margin="{DynamicResource Margin.SectionGap}">
-            <TextBlock Text="The passphrase cannot be reset. If it is lost, no licence can ever be renewed — back up the keystore to two offline media and verify the restore from each." />
+            <TextBlock Text="{lm:Loc Unlock.ThePassphraseCannotResetIfLost}" />
           </Border>
 
-          <TextBlock Classes="field-label" Text="Key id" />
+          <TextBlock Classes="field-label" Text="{lm:Loc Unlock.KeyId}" />
           <TextBox Classes="mono" Text="{Binding KeyId}" />
 
-          <TextBlock Classes="field-label" Text="Passphrase" />
+          <TextBlock Classes="field-label" Text="{lm:Loc Unlock.Passphrase}" />
           <TextBox PasswordChar="•" Text="{Binding Passphrase}" />
 
-          <TextBlock Classes="field-label" Text="Passphrase again" />
+          <TextBlock Classes="field-label" Text="{lm:Loc Unlock.PassphraseAgain}" />
           <TextBox PasswordChar="•" Text="{Binding PassphraseConfirmation}" />
         </StackPanel>
 
         <!-- Unlock ───────────────────────────────────────────────────────────────────────────── -->
         <StackPanel IsVisible="{Binding HasKeyStore}">
           <TextBlock Margin="{DynamicResource Margin.FieldGap}"
-                     Text="Unlock the keystore to issue licences." />
+                     Text="{lm:Loc Unlock.UnlockKeystoreIssueLicences}" />
 
-          <TextBlock Classes="field-label" Text="Passphrase" />
+          <TextBlock Classes="field-label" Text="{lm:Loc Unlock.Passphrase}" />
           <TextBox Name="PassphraseBox" PasswordChar="•" Text="{Binding Passphrase}" />
         </StackPanel>
 
@@ -77,9 +78,9 @@
         <!-- ⚠ `IsDefault` is BOUND, not literal, on both. Two buttons literally marked default in one
              window both answer Enter regardless of visibility, and which one wins is not something the
              markup states. Tying it to the same condition as the visibility leaves exactly one. -->
-        <Button Classes="primary" Content="Create signing key" IsDefault="{Binding !HasKeyStore}"
+        <Button Classes="primary" Content="{lm:Loc Unlock.CreateSigningKey}" IsDefault="{Binding !HasKeyStore}"
                 IsVisible="{Binding !HasKeyStore}" Command="{Binding CreateKeyCommand}" />
-        <Button Classes="primary" Content="Unlock" IsDefault="{Binding HasKeyStore}"
+        <Button Classes="primary" Content="{lm:Loc Unlock.Unlock}" IsDefault="{Binding HasKeyStore}"
                 IsVisible="{Binding HasKeyStore}" Command="{Binding UnlockCommand}" />
       </StackPanel>
     </Border>

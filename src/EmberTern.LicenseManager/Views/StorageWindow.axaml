@@ -1,9 +1,10 @@
-<Window xmlns="https://github.com/avaloniaui"
+﻿<Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:lm="clr-namespace:EmberTern.LicenseManager"
         xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
         x:Class="EmberTern.LicenseManager.Views.StorageWindow"
         x:DataType="vm:StorageViewModel"
-        Title="Storage"
+        Title="{lm:Loc Storage.Storage}"
         Width="760" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         CanResize="False"
@@ -34,12 +35,12 @@
          cannot be mistaken for the thing the operator came to do. -->
     <Border Grid.Row="0" Classes="dialog-header">
       <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
-        <TextBlock Grid.Column="0" Classes="h1" VerticalAlignment="Center" Text="Storage" />
-        <Button Grid.Column="2" Classes="flat" Name="ExportJsonl" Content="Export JSONL…"
+        <TextBlock Grid.Column="0" Classes="h1" VerticalAlignment="Center" Text="{lm:Loc Storage.Storage}" />
+        <Button Grid.Column="2" Classes="flat" Name="ExportJsonl" Content="{lm:Loc Storage.ExportJsonl}"
                 VerticalAlignment="Center"
-                ToolTip.Tip="A readable, UNENCRYPTED copy of every row. A diagnostic escape hatch, not a backup."
+                ToolTip.Tip="{lm:Loc Storage.AReadableUnencryptedCopyEveryRow}"
                 Command="{Binding ExportJsonlCommand}" />
-        <Button Grid.Column="3" Classes="flat" Name="OpenDataFolder" Content="Open data folder"
+        <Button Grid.Column="3" Classes="flat" Name="OpenDataFolder" Content="{lm:Loc Storage.OpenDataFolder}"
                 VerticalAlignment="Center"
                 Command="{Binding OpenDataFolderCommand}" />
       </Grid>
@@ -48,10 +49,10 @@
     <!-- Task switch ────────────────────────────────────────────────────────────────────────────── -->
     <Border Grid.Row="1" Classes="view-switch">
       <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
-        <Button Classes="view-tab" Name="BackupTab" Content="Backup"
+        <Button Classes="view-tab" Name="BackupTab" Content="{lm:Loc Storage.BackupTab}"
                 Classes.active="{Binding IsBackupTab}"
                 Command="{Binding ShowBackupCommand}" />
-        <Button Classes="view-tab" Name="RestoreTab" Content="Restore"
+        <Button Classes="view-tab" Name="RestoreTab" Content="{lm:Loc Storage.RestoreTab}"
                 Classes.active="{Binding IsRestoreTab}"
                 Command="{Binding ShowRestoreCommand}" />
       </StackPanel>
@@ -66,7 +67,7 @@
         <!-- ══ BACKUP ═══════════════════════════════════════════════════════════════════════════ -->
         <StackPanel Name="BackupForm" IsVisible="{Binding IsBackupTab}">
 
-          <TextBlock Classes="field-label" Text="Register of record" />
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.RegisterRecord}" />
           <SelectableTextBlock Name="RegisterPathText" Classes="mono" TextWrapping="Wrap"
                                Margin="{DynamicResource Margin.FieldGap}"
                                Text="{Binding RegisterPath}" />
@@ -76,26 +77,26 @@
                two operations with two risk profiles, and §24.2 forbids the private key from travelling
                in a backup at all. -->
           <TextBlock Classes="field-label"
-                     Text="Signing keystore — a separate file, NOT included in a backup" />
+                     Text="{lm:Loc Storage.SigningKeystoreSeparateFileNotIncluded}" />
           <SelectableTextBlock Name="KeyStorePathText" Classes="mono" TextWrapping="Wrap"
                                Margin="{DynamicResource Margin.FieldGap}"
                                Text="{Binding KeyStorePath}" />
 
-          <TextBlock Classes="field-label" Text="What a backup will carry" />
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.WhatBackupWillCarry}" />
           <TextBlock Name="BackupContentsText" TextWrapping="Wrap"
                      Margin="{DynamicResource Margin.SectionGap}"
                      Text="{Binding BackupContents}" />
 
-          <TextBlock Classes="section" Text="Encrypted backup" />
+          <TextBlock Classes="section" Text="{lm:Loc Storage.EncryptedBackup}" />
           <TextBlock TextWrapping="Wrap" Margin="{DynamicResource Margin.SectionGap}"
-                     Text="The whole register — customers, licences, every artifact ever issued, the current-artifact pointers and the complete audit log — encrypted with AES-256-GCM under a passphrase of its own, and verified row for row against the live register before it is written." />
+                     Text="{lm:Loc Storage.TheWholeRegisterCustomersLicencesEvery}" />
 
           <!-- ⭐ D‑1 said in the field's own caption: this is the BACKUP's secret, and the application
                never reaches for the keystore's. Typing the same words is the operator's choice. -->
-          <TextBlock Classes="field-label" Text="Backup passphrase — its own secret, not the keystore's" />
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.BackupPassphraseItsOwnSecretNot}" />
           <TextBox Name="BackupPassphraseBox" PasswordChar="•" Text="{Binding BackupPassphrase}" />
 
-          <TextBlock Classes="field-label" Text="Backup passphrase again" />
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.BackupPassphraseAgain}" />
           <TextBox Name="BackupPassphraseConfirmBox" PasswordChar="•"
                    Text="{Binding BackupPassphraseConfirmation}" />
 
@@ -104,7 +105,7 @@
         <!-- ══ RESTORE ══════════════════════════════════════════════════════════════════════════ -->
         <StackPanel Name="RestoreForm" IsVisible="{Binding IsRestoreTab}">
 
-          <TextBlock Classes="field-label" Text="Passphrase of the backup being restored" />
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.PassphraseBackupBeingRestored}" />
           <TextBox Name="RestorePassphraseBox" PasswordChar="•"
                    Margin="{DynamicResource Margin.FieldGap}"
                    Text="{Binding RestorePassphrase}" />
@@ -112,7 +113,7 @@
           <!-- ⭐ A picker rather than two buttons, so there is ONE Restore action and the paragraph below
                describes the thing that will actually happen. Two buttons would force the text to explain
                both at once, which is how the previous layout let the consequential one go unread. -->
-          <TextBlock Classes="field-label" Text="What this Restore will do" />
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.WhatRestoreWillDo}" />
           <ComboBox Name="RestoreMode" HorizontalAlignment="Stretch"
                     Margin="{DynamicResource Margin.FieldGap}"
                     ItemsSource="{Binding RestoreModes}"
@@ -154,11 +155,11 @@
          overflow the way the five-button footer did. -->
     <Border Grid.Row="3" Classes="dialog-footer">
       <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Md}">
-        <Button Classes="primary" Name="Backup" Content="Backup…"
+        <Button Classes="primary" Name="Backup" Content="{lm:Loc Storage.BackupAction}"
                 IsVisible="{Binding IsBackupTab}"
                 IsDefault="{Binding IsBackupTab}"
                 Command="{Binding BackupCommand}" />
-        <Button Classes="primary" Name="RunRestore" Content="Restore…"
+        <Button Classes="primary" Name="RunRestore" Content="{lm:Loc Storage.RestoreAction}"
                 IsVisible="{Binding IsRestoreTab}"
                 IsDefault="{Binding IsRestoreTab}"
                 Command="{Binding RunRestoreCommand}" />
