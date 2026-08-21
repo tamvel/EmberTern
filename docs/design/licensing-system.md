@@ -4784,3 +4784,173 @@ English word re-worded. ⛔ No plural family where English had a single arm — 
   `CSharpLocalizationTests.TechnicalLiterals`: three date formats, four separator-only shapes,
   `"{0}, payload v{1}"`, and `"EmberTern licence"` as a default FILE NAME. ⭐ That last reads identically to
   `FileType.Licence` and is deliberately not the same fact (§56.3).
+---
+
+## 58. L8.5 — the Polish interface, as built (2026-08-21)
+
+**The editorial stage: the first and only sub-stage where a visible word changes.** L8.0–L8.4 built the
+mechanism and migrated the English onto it; this one ships `Strings.pl.resx` and turns the
+Application-language picker into a real control.
+
+### 58.1 The numbers
+
+| | |
+|---|---|
+| `Strings.pl.resx` | **392 entries** — the whole catalog, nothing left to fall back |
+| English base | 379 → **380** (net: two byte keys became families, one key removed) |
+| Plural families | 7 → **12**, each 2 arms in English and **3 in Polish** |
+| Suite | **766 / 766** (from 737) |
+| Build | **0 / 0** — Debug and Release |
+
+### 58.2 ⭐⭐ The dictionary was INHERITED, not invented
+
+`terminology.md` §4.1 claims thirteen terms come from the product. ⭐ All thirteen were **verified present
+in `EmberTern.App/Localization/Strings.pl.resx`** before a word was written — Licencjobiorca ·
+Identyfikator licencji · Stanowiska · Ważna od · Stan licencji · Licencja EmberTern · Zapisz · Anuluj ·
+Zamknij · Wyczyść · Eksportuj · Ustawienia · Język — plus Użytkownik · Port · Host · Ogólne · Motyw ·
+Komunikat · Kopiuj · Minimalizuj · Menu aplikacji · O programie · Imię · Nazwisko. ⛔ The same fact must
+not be called two different things on the issuer's side and the customer's.
+
+⚠ **One correction to §4.1:** it renders `Valid until (inclusive)` as *"Ważna do (włącznie)"*, but the
+product's `SettingsLicenseValidUntilLabel` is **"Ważna do"**. The inherited term is the shorter one; the
+qualifier is the License Manager's own, in both languages. The value shipped is the composition, which is
+right — but §4.1 reads as though it were a quotation.
+
+⭐ **Register, taken from the product rather than chosen:** the product says *"zmieniono {0} wiersz"*, so a
+completed action is **impersonal past** ("Zapisano", "Wystawiono", "Wyeksportowano") and a button is
+**imperative** ("Zapisz"). ⛔ Never second person.
+
+### 58.3 ⭐⭐ The plural convention is a MEASURED fact about the product, not a preference
+
+`EmberTern.App/Localization/Strings.pl.resx` declares `Localization.PluralRuleSet` = **`one-few-many`** and
+uses `.one` / `.few` / `.many` across 42 entries — with **not one `.other`**. The Polish satellite here
+follows exactly that. ⚠ An `.other` arm in a `one-few-many` catalog is dead weight: `CategoriesOf` never
+produces it, so nothing would ever read it.
+
+### 58.4 ⭐ C‑1 — six hand-split keys became three counted families, and the strip learned to resolve one
+
+L8.2 wrote `Status.BlockedOne` / `BlockedMany` and two `BatchCompleted…One` / `…Many` pairs, correctly: it
+was forbidden from changing a single English character, and a family would have. **A pair cannot serve
+one/few/many**, so the pairs are now `Status.Blocked`, `Status.BatchCompleted` and
+`Status.BatchCompletedWithFirstIssues`.
+
+⭐ That needed one small addition to the mechanism: `StatusMessage` gained a nullable `Count`, and `Text`
+resolves through `Loc.FormatCount` when it is set. ⛔ Not a second mechanism — `FormatCount` already
+existed; the strip simply could not reach it. ⚠ The count is always `{0}`, in one place, so the arguments
+must not repeat it.
+
+⚠ `EveryMessageKey_NamesARealCatalogEntry` had to learn the same thing `CSharpLocalizationTests` already
+knew: **a counted key has no flat entry**, so either a flat value or a family counts as present.
+
+### 58.5 ⭐ C‑2 — "label: count" is the Polish answer to the English `(s)` hack
+
+Ten entries carry `{n} customer(s)` lists; `Storage.BackupContents` carries **five** independently counted
+nouns in one sentence, and a family inflects only on `{0}`. Polish has no `(s)`, so the values read
+*"klientów: {0} · licencji: {1} · …"*. ⭐ **It needs no key change and no code change**, it is the ordinary
+Polish UI form, and it reads better than the original. ⛔ The alternative — splitting into counted keys and
+gluing them — would have re-introduced exactly the half-sentence assembly L8.4 removed.
+
+### 58.6 ⭐ C‑3 — the second counter was reworded out of the grammar
+
+`Licences.CheckedWithHidden` counts twice: *"{0} licence selected — {1} of them not shown…"*. Polish wants
+to inflect on `{1}` as well, which no single family can do. The Polish reads *"Wybrano {0} licencje — w tym
+{1} poza bieżącymi filtrami."* — where `{1}` is a bare number and needs no agreement. ⭐ Editorial, not
+structural: no key moved.
+
+### 58.7 ⚠ C‑4 — the payoff of a rule made two stages earlier
+
+"Never issued" needs **four different Polish forms**, because the grammatical subject differs each time:
+`Row.StandingNeverIssued` → *Nigdy nie wystawiona* (a licence, feminine) · `Filter.NeverIssued` → *Nigdy
+nie wystawione* (a set) · `Licences.DetailNeverIssued` → *nigdy nie wystawiono* (the subject is the
+CUSTOMER) · `History.NeverIssued` → a whole sentence. ⭐ **All four were already separate keys** — §56.3's
+rule ("a shared English word is not a reason to share a key") cost nothing when it was written and paid
+for itself here. L8.5 split nothing.
+
+### 58.8 ⭐ D‑6 — "bajt" inflects, and the pivot is not the printed value
+
+`bytes` → a family, per the user's decision, rather than the non-inflecting `B`. ⚠ The subtlety: the byte
+count is an **echo of a technical field** and must stay invariantly formatted, but `FormatCount` renders
+`{0}` under the reader's culture (Polish groups thousands). ⭐ So the count travels **twice**: as `{0}`, the
+grammatical pivot, and as an already-formatted string that the sentence actually prints. ⛔ Do not
+"simplify" the two into one argument.
+
+### 58.9 ⭐⭐ C‑6 — the picker is real, and the ONE apply path survived becoming two callers
+
+D‑8 is **discharged, not bypassed**: it disabled the row while there was no Polish to show, because a
+preference that changes nothing is the `ClientLibraryPath` defect. There is Polish now.
+
+⚠ The interesting part is not the setter, it is the seam. `TheLanguage_IsAppliedInExactlyOnePlace` asserted
+that `Loc.Apply` appears in exactly one file, and the picker was about to become a second caller. ⛔ A view
+model applying its own language would be a second path, and two is how a stored preference and a rendered
+window start disagreeing. ⭐ So the seam moved into **`ApplicationLanguageService`** — `Restore()` for the
+startup, `Choose()` for the picker, one private `Use()` holding the single `Loc.Apply`. The guard still
+names one file; it now names a file whose job this is, rather than the composition root's convenience.
+
+⚠ **`ManagerPreferencesStore.Save` already existed** — the standing note that "the WRITER arrives with the
+picker" was stale. All that was missing was a path from the UI to it.
+
+⭐ Two smaller decisions: `Choose` applies the language **even if the write fails** (a disk that cannot be
+written is not a reason to leave the operator in a language they just left), and the picker's `IsEnabled`
+follows `CanChooseApplicationLanguage` rather than being hard-coded — a view model with nowhere to store a
+choice must not offer to make one.
+
+⛔ **`Settings.ApplicationLanguageUnavailable` is GONE**, key and all. It said the application was
+English-only, which stopped being true the moment the picker worked — and a stale explanation on screen is
+worse than none.
+
+### 58.10 ⚠ Two guards asserted the state L8.5 was waiting to leave
+
+`TheApplicationLanguagePickerIsVisibleButDisabled` and `TheApplicationLanguageIsNotWrittenAnywhere` (which
+asserted the ABSENCE of a setter, by reflection) were right when written and had to go with D‑8. ⭐ A guard
+asserting a state the application deliberately left is a guard that forbids the change it was waiting for.
+They are replaced by **one** test that asserts both halves of what the picker now does: the code reaches
+`ui.json`, **and** a catalog read comes back in the new language. ⚠ Either half alone passes on a broken
+picker — a write nobody applies, or an application nobody stored.
+
+⭐ A third test flipped for the best possible reason: `AStoredPreference_ReachesTheInterface` pinned *"Polish
+has no translation yet, so the words are still English"*. It now asserts **"Ustawienia"**.
+
+### 58.11 The verification, proportionate to the change
+
+🔒 The user's rule for this stage, stated before it began: *"weryfikacja ma być proporcjonalna"*, and
+⛔ **no injection campaign**. Four checks, one per claim:
+
+- **the catalog** — `EveryShippedTranslation_CoversTheBaseAndAddsNothing`: every base key is translated and
+  no satellite invents one. ⚠ Both directions, because they fail differently: a missing entry renders one
+  English line inside a Polish window, and an extra one is a translated sentence nothing reads.
+  ⭐ Spot-checked by deleting a single Polish entry — it went red naming `pl: Main.Contact`, then green again.
+- **the plural families** — `EveryPluralFamily_IsCompleteInEveryShippedCulture` now reads **every** shipped
+  `Strings*.resx`, discovered from disk. ⚠⚠ Despite its name it had only ever read the English file, so a
+  Polish satellite declaring one/few/many was checked by nothing.
+- **the picker** — one test, §58.10.
+- **the terminology** — `ManagerTerminologyTests`, the guard `terminology.md` §4 recorded as owed to L8.5.
+  27 inherited/ratified terms, the §4.4 technical contracts (language names, format names, `Status.Verbatim`,
+  branding inside a translated phrase), and one test that Polish really inflects — without it the catalog
+  could declare three identical arms and every completeness guard would stay green.
+
+⛔ The generation itself was scripted (the values come from data files, not from hand-edited XML), and the
+generator refuses to write while any of its four cross-checks fails. It caught both real gaps on the first
+run: the two byte keys were not yet families, and `ApplicationLanguageUnavailable` was still in the base.
+
+### 58.12 ⛔ What L8.5 deliberately did NOT do
+
+⛔ No English re-wording outside C‑1 and C‑6 and what the accepted pluralisation required. ⛔ No persisted
+value, audit action, audit note, file name, format name, ISO date or brand translated (`terminology.md`
+§4.4). ⛔ `English` / `Polski` stay named in themselves. ⛔ No new guard per term, no injection campaign, no
+re-analysis of the mechanism. ⛔ Nothing in `EmberTern.App`. ⛔ L7 untouched.
+
+### 58.13 ⏭ Hand-off to L8.6 — visual QA in EN/PL × Light/Dark
+
+**L8.6 is where a term may still be corrected** — §4 was ratified as a BASE, and the user reserved that
+right explicitly. Worth looking at first, because they are the ones I could not judge from a catalog:
+
+- **length.** Polish runs longer than English almost everywhere. The long explanations
+  (`Storage.TheWholeRegisterCustomersLicencesEvery`, `Status.DpapiProtectionNote`,
+  `Unlock.ThePassphraseCannotResetIfLost`) and the fixed-width grid columns are where that shows.
+- **`Main.Held` → "Wstrzymane"** — proposed without seeing the column it sits in.
+- **`Storage.Storage` → "Dane"** rather than "Magazyn", to avoid colliding with *Magazyn kluczy
+  podpisujących*. Reads well in a menu tooltip; unverified as a window title.
+- **`Row.Standing*` under the column named "Termin"** — *Wygasa dziś* / *Wygasła wczoraj* were written to
+  agree with a licence, which is right in the column and worth seeing beside the date.
+- **`Filter.*` as participles** (*Wygasające w ciągu 30 dni*) — a filter narrows a set, so a participle is
+  right; it is also longer than the English and sits in a narrow picker.
