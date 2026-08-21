@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -8,6 +8,7 @@ using EmberTern.Licensing;
 using EmberTern.LicenseManager.Data;
 using EmberTern.LicenseManager.Services;
 
+using EmberTern.LicenseManager.Localization;
 namespace EmberTern.LicenseManager.ViewModels;
 
 /// <summary>
@@ -94,6 +95,14 @@ public sealed partial class ArtifactHistoryViewModel : ObservableObject
         _register = register ?? throw new ArgumentNullException(nameof(register));
         _workflow = workflow ?? throw new ArgumentNullException(nameof(workflow));
         _session = session ?? throw new ArgumentNullException(nameof(session));
+
+        // ⭐⭐ §53.6 obligation 1. Every row here is BUILT (`ArtifactListItem` holds `required … init`
+        //    strings), and so is the artifact detail beside it, so a language change only reaches this
+        //    surface by reading the history again. ⭐ `Load` re-selects by `Artifact.ArtifactId` rather
+        //    than by reference — which is what makes rebuilding keep the operator looking at the same
+        //    artifact, and is the property §53.4 left this type's word-bearing identity resting on.
+        // ⚠ Weak, with a static handler: `Loc.LanguageChanged` is a static event, i.e. a GC root.
+        LanguageChange.SubscribeWeak(this, static history => history.Reload());
     }
 
     /// <summary>Every artifact ever issued for the licence, newest first.</summary>
@@ -235,7 +244,11 @@ public sealed partial class ArtifactHistoryViewModel : ObservableObject
             KeyId = artifact.KeyId,
             Ordinal = "#" + artifact.ArtifactId.ToString(CultureInfo.InvariantCulture),
             IsCurrent = isCurrent,
-            Standing = isCurrent ? "current" : "superseded",
+
+            // ⭐⭐ Was `isCurrent ? "current" : "superseded"` — the PERSISTED values
+            //    (RegisterQueries.Current / .Superseded) printed straight to the screen, which is
+            //    §53.6 obligation 2's defect wearing a different name. The stored values are untouched.
+            Standing = ArtifactStandingText.Describe(isCurrent),
         };
     }
 
@@ -243,18 +256,15 @@ public sealed partial class ArtifactHistoryViewModel : ObservableObject
     {
         if (Artifacts.Count == 0)
         {
-            return "Never issued. Nothing has been sent to the customer for this licence.";
+            return HistoryCatalog.NeverIssued;
         }
 
         // ⭐ Says the append-only guarantee out loud. The operator's question behind this whole surface is
         //    "did re-issuing overwrite what I sent them before?" — and the answer is a property of the
         //    schema, so it is worth stating rather than leaving to be inferred from a list of rows.
-        var kept = Artifacts.Count == 1
-            ? "1 issue on record"
-            : $"{Artifacts.Count} issues on record, all kept";
-
-        return $"{kept}. The current file is the one marked below; earlier ones were superseded, " +
-               "never overwritten or deleted.";
+        // ⚠ ONE counted key rather than a fragment plus a shared tail: the two English arms differ by more
+        //   than the number ("all kept"), which is exactly why the tail could not stay shared.
+        return HistoryCatalog.Summary(Artifacts.Count);
     }
 
     partial void OnSelectedArtifactChanged(ArtifactListItem? value)
@@ -276,8 +286,12 @@ public sealed partial class ArtifactHistoryViewModel : ObservableObject
         // ⭐ The delivered size, measured from the token that would actually be written — not from the
         //    string's character count. `SaveArtifact` writes UTF-8 with no BOM, and the armor is what
         //    goes in the file, so this is the number the customer receives.
-        TokenSize = string.Create(CultureInfo.InvariantCulture,
-            $"{System.Text.Encoding.UTF8.GetByteCount(LicenseArmor.Wrap(artifact.Token))} bytes as delivered");
+        // ⚠ The COUNT is formatted invariantly by its producer and handed over as a string: it echoes a
+        //   technical field, so no format specifier in a resource value may touch it (Loc.Format's rule).
+        TokenSize = HistoryCatalog.TokenSizeAsDelivered(
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"{System.Text.Encoding.UTF8.GetByteCount(LicenseArmor.Wrap(artifact.Token))}"));
 
         // ⭐⭐ TWO SOURCES, EACH ANSWERING WHAT ONLY IT CAN.
         //
@@ -298,7 +312,7 @@ public sealed partial class ArtifactHistoryViewModel : ObservableObject
                 System.Text.Encoding.UTF8.GetBytes(artifact.PayloadJson), out var payload, out _))
         {
             Licensee = payload.Licensee;
-            Seats = payload.Seats == 1 ? "1 seat" : $"{payload.Seats} seats";
+            Seats = RowCatalog.Seats(payload.Seats);
             Validity =
                 $"{payload.NotBefore.ToString(DateFormat, CultureInfo.InvariantCulture)} → " +
                 $"{payload.ExpiresAt.ToString(DateFormat, CultureInfo.InvariantCulture)}";
@@ -309,7 +323,7 @@ public sealed partial class ArtifactHistoryViewModel : ObservableObject
         {
             // ⚠ Stated, not hidden. A payload the parser cannot read is the single most interesting row in
             //    the register, and blanking the fields would present it as an ordinary one.
-            Licensee = Seats = Validity = Product = "— unreadable payload —";
+            Licensee = Seats = Validity = Product = HistoryCatalog.UnreadablePayload;
             SignedWith = artifact.KeyId;
         }
 

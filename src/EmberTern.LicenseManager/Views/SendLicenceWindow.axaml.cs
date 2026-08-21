@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
@@ -57,7 +57,7 @@ public sealed partial class SendLicenceWindow : Window
     {
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Save the message",
+            Title = FileTypeCatalog.SaveMessageTitle,
             SuggestedFileName = suggestedName,
             DefaultExtension = EmlFileEmailSender.FileExtension.TrimStart('.'),
             FileTypeChoices = [EmlFileType],
@@ -66,7 +66,7 @@ public sealed partial class SendLicenceWindow : Window
         return file?.TryGetLocalPath();
     }
 
-    private static FilePickerFileType EmlFileType => new("E-mail message")
+    private static FilePickerFileType EmlFileType => new(FileTypeCatalog.EmailMessage)
     {
         Patterns = ["*" + EmlFileEmailSender.FileExtension],
         MimeTypes = ["message/rfc822"],

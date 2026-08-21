@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -58,7 +58,7 @@ public sealed partial class StorageWindow : Window
     {
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Save",
+            Title = FileTypeCatalog.SaveTitle,
             SuggestedFileName = suggestedName,
             DefaultExtension = Path.GetExtension(suggestedName).TrimStart('.'),
             FileTypeChoices = [BackupFileType, JsonlFileType],
@@ -71,7 +71,7 @@ public sealed partial class StorageWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Choose a register backup",
+            Title = FileTypeCatalog.ChooseBackupTitle,
             AllowMultiple = false,
             FileTypeFilter = [BackupFileType],
         });
@@ -86,7 +86,7 @@ public sealed partial class StorageWindow : Window
         //    argument shaped like that anywhere on this path — see RestoreWorkflow.
         var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Choose a NEW, empty folder to restore into",
+            Title = FileTypeCatalog.ChooseRestoreFolderTitle,
             AllowMultiple = false,
         });
 
@@ -112,12 +112,16 @@ public sealed partial class StorageWindow : Window
         }
     }
 
-    private static FilePickerFileType BackupFileType { get; } = new("EmberTern register backup")
+    // ⚠⚠ COMPUTED, never `{ get; } = new(...)`. That shape is an auto-property with an initializer —
+    //    i.e. a static readonly — so it resolved its name ONCE at type initialization and froze in
+    //    whatever language happened to be in force then. It renders correctly, which is what makes it
+    //    dangerous (Loc's class remarks; ManagerSettingsCatalog paid for this lesson in the product).
+    private static FilePickerFileType BackupFileType => new(FileTypeCatalog.RegisterBackup)
     {
         Patterns = ["*" + RegisterBackup.FileExtension],
     };
 
-    private static FilePickerFileType JsonlFileType { get; } = new("JSON Lines")
+    private static FilePickerFileType JsonlFileType => new(FileTypeCatalog.JsonLines)
     {
         Patterns = ["*" + RegisterJsonl.FileExtension],
     };

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -10,6 +10,7 @@ using System.Xml.Linq;
 using EmberTern.LicenseManager.Email;
 using EmberTern.LicenseManager.Localization;
 using EmberTern.LicenseManager.Settings;
+using EmberTern.LicenseManager.Views;
 using EmberTern.LicenseManager.ViewModels;
 using Xunit;
 
@@ -126,12 +127,28 @@ public sealed class LocalizationMechanismTests
     {
         var found = Catalogs().Select(c => c.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
 
-        // ⚠ Updated deliberately by L8.2, which added the two catalogs the message strip and the
-        //   confirmation dialog resolve through. ⛔ This list is a TRIPWIRE, not bookkeeping: a new catalog
-        //   must fail here and be added on purpose, because a catalog nobody swept is a catalog nobody
-        //   guards.
+        // ⚠ Updated deliberately by L8.2 (the two catalogs the message strip and the confirmation dialog
+        //   resolve through) and by L8.4 (the twelve the C# surfaces resolve through). ⛔ This list is a
+        //   TRIPWIRE, not bookkeeping: a new catalog must fail here and be added on purpose, because a
+        //   catalog nobody swept is a catalog nobody guards.
         Assert.Equal(
-            [nameof(ConfirmCatalog), nameof(ManagerSettingsCatalog), nameof(StatusCatalog)],
+            [
+                nameof(ArtifactStandingText),
+                nameof(BatchCatalog),
+                nameof(ConfirmCatalog),
+                nameof(FileTypeCatalog),
+                nameof(FilterCatalog),
+                nameof(HistoryCatalog),
+                nameof(LicenceStatusText),
+                nameof(LicencesCatalog),
+                nameof(ManagerSettingsCatalog),
+                nameof(ReasonText),
+                nameof(RowCatalog),
+                nameof(SendCatalog),
+                nameof(StatusCatalog),
+                nameof(StorageCatalog),
+                nameof(UnlockCatalog),
+            ],
             found);
 
         Assert.NotEmpty(WordProperties(typeof(ManagerSettingsCatalog)));

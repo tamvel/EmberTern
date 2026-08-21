@@ -80,7 +80,7 @@ public static class ManagerSettingsCatalog
     /// <summary>The title of a page, for the navigation list and the page heading alike.</summary>
     /// <remarks>⚠ ONE answer for both, so the two can never disagree — which is exactly how EmberTern's
     /// frozen-table defect became visible.</remarks>
-    public static string TitleOf(string categoryId) => categoryId switch
+    internal static string TitleOf(string categoryId) => categoryId switch
     {
         CategoryEmail => Email,
         _ => General,
@@ -123,6 +123,21 @@ public static class ManagerSettingsCatalog
     /// <summary>The SMTP group's caption on the E-mail page.</summary>
     public static string SmtpSettings => Word(nameof(SmtpSettings));
 
+    /// <summary>⭐ The one sentence that tells an operator whether they are done: nothing is set yet.</summary>
+    public static string DeliveryNotConfigured => Word(nameof(DeliveryNotConfigured));
+
+    /// <summary>A message can be written to a file, but not sent from here.</summary>
+    public static string DeliveryFileOnly => Word(nameof(DeliveryFileOnly));
+
+    /// <summary>Both routes work.</summary>
+    public static string DeliveryBoth => Word(nameof(DeliveryBoth));
+
+    /// <summary>No transport security. ⚠ A property, so the catalog sweep covers the key.</summary>
+    public static string SecurityNone => Word(nameof(SecurityNone));
+
+    /// <summary>STARTTLS. ⚠ A property, so the catalog sweep covers the key.</summary>
+    public static string SecurityStartTls => Word(nameof(SecurityStartTls));
+
     /// <summary>How a language code is offered to a human.</summary>
     /// <remarks>
     /// ⭐ Each language is named IN ITSELF — "Polski", not "Polish" — which is what a language picker owes
@@ -134,7 +149,7 @@ public static class ManagerSettingsCatalog
     /// LISTS are <see cref="Email.MessageLanguages"/> and <see cref="ApplicationLanguages"/>, and they are
     /// deliberately separate. The codes are culture names in both, so one map serves them.</para>
     /// </remarks>
-    public static string LanguageLabel(string code) => code switch
+    internal static string LanguageLabel(string code) => code switch
     {
         MessageLanguages.English => "English",
         _ => "Polski",
@@ -149,10 +164,15 @@ public static class ManagerSettingsCatalog
     /// then compare unequal, and the picker silently loses its selection the moment the list is rebuilt.
     /// ⛔ Do not move a label back into an option record.</para>
     /// </summary>
-    /// <remarks>⚠ A property-shaped body, like every word above it — in L8 it becomes a lookup.</remarks>
-    public static string SecurityLabel(SmtpSecurity security) => security switch
+    /// <remarks>
+    /// ⚠⚠ It used to resolve <c>Word("SecurityNone")</c> from a TYPED-OUT string, which meant neither key
+    /// was a member — and the catalog sweep only sees members, so both were unguarded while looking
+    /// guarded. They are properties now and this only dispatches. ⭐ Same reason it is <c>internal</c>: a
+    /// PUBLIC member of a catalog names a key, and that convention is what lets the sweep judge methods.
+    /// </remarks>
+    internal static string SecurityLabel(SmtpSecurity security) => security switch
     {
-        SmtpSecurity.None => Word("SecurityNone"),
-        _ => Word("SecurityStartTls"),
+        SmtpSecurity.None => SecurityNone,
+        _ => SecurityStartTls,
     };
 }

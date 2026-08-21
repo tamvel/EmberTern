@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -111,11 +111,35 @@ public sealed partial class StorageViewModel : MessageHostViewModel
     /// <summary>The register's schema version.</summary>
     public int SchemaVersion { get; } = LicenseRegister.CurrentSchemaVersion;
 
+    /// <inheritdoc />
+    /// <remarks>
+    /// ⚠⚠ Every property listed here composes its words in C#, so it follows the language perfectly on
+    /// READ and is never re-read unless something says so. ⛔ Without this the window renders two
+    /// languages at once, with no binding error and no exception.
+    /// </remarks>
+    protected override void OnLanguageChanged()
+    {
+        base.OnLanguageChanged();
+        OnPropertyChanged(nameof(BackupContents));
+        OnPropertyChanged(nameof(ReplaceRule));
+        OnPropertyChanged(nameof(RestoreElsewhereRule));
+        OnPropertyChanged(nameof(RestoreConsequence));
+    }
+
     /// <summary>One sentence naming everything a backup will carry.</summary>
-    public string BackupContents =>
-        $"{Counts.Customers} customer(s) · {Counts.Licenses} licence(s) · " +
-        $"{Counts.Artifacts} issued artifact(s), the whole history · " +
-        $"{Counts.CurrentPointers} current-artifact pointer(s) · {Counts.AuditEntries} audit entries.";
+    /// <remarks>
+    /// ⚠ Each count is handed over ALREADY FORMATTED invariantly — they echo register totals, and a
+    /// format specifier in a resource value must not be able to reach them (Loc.Format's rule).
+    /// </remarks>
+    public string BackupContents => StorageCatalog.BackupContents(
+        Invariant(Counts.Customers),
+        Invariant(Counts.Licenses),
+        Invariant(Counts.Artifacts),
+        Invariant(Counts.CurrentPointers),
+        Invariant(Counts.AuditEntries));
+
+    private static string Invariant(int value) =>
+        value.ToString(CultureInfo.InvariantCulture);
 
     // ── Backup ──────────────────────────────────────────────────────────────────────────────────────
 
@@ -230,20 +254,12 @@ public sealed partial class StorageViewModel : MessageHostViewModel
     /// What replacing the active register does. ⚠ It describes the rule; it is not what enforces it —
     /// <see cref="RestoreWorkflow"/> is, by preserving and by verifying twice.
     /// </summary>
-    public string ReplaceRule =>
-        "The current register will be preserved before restore. " +
-        $"It is moved to {ManagerPaths.RegisterFileName}.replaced-<date-time> in the same folder and is " +
-        "never deleted, so a failed restore always leaves you the register you started with. " +
-        "⚠ The License Manager closes when this succeeds — start it again to work on the restored register.";
+    public string ReplaceRule => StorageCatalog.ReplaceRule(ManagerPaths.RegisterFileName);
 
     /// <summary>
     /// What restoring elsewhere does. ⛔ The active register is not touched, not even a history entry.
     /// </summary>
-    public string RestoreElsewhereRule =>
-        "The active register will not be changed. " +
-        $"The backup is restored into a NEW, empty folder of your choosing; nothing is written into " +
-        $"{DataFolder}, and no history entry is added. For recovering or inspecting a backup while you " +
-        "carry on working.";
+    public string RestoreElsewhereRule => StorageCatalog.RestoreElsewhereRule(DataFolder);
 
     /// <summary>
     /// ⭐ Closes the running application's register and reports whether it let go. Assigned by the
@@ -536,9 +552,19 @@ public sealed record RestoreModeOption(bool ReplacesActiveRegister)
     public string Label => LabelFor(ReplacesActiveRegister);
 
     /// <summary>
+    /// The caption a picker binds to. ⭐ Notifying, so the label follows a language change.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ A picker binds <b>this</b>, never <see cref="Label"/> directly — measured: an option record
+    /// raises no <c>PropertyChanged</c>, so a <c>ComboBox</c> bound straight to a label renders correctly
+    /// on load and then freezes in that language. See <see cref="LocalizedCaption"/>.
+    /// </remarks>
+    public LocalizedCaption Caption => new(() => Label);
+
+    /// <summary>
     /// The one place either mode is named.
     /// </summary>
     /// <remarks>⚠ A property-shaped body — in L8 it becomes a lookup, and nothing else changes.</remarks>
     internal static string LabelFor(bool replacesActiveRegister) =>
-        replacesActiveRegister ? "Replace active register" : "Restore to another location";
+        replacesActiveRegister ? StorageCatalog.ModeReplaceActive : StorageCatalog.ModeRestoreElsewhere;
 }

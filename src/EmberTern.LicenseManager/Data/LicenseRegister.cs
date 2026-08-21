@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
@@ -336,9 +336,11 @@ public sealed class LicenseRegister : IDisposable
             !string.Equals(existing.CustomerId, license.CustomerId, StringComparison.Ordinal))
         {
             throw new RegisterIntegrityException(
+                StatusCatalog.LicenceBelongsToAnotherCustomer,
                 $"Licence {license.LicenseId} belongs to customer {existing.CustomerId} and cannot be " +
                 $"moved to {license.CustomerId}. Artifacts already issued for it carry the original " +
-                "customer's name, so the register would stop agreeing with what was delivered.");
+                "customer's name, so the register would stop agreeing with what was delivered.",
+                license.LicenseId, existing.CustomerId, license.CustomerId);
         }
 
         var saved = license with
@@ -462,9 +464,11 @@ public sealed class LicenseRegister : IDisposable
         }
 
         throw new RegisterIntegrityException(
+            StatusCatalog.ArtifactIatNotAfterCurrent,
             $"The artifact for licence {artifact.LicenseId} carries iat {Stamp(artifact.IssuedAt)}, which " +
             $"does not come after the current artifact's {Stamp(current.IssuedAt)}. EmberTern would refuse " +
-            "to install it as a replacement, so it is refused here instead of being recorded as delivered.");
+            "to install it as a replacement, so it is refused here instead of being recorded as delivered.",
+            artifact.LicenseId, Stamp(artifact.IssuedAt), Stamp(current.IssuedAt));
     }
 
     /// <summary>Every artifact ever issued for a licence, newest first, each carrying its status.</summary>
@@ -596,15 +600,19 @@ public sealed class LicenseRegister : IDisposable
             if (!seen.Add(lid))
             {
                 throw new RegisterIntegrityException(
+                    StatusCatalog.LicenceAppearsTwiceInBatch,
                     $"Licence {lid} appears twice in one batch. Two artifacts issued in the same operation " +
-                    "would carry the same iat, and the second could never replace the first in the field.");
+                    "would carry the same iat, and the second could never replace the first in the field.",
+                    lid);
             }
 
             if (unit.UpdatedTerms is { } terms &&
                 !string.Equals(terms.LicenseId, lid, StringComparison.Ordinal))
             {
                 throw new RegisterIntegrityException(
-                    $"A batch unit pairs the terms of licence {terms.LicenseId} with an artifact for {lid}.");
+                    StatusCatalog.BatchUnitPairsMismatchedTerms,
+                    $"A batch unit pairs the terms of licence {terms.LicenseId} with an artifact for {lid}.",
+                    terms.LicenseId, lid);
             }
 
             // ⭐ A batch may not be worse to audit than a single issue. The summary is the sentence that

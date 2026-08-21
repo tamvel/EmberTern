@@ -1,8 +1,10 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text;
 using EmberTern.LicenseManager.Data;
 
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.ViewModels;
 namespace EmberTern.LicenseManager.Services;
 
 /// <summary>What a backup turned out to contain, once it is written and therefore true.</summary>
@@ -98,9 +100,13 @@ public sealed class BackupWorkflow
         var problems = _register.CheckIntegrity();
         if (problems.Count > 0)
         {
+            // ⭐ The problems travel as ONE argument that resolves at format time (LocalizedSentences),
+            //   so a variable number of our own complete sentences stays live inside a live sentence.
             throw new RegisterIntegrityException(
+                StatusCatalog.RegisterHasIntegrityProblems,
                 "The register has integrity problems, so it was not backed up: " +
-                string.Join(" ", problems));
+                string.Join(" ", problems),
+                new LocalizedSentences(problems));
         }
 
         var expected = _register.DumpContent();
@@ -180,8 +186,10 @@ public sealed class BackupWorkflow
             if (actual.Count != expected.Count)
             {
                 throw new RegisterIntegrityException(
+                    StatusCatalog.SnapshotRowCountMismatch,
                     $"The snapshot holds {actual.Count} row(s) where the register holds {expected.Count}. " +
-                    "Nothing was written.");
+                    "Nothing was written.",
+                    actual.Count, expected.Count);
             }
 
             for (var i = 0; i < actual.Count; i++)
@@ -189,6 +197,7 @@ public sealed class BackupWorkflow
                 if (!string.Equals(actual[i], expected[i], StringComparison.Ordinal))
                 {
                     throw new RegisterIntegrityException(
+                        StatusCatalog.SnapshotDoesNotReproduceRegister,
                         "The snapshot does not reproduce the register row for row. Nothing was written.");
                 }
             }

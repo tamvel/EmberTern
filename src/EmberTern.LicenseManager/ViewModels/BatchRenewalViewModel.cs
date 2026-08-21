@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -115,8 +115,12 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
 
         // ⚠ Weak + static handler: this view model outlives nothing in particular, and Loc.LanguageChanged
         //   is a static event. See LanguageChange.SubscribeWeak.
+        // ⭐ Rebuild rather than notify: `BatchRenewalRow.ReasonLabel` is a computed property on a row
+        //   the grid binds directly, and a row raises nothing — so the rows have to be built again.
+        //   `Rebuild` also notifies PreviewSummary, which is where the counted sentences live.
         LanguageChange.SubscribeWeak(this, static batch =>
         {
+            batch.Rebuild();
             batch.OnPropertyChanged(nameof(LastResult));
             batch.OnPropertyChanged(nameof(BlockerSummary));
         });
@@ -179,20 +183,18 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
             if (_previewed is not { } plan || plan.IsEmpty)
             {
                 return TargetDate is null
-                    ? "Tick licences in the list and choose a target date."
-                    : "Tick the licences to extend.";
+                    ? BatchCatalog.TickAndChooseDate
+                    : BatchCatalog.TickLicences;
             }
 
-            var qualifying = plan.Qualifying.Count;
-            var licences = qualifying == 1 ? "1 licence" : $"{qualifying} licences";
-            var firstIssues = plan.FirstIssues switch
-            {
-                0 => string.Empty,
-                1 => " 1 of them has never been issued and would receive its first artifact.",
-                _ => $" {plan.FirstIssues} of them have never been issued and would receive their first artifact.",
-            };
+            // ⭐ TWO whole sentences, joined here. The first-issue notice used to be a fragment carrying
+            //   its own leading space — legible in English and unassignable to a translator. The space is
+            //   the JOIN's, so the rendered line is unchanged.
+            var extended = BatchCatalog.WouldBeExtended(plan.Qualifying.Count, plan.TargetDay);
 
-            return $"{licences} would be extended to {plan.TargetDay}.{firstIssues}";
+            return plan.FirstIssues == 0
+                ? extended
+                : extended + " " + BatchCatalog.FirstIssues(plan.FirstIssues);
         }
     }
 
@@ -294,7 +296,12 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
         }
         catch (RegisterIntegrityException e)
         {
-            _report(StatusMessage.Error(StatusCatalog.NothingIssuedRegisterUnchanged, e.Message));
+            // ⭐ Two of OUR sentences, both resolved at read time: the outer one says nothing was issued,
+            //   and the register's own refusal is nested as an argument (LocalizedText's mechanism).
+            //   ⛔ Not `e.Message` — that is the English diagnostic half.
+            _report(StatusMessage.Error(
+                StatusCatalog.NothingIssuedRegisterUnchanged,
+                new LocalizedText(e.Key, [.. e.Arguments])));
             return;
         }
         catch (ArgumentException e)

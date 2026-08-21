@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -93,27 +93,22 @@ public sealed partial class SendLicenceViewModel : MessageHostViewModel
     /// <para>⭐ The size is worth showing: it is the cheapest signal that the file is a licence and not an
     /// empty artifact, and an operator who sees "0 bytes" stops before sending.</para>
     /// </summary>
-    public string Attachment => string.Create(
-        CultureInfo.InvariantCulture,
-        $"{Composed.AttachmentFileName} · {Composed.AttachmentBytes.Length} bytes · " +
-        $"{Composed.AttachmentMediaType}");
+    public string Attachment => SendCatalog.Attachment(
+        Composed.AttachmentFileName,
+        Composed.AttachmentBytes.Length.ToString(CultureInfo.InvariantCulture),
+        Composed.AttachmentMediaType);
 
     /// <summary>Which language the message is written in, and where that is decided.</summary>
-    public string LanguageNote => string.Create(
-        CultureInfo.InvariantCulture,
-        $"Written in '{Composed.Language}'. The language applies to every customer and is changed under " +
-        $"Settings ▸ E-mail.");
+    public string LanguageNote => SendCatalog.LanguageNote(Composed.Language);
 
     /// <summary>How it will travel, or why it cannot travel directly.</summary>
     public string DeliveryNote => _settings.CanSendDirectly
-        ? $"Sending through {_settings.Host}:{_settings.Port.ToString(CultureInfo.InvariantCulture)}."
-        : "No SMTP server is configured, so this message can only be saved as an .eml file and sent " +
-          "from your own mail client. Add a server under Settings ▸ E-mail to send directly.";
+        ? SendCatalog.DeliveryDirect(
+            _settings.Host, _settings.Port.ToString(CultureInfo.InvariantCulture))
+        : SendCatalog.DeliveryNoServer;
 
     /// <summary>⚠ Said in the window: the preview is the text body, and an HTML version travels with it.</summary>
-    public string PreviewNote =>
-        "This is exactly what will be sent. An HTML version of the same message is included for mail " +
-        "clients that show it; clients that strip HTML show the text above.";
+    public string PreviewNote => SendCatalog.PreviewNote;
 
     // ── State ───────────────────────────────────────────────────────────────────────────────────────
 
@@ -263,4 +258,19 @@ public sealed partial class SendLicenceViewModel : MessageHostViewModel
     /// <summary>Closes the window.</summary>
     [RelayCommand]
     private void Close() => RequestClose?.Invoke();
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// ⚠⚠ Every property listed here composes its words in C#, so it follows the language perfectly on
+    /// READ and is never re-read unless something says so. ⛔ Without this the window renders two
+    /// languages at once, with no binding error and no exception.
+    /// </remarks>
+    protected override void OnLanguageChanged()
+    {
+        base.OnLanguageChanged();
+        OnPropertyChanged(nameof(Attachment));
+        OnPropertyChanged(nameof(LanguageNote));
+        OnPropertyChanged(nameof(DeliveryNote));
+        OnPropertyChanged(nameof(PreviewNote));
+    }
 }

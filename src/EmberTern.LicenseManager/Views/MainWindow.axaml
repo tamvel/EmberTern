@@ -40,10 +40,13 @@
 
   <Window.Resources>
     <!-- ⭐ ONE template for all three filter dropdowns, keyed on the shared FilterOption base record.
-         Three copies of `<TextBlock Text="{Binding Label}" />` is how three dropdowns start looking
-         slightly different from each other. -->
+         Three copies of the same one-line template is how three dropdowns start looking slightly
+         different from each other.
+         ⚠⚠ It binds Caption.Value, never the option's Label: an option record raises no PropertyChanged,
+         so a template bound straight to the label renders correctly and then freezes in that language.
+         Measured — see PickerLabelLivenessTests. -->
     <DataTemplate x:Key="FilterOptionTemplate" x:DataType="vm:FilterOption">
-      <TextBlock Text="{Binding Label}" />
+      <TextBlock Text="{Binding Caption.Value}" />
     </DataTemplate>
   </Window.Resources>
 
@@ -468,7 +471,7 @@
                         IsEnabled="{Binding CanChooseIssueReason}">
                 <ComboBox.ItemTemplate>
                   <DataTemplate x:DataType="vm:IssueReasonOption">
-                    <TextBlock Text="{Binding Label}" />
+                    <TextBlock Text="{Binding Caption.Value}" />
                   </DataTemplate>
                 </ComboBox.ItemTemplate>
               </ComboBox>

@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.ViewModels;
 namespace EmberTern.LicenseManager.Data;
 
 /// <summary>
@@ -200,25 +202,50 @@ public sealed record IssueBatchResult(string BatchId, IReadOnlyList<IssuedArtifa
 /// itself, which is the condition a restore has to refuse on (⏭ L5.5) and an operator has to be told
 /// about rather than shielded from.</para>
 /// </summary>
-public sealed class RegisterIntegrityException : Exception
+/// <remarks>
+/// ⚠⚠ <b>It is an <see cref="ILocalizedError"/>, and L8.2 missed that it had to be.</b> Its sentences are
+/// OURS and they reach the message strip UNFRAMED at two call sites — <c>StorageViewModel</c> hands it to
+/// <c>StatusMessage.FromError</c>, and <c>BatchRenewalViewModel</c> passes <c>e.Message</c> as an argument.
+/// §55.3 sorted the exception sites by the type each <c>catch</c> names, and that put this one in the
+/// "catch-all, so the words are not ours" bucket; the words are ours. ⭐ Measured in L8.4 by reading the
+/// two display paths rather than the catch clauses.
+///
+/// <para>⛔ The English text stays on <see cref="Exception.Message"/> for diagnostics — a debugger, a log,
+/// an unhandled escape — and is never what the operator reads. The display path is <see cref="Key"/>.</para>
+/// </remarks>
+public sealed class RegisterIntegrityException : Exception, ILocalizedError
 {
     /// <summary>Creates the exception.</summary>
-    public RegisterIntegrityException(string message)
+    /// <param name="key">The catalog key for the sentence the operator reads.</param>
+    /// <param name="message">⚠ The same sentence in English, for diagnostics only. ⛔ Never displayed.</param>
+    /// <param name="arguments">The values that sentence interpolates.</param>
+    public RegisterIntegrityException(MessageKey key, string message, params object?[] arguments)
         : base(message)
     {
+        Key = key;
+        Arguments = arguments ?? [];
     }
 
     /// <summary>Creates the exception with an inner cause.</summary>
-    public RegisterIntegrityException(string message, Exception innerException)
+    public RegisterIntegrityException(
+        MessageKey key, string message, Exception innerException, params object?[] arguments)
         : base(message, innerException)
     {
+        Key = key;
+        Arguments = arguments ?? [];
     }
 
     /// <summary>Required by the exception design guidelines.</summary>
     public RegisterIntegrityException()
-        : base("The register is inconsistent.")
+        : this(StatusCatalog.RegisterIsInconsistent, "The register is inconsistent.")
     {
     }
+
+    /// <inheritdoc />
+    public MessageKey Key { get; }
+
+    /// <inheritdoc />
+    public IReadOnlyList<object?> Arguments { get; }
 }
 
 /// <summary>

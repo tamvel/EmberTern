@@ -120,7 +120,7 @@
                     SelectedItem="{Binding SelectedRestoreMode}">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="vm:RestoreModeOption">
-                <TextBlock Text="{Binding Label}" />
+                <TextBlock Text="{Binding Caption.Value}" />
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>

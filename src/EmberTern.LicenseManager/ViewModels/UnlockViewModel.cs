@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.Licensing.Issuing;
@@ -54,7 +54,7 @@ public sealed partial class UnlockViewModel : MessageHostViewModel
     /// already said, and left the operator to work out which of the two modes they were in from the
     /// body text.</para>
     /// </summary>
-    public string Headline => HasKeyStore ? "Unlock the keystore" : "Create the signing key";
+    public string Headline => HasKeyStore ? UnlockCatalog.HeadlineUnlock : UnlockCatalog.HeadlineCreate;
 
     // ⛔ There is deliberately no `Location` property and the storage path is NOT shown on this screen
     //    (user review, 2026-08-15). It is infrastructure: it does not help anyone perform the one
@@ -145,5 +145,17 @@ public sealed partial class UnlockViewModel : MessageHostViewModel
         PassphraseConfirmation = string.Empty;
         Message = null;
         Unlocked?.Invoke(session);
+    }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// ⚠⚠ Every property listed here composes its words in C#, so it follows the language perfectly on
+    /// READ and is never re-read unless something says so. ⛔ Without this the window renders two
+    /// languages at once, with no binding error and no exception.
+    /// </remarks>
+    protected override void OnLanguageChanged()
+    {
+        base.OnLanguageChanged();
+        OnPropertyChanged(nameof(Headline));
     }
 }

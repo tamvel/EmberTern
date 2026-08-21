@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -45,12 +45,12 @@ public sealed partial class MainWindow : Window
     {
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = "Save the licence",
+            Title = FileTypeCatalog.SaveLicenceTitle,
             SuggestedFileName = suggestedName,
             DefaultExtension = LicenseConstants.FileExtension.TrimStart('.'),
             FileTypeChoices =
             [
-                new FilePickerFileType("EmberTern licence")
+                new FilePickerFileType(FileTypeCatalog.Licence)
                 {
                     Patterns = ["*" + LicenseConstants.FileExtension],
                 },

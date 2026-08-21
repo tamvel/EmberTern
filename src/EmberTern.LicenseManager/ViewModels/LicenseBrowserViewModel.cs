@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.LicenseManager.Data;
 
+using EmberTern.LicenseManager.Localization;
 namespace EmberTern.LicenseManager.ViewModels;
 
 /// <summary>
@@ -28,6 +29,16 @@ public abstract record FilterOption
 {
     /// <summary>What the dropdown shows. ⭐ Derived from the narrowing, resolved at read time.</summary>
     public abstract string Label { get; }
+
+    /// <summary>
+    /// The caption a picker binds to. ⭐ Notifying, so the label follows a language change.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ A picker binds <b>this</b>, never <see cref="Label"/> directly — measured: an option record
+    /// raises no <c>PropertyChanged</c>, so a <c>ComboBox</c> bound straight to a label renders correctly
+    /// on load and then freezes in that language. See <see cref="LocalizedCaption"/>.
+    /// </remarks>
+    public LocalizedCaption Caption => new(() => Label);
 }
 
 /// <summary>Narrows by the licence row's own status.</summary>
@@ -37,12 +48,16 @@ public abstract record FilterOption
 public sealed record StatusFilter(string? Status) : FilterOption
 {
     /// <inheritdoc />
-    /// <remarks>⚠ In L8 each arm becomes a lookup; nothing else about this type changes.</remarks>
+    /// <remarks>
+    /// ⭐ Each arm is a lookup, exactly as this comment predicted before L8.4 — and the two status words
+    /// come from <see cref="LicenceStatusText"/> rather than from here, because the licences list's Status
+    /// column reads the same dictionary, and two owners is how a column and a filter start disagreeing.
+    /// </remarks>
     public override string Label => Status switch
     {
-        LicenseStatuses.Active => "Active",
-        LicenseStatuses.Blocked => "Blocked",
-        _ => "Any status",
+        LicenseStatuses.Active => LicenceStatusText.Active,
+        LicenseStatuses.Blocked => LicenceStatusText.Blocked,
+        _ => FilterCatalog.AnyStatus,
     };
 }
 
@@ -68,13 +83,12 @@ public sealed record ExpiryFilter(int? WithinDays = null, bool Expired = false) 
     /// </remarks>
     public override string Label => (WithinDays, Expired) switch
     {
-        (null, true) => "Already expired",
-        (null, false) => "Any expiry",
-        (30, _) => "Expiring within 30 days",
-        (90, _) => "Expiring within 90 days",
-        (365, _) => "Expiring within a year",
-        var (days, _) => string.Create(
-            CultureInfo.InvariantCulture, $"Expiring within {days} days"),
+        (null, true) => FilterCatalog.AlreadyExpired,
+        (null, false) => FilterCatalog.AnyExpiry,
+        (30, _) => FilterCatalog.ExpiringWithin30Days,
+        (90, _) => FilterCatalog.ExpiringWithin90Days,
+        (365, _) => FilterCatalog.ExpiringWithinAYear,
+        var (days, _) => FilterCatalog.ExpiringWithinDays(days!.Value),
     };
 }
 
@@ -85,9 +99,9 @@ public sealed record IssuingFilter(bool? NeverIssued) : FilterOption
     /// <inheritdoc />
     public override string Label => NeverIssued switch
     {
-        true => "Never issued",
-        false => "Issued at least once",
-        _ => "Issued or not",
+        true => FilterCatalog.NeverIssued,
+        false => FilterCatalog.IssuedAtLeastOnce,
+        _ => FilterCatalog.IssuedOrNot,
     };
 }
 
@@ -202,12 +216,13 @@ public sealed partial class LicenseListItem : ObservableObject
             Summary = summary,
             CustomerName = summary.CustomerName,
             ShortId = id.Length > 12 ? id[..12] + "…" : id,
-            Seats = summary.License.Seats == 1 ? "1 seat" : $"{summary.License.Seats} seats",
+            Seats = RowCatalog.Seats(summary.License.Seats),
             Contact = DescribeContact(summary),
-            // ⚠ Capitalised for display and NOT translated into another vocabulary: whatever the register
-            //   stores is what the operator reads, so a value this build has never heard of still shows up
-            //   rather than silently becoming "Unknown".
-            Status = Capitalise(summary.License.Status),
+            // ⭐⭐ §53.6 obligation 2, discharged. This used to be `Capitalise(summary.License.Status)` — a
+            //    presentation built by upper-casing the PERSISTED value, which no other language can
+            //    reach. The stored value is unchanged; only the reading of it moved to its one owner, and
+            //    a value this build has never heard of is still echoed capitalised exactly as before.
+            Status = LicenceStatusText.Describe(summary.License.Status),
             Expiry = summary.License.ExpiresAt.ToString(DateFormat, CultureInfo.InvariantCulture),
             Standing = DescribeStanding(summary, now),
         };
@@ -223,14 +238,11 @@ public sealed partial class LicenseListItem : ObservableObject
         return string.IsNullOrWhiteSpace(name) ? "—" : name;
     }
 
-    private static string Capitalise(string value) =>
-        string.IsNullOrEmpty(value) ? value : char.ToUpperInvariant(value[0]) + value[1..];
-
     private static string DescribeStanding(LicenseSummary summary, DateTimeOffset now)
     {
         if (summary.NeverIssued)
         {
-            return "Never issued";
+            return RowCatalog.StandingNeverIssued;
         }
 
         // ⚠ Whole days between the two DATES, not a rounded span. "Expires in 0 days" for something that
@@ -239,11 +251,11 @@ public sealed partial class LicenseListItem : ObservableObject
 
         return days switch
         {
-            0 => "Expires today",
-            1 => "Expires tomorrow",
-            > 1 => $"Expires in {days} days",
-            -1 => "Expired yesterday",
-            _ => $"Expired {-days} days ago",
+            0 => RowCatalog.StandingExpiresToday,
+            1 => RowCatalog.StandingExpiresTomorrow,
+            > 1 => RowCatalog.StandingExpiresInDays(days),
+            -1 => RowCatalog.StandingExpiredYesterday,
+            _ => RowCatalog.StandingExpiredDaysAgo(-days),
         };
     }
 }
@@ -284,6 +296,14 @@ public sealed partial class LicenseBrowserViewModel : ObservableObject
 
         _loading = false;
         Refresh();
+
+        // ⭐⭐ Every row is BUILT, not bound: `LicenseListItem` carries `required … { get; init; }`
+        //    strings, and the grid's columns bind straight to them. So the only way a language change
+        //    reaches this list is to build it again — and `Refresh` already restores the selection and
+        //    the batch ticks, which is exactly what makes rebuilding safe here.
+        // ⚠ Weak, with a static handler: `Loc.LanguageChanged` is a static event, i.e. a GC root.
+        //    See LanguageChange.SubscribeWeak.
+        LanguageChange.SubscribeWeak(this, static browser => browser.Refresh());
     }
 
     /// <summary>What the list currently shows.</summary>
@@ -355,15 +375,16 @@ public sealed partial class LicenseBrowserViewModel : ObservableObject
         {
             if (_checked.Count == 0)
             {
-                return "No licence selected.";
+                return LicencesCatalog.NoneSelected;
             }
 
-            var selected = _checked.Count == 1 ? "1 licence selected" : $"{_checked.Count} licences selected";
+            // ⭐ Two WHOLE sentences rather than a fragment plus a tail. The old shape appended "." or
+            //    spliced the fragment into a longer clause, which left word order to English.
             var hidden = CheckedNotShown;
 
             return hidden == 0
-                ? selected + "."
-                : $"{selected} — {hidden} of them not shown by the current filters.";
+                ? LicencesCatalog.Checked(_checked.Count)
+                : LicencesCatalog.CheckedWithHidden(_checked.Count, hidden);
         }
     }
 
@@ -522,13 +543,15 @@ public sealed partial class LicenseBrowserViewModel : ObservableObject
                 return string.Empty;
             }
 
-            var issuing = summary.NeverIssued
-                ? "never issued"
+            // ⭐ Three WHOLE sentences. The clause used to be composed here and spliced into a shared
+            //    tail — legible in English, and unassignable to a translator.
+            return summary.NeverIssued
+                ? LicencesCatalog.DetailNeverIssued(summary.CustomerName)
                 : summary.ArtifactCount == 1
-                    ? "issued once, on " + Stamp(summary.LastIssuedAt)
-                    : $"issued {summary.ArtifactCount} times, last on {Stamp(summary.LastIssuedAt)}";
-
-            return $"{summary.CustomerName} — {issuing}.";
+                    ? LicencesCatalog.DetailIssuedOnce(
+                        summary.CustomerName, Stamp(summary.LastIssuedAt))
+                    : LicencesCatalog.DetailIssuedTimes(
+                        summary.CustomerName, summary.ArtifactCount, Stamp(summary.LastIssuedAt));
         }
     }
 
@@ -632,10 +655,12 @@ public sealed partial class LicenseBrowserViewModel : ObservableObject
 
     private string Describe(int count) => count switch
     {
-        0 when IsFiltered => "No licence matches these filters.",
-        0 => "The register holds no licences yet.",
-        1 => "1 licence.",
-        _ => $"{count} licences.",
+        0 when IsFiltered => LicencesCatalog.NoneMatchesTheseFilters,
+        0 => LicencesCatalog.RegisterHoldsNoneYet,
+
+        // ⭐ One counted key rather than two arms: English already had both forms, so `one` / `other`
+        //   reproduce exactly what was rendered — and Polish gets its third form without a code change.
+        _ => LicencesCatalog.Count(count),
     };
 
     private static string Stamp(DateTimeOffset? value) =>

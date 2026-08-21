@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -26,6 +26,16 @@ public sealed record SmtpSecurityOption(SmtpSecurity Value)
 {
     /// <summary>What the operator reads. ⭐ Resolved at read time, from the one catalog that owns it.</summary>
     public string Label => ManagerSettingsCatalog.SecurityLabel(Value);
+
+    /// <summary>
+    /// The caption a picker binds to. ⭐ Notifying, so the label follows a language change.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ A picker binds <b>this</b>, never <see cref="Label"/> directly — measured: an option record
+    /// raises no <c>PropertyChanged</c>, so a <c>ComboBox</c> bound straight to a label renders correctly
+    /// on load and then freezes in that language. See <see cref="LocalizedCaption"/>.
+    /// </remarks>
+    public LocalizedCaption Caption => new(() => Label);
 }
 
 /// <summary>
@@ -214,20 +224,30 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
     /// operator whether they are done. It reads the FIELDS, not the saved file, so it answers about what
     /// they are looking at.
     /// </summary>
+    /// <inheritdoc />
+    /// <remarks>
+    /// ⚠⚠ Every property listed here composes its words in C#, so it follows the language perfectly on
+    /// READ and is never re-read unless something says so. ⛔ Without this the window renders two
+    /// languages at once, with no binding error and no exception.
+    /// </remarks>
+    protected override void OnLanguageChanged()
+    {
+        base.OnLanguageChanged();
+        OnPropertyChanged(nameof(DeliverySummary));
+    }
+
     public string DeliverySummary
     {
         get
         {
             if (string.IsNullOrWhiteSpace(FromAddress))
             {
-                return "Not configured yet. A sender address is the minimum — without one, no message " +
-                       "can be composed at all.";
+                return ManagerSettingsCatalog.DeliveryNotConfigured;
             }
 
             return string.IsNullOrWhiteSpace(Host)
-                ? "File delivery only: a message can be saved as an .eml file and sent from your own " +
-                  "mail client. Add a server below to send directly."
-                : "Direct sending and file delivery are both available.";
+                ? ManagerSettingsCatalog.DeliveryFileOnly
+                : ManagerSettingsCatalog.DeliveryBoth;
         }
     }
 
@@ -608,6 +628,16 @@ public sealed record LanguageOption(string Code)
     /// <see cref="ManagerSettingsCatalog.LanguageLabel"/> even after L8 — it is not a translation.</para>
     /// </summary>
     public string Label => ManagerSettingsCatalog.LanguageLabel(Code);
+
+    /// <summary>
+    /// The caption a picker binds to. ⭐ Notifying, like every other option in this application.
+    /// </summary>
+    /// <remarks>
+    /// ⭐ A language names itself, so this one could not go stale — and it binds through the caption
+    /// anyway, because the rule is stated POSITIVELY (every picker binds a caption) rather than as
+    /// "every picker except the two that happen not to need it". See <see cref="LocalizedCaption"/>.
+    /// </remarks>
+    public LocalizedCaption Caption => new(() => Label);
 
     /// <summary>
     /// The languages a licence e-mail can be written in — a fact about the CUSTOMER who reads it.

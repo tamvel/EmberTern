@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -541,6 +541,18 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     private IssueReasonOption? _selectedIssueReason;
 
     /// <summary>What the selected reason means, so the choice is made on meaning rather than on a label.</summary>
+    /// <inheritdoc />
+    /// <remarks>
+    /// ⚠⚠ Every property listed here composes its words in C#, so it follows the language perfectly on
+    /// READ and is never re-read unless something says so. ⛔ Without this the window renders two
+    /// languages at once, with no binding error and no exception.
+    /// </remarks>
+    protected override void OnLanguageChanged()
+    {
+        base.OnLanguageChanged();
+        OnPropertyChanged(nameof(IssueReasonExplanation));
+    }
+
     public string IssueReasonExplanation => SelectedIssueReason?.Explanation ?? string.Empty;
 
     /// <summary>

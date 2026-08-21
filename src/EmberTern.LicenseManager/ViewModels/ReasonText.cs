@@ -1,4 +1,6 @@
-using EmberTern.LicenseManager.Data;
+﻿using EmberTern.LicenseManager.Data;
+
+using EmberTern.LicenseManager.Localization;
 
 namespace EmberTern.LicenseManager.ViewModels;
 
@@ -17,15 +19,45 @@ namespace EmberTern.LicenseManager.ViewModels;
 /// append-only and its vocabulary can only ever grow, so a register written by a later version must stay
 /// readable in an older one — and the raw value is always more informative than our word for not knowing it.</para>
 /// </summary>
+[StringCatalog(KeyPrefix)]
 internal static class ReasonText
 {
+    /// <summary>The prefix every key in this catalog carries.</summary>
+    internal const string KeyPrefix = "Reason.";
+
+    private static string Word(string member) => Loc.Text(KeyPrefix + member);
+
+    /// <summary>The first artifact for a licence.</summary>
+    public static string Initial => Word(nameof(Initial));
+
+    /// <summary>The expiry moved.</summary>
+    public static string Renewal => Word(nameof(Renewal));
+
+    /// <summary>Something other than the expiry changed.</summary>
+    public static string TermsChange => Word(nameof(TermsChange));
+
+    /// <summary>The customer lost a file that is otherwise still correct.</summary>
+    public static string ReissueLost => Word(nameof(ReissueLost));
+
+    /// <summary>What <see cref="Initial"/> means.</summary>
+    public static string InitialExplained => Word(nameof(InitialExplained));
+
+    /// <summary>What <see cref="Renewal"/> means.</summary>
+    public static string RenewalExplained => Word(nameof(RenewalExplained));
+
+    /// <summary>What <see cref="TermsChange"/> means.</summary>
+    public static string TermsChangeExplained => Word(nameof(TermsChangeExplained));
+
+    /// <summary>What <see cref="ReissueLost"/> means.</summary>
+    public static string ReissueLostExplained => Word(nameof(ReissueLostExplained));
+
     /// <summary>The short name, used wherever a reason appears in a list or a picker.</summary>
     internal static string Describe(string reason) => reason switch
     {
-        IssueReasons.Initial => "Initial issue",
-        IssueReasons.Renewal => "Renewal",
-        IssueReasons.TermsChange => "Terms change",
-        IssueReasons.ReissueLost => "Re-issue — lost file",
+        IssueReasons.Initial => Initial,
+        IssueReasons.Renewal => Renewal,
+        IssueReasons.TermsChange => TermsChange,
+        IssueReasons.ReissueLost => ReissueLost,
         _ => reason,
     };
 
@@ -35,14 +67,10 @@ internal static class ReasonText
     /// </summary>
     internal static string Explain(string reason) => reason switch
     {
-        IssueReasons.Initial =>
-            "The first artifact for this licence. Nothing has been sent to the customer yet.",
-        IssueReasons.Renewal =>
-            "The expiry moved. Press Save terms with the new expiry first — the issue signs the saved terms.",
-        IssueReasons.TermsChange =>
-            "Something other than the expiry changed: seats, the start date, or the licensee's name.",
-        IssueReasons.ReissueLost =>
-            "The customer lost their copy of a file that is otherwise still correct.",
+        IssueReasons.Initial => InitialExplained,
+        IssueReasons.Renewal => RenewalExplained,
+        IssueReasons.TermsChange => TermsChangeExplained,
+        IssueReasons.ReissueLost => ReissueLostExplained,
         _ => string.Empty,
     };
 }

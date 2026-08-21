@@ -118,7 +118,7 @@
                     ToolTip.Tip="{Binding ApplicationLanguageUnavailable}">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="vm:LanguageOption">
-                <TextBlock Text="{Binding Label}" />
+                <TextBlock Text="{Binding Caption.Value}" />
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
@@ -181,7 +181,7 @@
                   SelectedItem="{Binding SelectedSecurity}">
           <ComboBox.ItemTemplate>
             <DataTemplate x:DataType="vm:SmtpSecurityOption">
-              <TextBlock Text="{Binding Label}" />
+              <TextBlock Text="{Binding Caption.Value}" />
             </DataTemplate>
           </ComboBox.ItemTemplate>
         </ComboBox>
@@ -247,7 +247,7 @@
                   SelectedItem="{Binding MessageLanguage}">
           <ComboBox.ItemTemplate>
             <DataTemplate x:DataType="vm:LanguageOption">
-              <TextBlock Text="{Binding Label}" />
+              <TextBlock Text="{Binding Caption.Value}" />
             </DataTemplate>
           </ComboBox.ItemTemplate>
         </ComboBox>

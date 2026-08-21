@@ -472,4 +472,37 @@ internal static class StatusCatalog
 
     /// <summary>Saved licence {0}….</summary>
     public static MessageKey LicenceSavedShort => Key(nameof(LicenceSavedShort));
+
+    // ── The register's own integrity refusals (L8.4) ─────────────────────────────────────────────
+    //
+    // ⚠⚠ These are OURS, and L8.2 left them as English behind `e.Message`. `RegisterIntegrityException`
+    //    reaches the strip at two call sites — `StorageViewModel` through `StatusMessage.FromError`, and
+    //    `BatchRenewalViewModel` as an argument — so the sentences are the operator's to read in their
+    //    own language. ⛔ The exception keeps its English text for diagnostics; the display path is here.
+
+    /// <summary>Licence {0} belongs to customer {1} and cannot be moved to {2}. …</summary>
+    public static MessageKey LicenceBelongsToAnotherCustomer => Key(nameof(LicenceBelongsToAnotherCustomer));
+
+    /// <summary>The artifact for licence {0} carries iat {1}, which does not come after {2}. …</summary>
+    public static MessageKey ArtifactIatNotAfterCurrent => Key(nameof(ArtifactIatNotAfterCurrent));
+
+    /// <summary>Licence {0} appears twice in one batch. …</summary>
+    public static MessageKey LicenceAppearsTwiceInBatch => Key(nameof(LicenceAppearsTwiceInBatch));
+
+    /// <summary>A batch unit pairs the terms of licence {0} with an artifact for {1}.</summary>
+    public static MessageKey BatchUnitPairsMismatchedTerms => Key(nameof(BatchUnitPairsMismatchedTerms));
+
+    /// <summary>The register has integrity problems, so it was not backed up: {0}</summary>
+    /// <remarks>⭐ {0} is a <c>LocalizedSentences</c> — a variable number of our own live sentences.</remarks>
+    public static MessageKey RegisterHasIntegrityProblems => Key(nameof(RegisterHasIntegrityProblems));
+
+    /// <summary>The snapshot holds {0} row(s) where the register holds {1}. Nothing was written.</summary>
+    public static MessageKey SnapshotRowCountMismatch => Key(nameof(SnapshotRowCountMismatch));
+
+    /// <summary>The snapshot does not reproduce the register row for row. Nothing was written.</summary>
+    public static MessageKey SnapshotDoesNotReproduceRegister => Key(nameof(SnapshotDoesNotReproduceRegister));
+
+    /// <summary>The register is inconsistent.</summary>
+    /// <remarks>⚠ The parameterless-constructor fallback, required by the exception design guidelines.</remarks>
+    public static MessageKey RegisterIsInconsistent => Key(nameof(RegisterIsInconsistent));
 }

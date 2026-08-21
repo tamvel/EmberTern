@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using EmberTern.LicenseManager.Localization;
 
 namespace EmberTern.LicenseManager.ViewModels;
@@ -27,7 +27,21 @@ public abstract partial class MessageHostViewModel : ObservableObject
     /// <c>SendLicenceViewModel</c> is rebuilt on every send. See <see cref="LanguageChange.SubscribeWeak"/>.
     /// </remarks>
     protected MessageHostViewModel() =>
-        LanguageChange.SubscribeWeak(this, static host => host.OnPropertyChanged(nameof(MessageText)));
+        LanguageChange.SubscribeWeak(this, static host => host.OnLanguageChanged());
+
+    /// <summary>
+    /// ⭐⭐ Re-reads every word this view model composes in C#, called on a real language change.
+    ///
+    /// <para><b>The base answers for the strip and for nothing else</b>, and that was the whole gap L8.4
+    /// found: four derived hosts compose sentences of their own as computed properties, which follow the
+    /// language perfectly in C# and are never re-read by a binding, because nothing tells the binding to
+    /// ask again. ⚠ The failure is silent — no binding error, no exception, just one window rendering two
+    /// languages at once.</para>
+    ///
+    /// <para>⛔ An override must call <c>base.OnLanguageChanged()</c>: the strip's own notification lives
+    /// here, and a host that forgot it would freeze the message while refreshing everything around it.</para>
+    /// </summary>
+    protected virtual void OnLanguageChanged() => OnPropertyChanged(nameof(MessageText));
 
     /// <summary>The current message, or <see langword="null"/> when there is nothing to say.</summary>
     [ObservableProperty]

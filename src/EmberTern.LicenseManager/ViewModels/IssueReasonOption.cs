@@ -1,3 +1,5 @@
+﻿using EmberTern.LicenseManager.Localization;
+
 namespace EmberTern.LicenseManager.ViewModels;
 
 /// <summary>
@@ -27,4 +29,14 @@ public sealed record IssueReasonOption(string Value)
 
     /// <summary>The one-line meaning, shown for whichever option is selected.</summary>
     public string Explanation => ReasonText.Explain(Value);
+
+    /// <summary>
+    /// The caption a picker binds to. ⭐ Notifying, so the label follows a language change.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ A picker binds <b>this</b>, never <see cref="Label"/> directly — measured: an option record
+    /// raises no <c>PropertyChanged</c>, so a <c>ComboBox</c> bound straight to a label renders correctly
+    /// on load and then freezes in that language. See <see cref="LocalizedCaption"/>.
+    /// </remarks>
+    public LocalizedCaption Caption => new(() => Label);
 }
