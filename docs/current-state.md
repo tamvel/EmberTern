@@ -22,18 +22,20 @@
 >
 > ## ⏭ START HERE: **L8.4 — the remaining C# texts.** NOT STARTED.
 >
-> ≈300 by the standing estimate, plus the nine counted sentences and §53.6's two obligations (the selected
-> artifact surviving a language change; `LicenseListItem.Status = Capitalise(...)` must go).
-> ⚠⚠ **RE-MEASURE the ≈300 before planning** — this stage has now caught two stale counts in a row (the XAML
-> figure was 151 not 146; L8.2's exception classification was wrong by more). **Brief: §56.9.**
+> ⚠⚠ **RE-MEASURED 2026-08-21 and the standing "≈300" is wrong: 161 sentence-shaped literals, 19 in SQL,
+> = 142 candidates.** ⛔ And 142 is NOT a to-do list — `Data`/`Services` are dominated by the English
+> DIAGNOSTIC halves L8.2 left beside a `MessageKey` (`RestoreWorkflow` 18, `RegisterBackup` 15), whose
+> display path is already keyed. ⭐ The real work is concentrated: **`LicenseBrowserViewModel` 21** (the three
+> filter pickers), `ReasonText` 7, `ArtifactHistoryViewModel` 7. Plus the nine counted sentences and §53.6's
+> two obligations — the selected artifact surviving a language change, and
+> `LicenseListItem.Status = Capitalise(...)` which Polish cannot reach. **Brief: §56.9.**
 >
-> ✅ **L8.3 — ACCEPTED** (user QA, 2026-08-21), committed and pushed to BOTH remotes. §56. **147** attribute values became
-> `{lm:Loc Key}`, **130** entries added and **3 reused**, `Strings.resx` 164 → 294; **4 branding literals kept
-> as named, guarded exemptions**; `ConfirmDialog` untouched. **133/133** values matched what the
-> pre-migration XAML *rendered*. **5 injections, 5 reds.** ⚠ Two findings: an XML parser normalises the line
-> ending BEFORE the attribute value, so the first attempt added one space per line break (#399 — caught only
-> by the mechanical comparison); and `NoLocKeyInXaml_IsMissingFromTheCatalog`, cited by name in three source
-> files as the guard compensating for `{lm:Loc}`'s lost compile-time check, **did not exist** until now.
+> ✅ **L8.3 — ACCEPTED** (QA 2026-08-21), committed and pushed to both remotes. §56. **147** attribute values
+> on `{lm:Loc}`, 130 keys added + 3 reused, `Strings.resx` 164 → 294, **4 branding literals kept as named,
+> guarded exemptions**, `ConfirmDialog` untouched. **133/133** matched what the old XAML *rendered*;
+> 5 injections, 5 reds. ⚠ Two findings: XML normalises the line ending BEFORE the attribute value, so the
+> first attempt added a space per line break (**#399**, caught only mechanically); and
+> `NoLocKeyInXaml_IsMissingFromTheCatalog` — cited by name in three source files — **did not exist**.
 >
 > ✅ **L8.2 — ACCEPTED** (QA 2026-08-21), committed and pushed to both remotes. §55. `StatusMessage` = key +
 > arguments + severity, resolved at read time (D‑2 = B). ⭐ Its safety came from making the old shape
@@ -54,9 +56,9 @@
 > `LocalizationSource` notifying **per key** (⛔ never an indexer) · `PluralRules` · `StringCatalogAttribute`
 > so guards DISCOVER catalogs · **`ui.json`, the FOURTH preferences file**. **6 injections, 6 reds.**
 >
-> ⚠⚠ **Two L8.1 findings worth not rediscovering:** a UTF-8 **BOM** in `ui.json` made `System.Text.Json`
-> throw and the forgiving `catch` served DEFAULTS (gotcha **#395**); and a guard went red against **its own
-> documentation**, so every text-scanning guard now reads `CodeOf(file)` (gotcha **#396**).
+> ⚠⚠ **Two L8.1 findings:** a UTF-8 **BOM** in `ui.json` made `System.Text.Json` throw and the forgiving
+> `catch` served DEFAULTS (**#395**); a guard went red against its own documentation, so every text-scanning
+> guard now reads `CodeOf(file)` (**#396**).
 >
 > ### ⛔ Standing constraints for the rest of L8
 >
@@ -89,11 +91,7 @@
 > **Standing facts a next session must not rediscover:** §42.4, §46.11, §47.6, and now §48.1 (the Gmail /
 > company distinction), §49.4 (`WithCulture="false"`) and §49.9 (the two reds).
 >
-> **Earlier milestones:** L1–L4b delivered the offline licensing loop end to end (verdict at startup,
-> activation window, Settings ▸ Licence, About line, expiry banner, one connection SEAM, EN + PL) — §34–§38.
-> **L5 CLOSED 2026-08-18** and pushed: search, filters, the licences grid, re-issue with a reason, batch
-> renewal, encrypted backup, two restore modes, the JSONL escape hatch and the Storage window — §39–§47.
->
+
 > ⚠ **L7 still owns the production key ceremony** — until it runs, `TrustedKeys.Production` is empty and
 > no real licence verifies as usable in any build. Deliberate; `Valid` / `Grace` are proven by tests
 > rather than by hand (§38.6).

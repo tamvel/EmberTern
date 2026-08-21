@@ -4550,9 +4550,38 @@ SMTP, the audit log or the `.etlic` format. ⛔ L7 untouched.
 
 ### 56.9 ⏭ Hand-off to L8.4
 
-**L8.4 is the remaining C# texts** (≈300 by the standing estimate — ⚠ **re-measure it; the XAML figure was
-stale by 5 and the L8.2 exception counts were wrong by more**), the nine counted sentences, and §53.6's two
-obligations.
+**L8.4 is the remaining C# texts**, the nine counted sentences, and §53.6's two obligations.
+
+⚠⚠ **RE-MEASURED at this checkpoint, and the standing "≈300" is wrong — but so is reading the new figure as
+a to-do list.** Measured 2026-08-21 over every `.cs` in the License Manager, whole-line comments dropped,
+counting only literals that contain a space and two letters:
+
+| | |
+|---|---|
+| Sentence-shaped literals | **161** |
+| − inside SQL | 19 |
+| **= candidates** | **142** |
+
+⭐⭐ **The candidates are NOT 142 things to translate, and the difference is the whole point of measuring.**
+By folder: `ViewModels` 57 · `Data` 39 · `Services` 27 · `Email` 9 · `Views` 8 · root 2. The `Data` and
+`Services` halves are dominated by the **English diagnostic strings L8.2 deliberately left beside a
+`MessageKey`** — `RestoreWorkflow` 18 and `RegisterBackup` 15 are almost entirely the `ILocalizedError`
+message arguments and `BackupFailure` texts whose DISPLAY path is already keyed. ⛔ Re-migrating those would
+be double work at best and would break the diagnostic-only contract at worst; each needs checking against
+§55.3/§55.4 before it is touched.
+
+⭐ **Where the real work is concentrated:**
+
+| File | Count | What |
+|---|---|---|
+| `LicenseBrowserViewModel.cs` | **21** | ⭐ The three filter pickers' labels — *Any status*, *Expiring within 30 days*, *Never issued*… Bound as `ItemsSource` and rendered through `Label`. The code already anticipates it: *"⚠ In L8 each arm becomes a lookup; nothing else about this type changes."* |
+| `ReasonText.cs` | **7** | The issue-reason names and their explanations. |
+| `ArtifactHistoryViewModel.cs` | 7 | Presentation strings for the history rows. |
+| `StorageViewModel.cs` | 8 | ⚠ Mostly `Describe`/`Explain` residue — check against §55.3 first. |
+
+⚠ **`LicenseBrowserViewModel` is also where §53.6's second obligation lives** — `LicenseListItem.Status =
+Capitalise(summary.License.Status)` upper-cases the PERSISTED value, which Polish cannot reach by
+capitalisation. ⛔ The persisted value stays exactly as it is; the STATUS must be localized from the code.
 
 ⭐ Two things L8.4 inherits ready-made. The `Status.` catalog and `MessageKey` already carry every message
 the strip can raise, so L8.4's subject is what is left: window-level helper text, `ReasonText`,
