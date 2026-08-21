@@ -4954,3 +4954,134 @@ right explicitly. Worth looking at first, because they are the ones I could not 
   agree with a licence, which is right in the column and worth seeing beside the date.
 - **`Filter.*` as participles** (*Wygasające w ciągu 30 dni*) — a filter narrows a set, so a participle is
   right; it is also longer than the English and sits in a narrow picker.
+---
+
+## 59. ⭐⭐ L8.6 — visual QA, and L8 CLOSED (2026-08-21)
+
+**The stage that answered one question: does the License Manager actually work and look right in Polish and
+English, in both themes?** 🔒 The user's verdict: **yes**, after two defects they found and I fixed.
+
+### 59.1 ⭐⭐ The division of labour, stated honestly
+
+⚠ **I cannot see pixels.** So L8.6 was split at the line where the evidence changes kind:
+
+- **Mechanical, mine.** Six windows × 2 languages × 2 themes = 24 renders, headless, reading text off
+  realised controls: **0 exceptions · 0 keys on screen · 0 clipped text blocks** (despite Polish running
+  longer), and the live switch, the `ui.json` round-trip, the plural forms and the argument substitution all
+  verified by value. ⛔ The instrument was a THROWAWAY probe, read once and deleted — not a guard.
+- **Perceptual, the user's.** Whether a word reads well, whether a column is wide enough, whether Dark
+  contrast holds. ⛔ Not mine to claim, per the standing directive that a UI change is not "fixed" until
+  it has been seen in the running app.
+
+⭐ **And the split is the finding**: my 24 renders were clean, and the user's pass found **two real defects
+in ninety seconds** — both invisible to a text-and-measurement sweep, because both were about text that was
+*correct on load and then stale*.
+
+### 59.2 ⚠⚠ Defect 1 — the category list kept saying "General"
+
+`SettingsPageViewModel.Title` is a computed property on a class that raises **no `PropertyChanged`**, bound
+in a `ListBox.ItemTemplate` as `{Binding Title}`. Gotcha **#401** exactly — the one L8.5 measured and fixed
+for `ComboBox` option records.
+
+⚠⚠ **Why L8.5's own guard walked past it: `NoItemTemplate_BindsALabelDirectly` sweeps for
+`{Binding Label}`, and this member is called `Title`.** The guard keyed on a member NAME; the defect is a
+property of the SHAPE. ⭐ That is the whole lesson, and it is worth more than the fix.
+
+⚠ **A second surface had it and hid better.** The page header binds `SelectedPage.Title`, and the only page
+heading whose word differs between the two languages is *General* — with the E-mail page open (`E-mail` in
+both), nothing looked wrong at all. Fixed with the list; ⛔ it would still be latent otherwise.
+
+**Fix:** `SettingsPageViewModel` exposes `Caption` (the existing `LocalizedCaption` — ⛔ no new mechanism),
+and both bindings read `Caption.Value`.
+
+### 59.3 ⚠⚠ Defect 2 — the DPAPI note stayed English
+
+`ProtectionNote` is a correctly written computed property (`=> Loc.Text(…)`), so it resolved the new language
+at every read. It was simply **absent from the notification list** in `SettingsViewModel.OnLanguageChanged`.
+
+⭐ Pure **#284**: a hand-maintained derived fact. I enumerated that class's properties in L8.4 and missed
+this one — which is precisely the failure mode #284 describes, met in my own work one stage later.
+
+**Fix:** one `OnPropertyChanged(nameof(ProtectionNote))`, with a comment saying out loud that the list is a
+hand-maintained fact and that a behavioural test — not the list — is what now measures completeness.
+
+### 59.4 ⭐ One test, and it was proved on the defects themselves
+
+`TheOpenSettingsWindow_FollowsALanguageChange` asserts on the realised controls of an **already open**
+window: EN → check both → PL → check both → **back to EN** → check both. ⭐ The return leg is deliberate: a
+fix that works in one direction works by accident.
+
+⛔ No campaign. **Two targeted reverts**, each rebuilt before any conclusion (#400):
+
+| state | result |
+|---|---|
+| both fixes reverted | **RED** — `Expected: "Ogólne" / Actual: "General"` — the user's symptom, verbatim |
+| fix 1 restored, fix 2 reverted | **RED** — `"The password is encrypted with Windows DP…"` vs expected `"Hasło jest szyfrowane"` |
+| both restored | **GREEN** |
+
+⚠ The two assertions catch two different causes, which is why one test carries both.
+
+### 59.5 ⭐ What the mechanical sweep DID establish
+
+Worth keeping, because it is the half a future stage does not need to redo:
+
+- Every window renders in both languages and both themes without throwing.
+- **No catalog fall-through anywhere** — not one key reached the screen.
+- **No clipped text**, measured as desired-width > arranged-width on a non-wrapping, non-trimming block.
+  ⭐ Polish being longer than English cost nothing here.
+- The live switch carries the whole licences view: `1 licence.` → `1 licencja.` · `Expires in 365 days` →
+  `Wygasa za 365 dni` · `Active` → `Aktywna` · `5 seats` → `5 stanowisk` · `Initial issue` → `Pierwsze
+  wystawienie` · `current` → `bieżący`, **with the selection and the batch ticks preserved**.
+- `ui.json` round-trip: `"language": "pl"` written, `Restore()` returns `pl`, the catalog reads `Ustawienia`.
+- Polish plurals across 1 / 2 / 3 / 5 / 12 / 22 / 25 — **including 12 → many and 22 → few**, the teen
+  exclusion that is easiest to get wrong.
+- ⚠ Three strings the sweep flagged as "still English" are **false positives**: `E-mail`, `Token`, `Port`
+  are the same word in Polish.
+
+### 59.6 ⏭ One observation kept as backlog, deliberately not acted on
+
+🔒 The user's call. `NoItemTemplate_BindsALabelDirectly` still keys on the name `Label`, so a third
+non-notifying member under a third name would pass it again. ⛔ Widening it is NOT straightforward and must
+not be done casually: there are **two legitimate strategies** for a template over a non-notifying item —
+bind a notifying caption (option records) **or** rebuild the list (`LicenseListItem`, `ArtifactListItem`,
+which §53.6 requires to be rebuilt anyway). A blanket "no direct binding in a `DataTemplate`" rule would
+report the second as a defect. ⏭ Whoever revisits it needs that distinction first; gotcha **#408** records it.
+
+### 59.7 ⛔ `Licences.DetailIssuedOnce` — an editorial item deferred on purpose
+
+It renders *"ACME Sp. z o.o. — wystawiono raz, 2026-08-15."*, which reads telegraphically in Polish where
+the English has a preposition (*"issued once, on …"*). 🔒 Reported at QA and **deliberately left alone** —
+the user deferred the decision. ⚠ One `.resx` value, no key and no code change, whenever it is taken up.
+
+### 59.8 Verification at closure
+
+- ✅ Build **0 warnings / 0 errors** — Debug and Release.
+- ✅ **767 / 767** (766 before the new test), 0 failed, 0 skipped.
+- ✅ Two targeted reverts, two reds, both restored and re-verified green.
+- ⛔ The EmberTern suite was not run: no product file was touched in any L8 sub-stage.
+- ⛔ `DatePresentationTests` not re-run — its two offenders were measured at `b012a0e`, before L8.4, and are
+  outside every L8 diff (§57.8).
+
+### 59.9 ⭐⭐ L8 — CLOSED
+
+🔒 Accepted by the user, 2026-08-21. **The License Manager has a Polish interface, switchable without a
+restart, and the switch reaches every surface.**
+
+| | |
+|---|---|
+| Catalog | `Strings.resx` **380** · `Strings.pl.resx` **392** |
+| Plural families | **12**, three arms in Polish |
+| `[StringCatalog]` classes | **15** |
+| Suite | 632 → **767** |
+| Sub-stages | L8.0/prep §53 · L8.1 §54 · L8.2 §55 · L8.3 §56 · L8.4 §57 · L8.5 §58 · L8.6 §59 |
+
+⭐ **The property the whole stage rests on, stated once:** L8.1–L8.4 changed **not one user-visible word**
+and it was proved mechanically every time — by generation rather than transcription, by classification
+against the pre-migration tree, and by pinning the rendered output. L8.5 then changed them all, on purpose.
+⭐ **The other property, learned the hard way in L8.4 and confirmed by L8.6's two defects:** the difficulty
+of localizing an application is not the translation — it is knowing, for every surface, **by what mechanism
+it learns that the language changed**.
+
+⏭ **Next: L7** — hardening and closing (§32): clock high-water, `%PROGRAMDATA%` fallback, the `maint` gate,
+the **real key ceremony** and the shipped public key. ⛔ `TrustedKeys.Production` is still empty and no real
+licence verifies as usable in any build until that ceremony runs.
