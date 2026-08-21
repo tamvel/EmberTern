@@ -112,7 +112,7 @@ public sealed class LicenseSpacingTests
             using var manager = new ManagerFixture();
             var shell = new ShellViewModel(manager.Register, manager.Session, manager.Paths, () => manager.Now)
             {
-                Message = StatusMessage.Warning("careful"),
+                Message = StatusMessage.Warning(StatusCatalog.SelectLicence),
             };
             var window = Show(shell);
 

@@ -3,6 +3,8 @@ using System.Net;
 using System.Net.Mail;
 using System.Threading;
 using System.Threading.Tasks;
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.ViewModels;
 
 namespace EmberTern.LicenseManager.Email;
 
@@ -46,7 +48,10 @@ public sealed class SmtpLicenseEmailSender : ILicenseEmailSender
 
         if (!settings.CanSendDirectly)
         {
-            throw new ArgumentException(
+            // ⚠ Reaches the strip UNFRAMED at two call sites (Settings ▸ test send, Send licence), so the
+            //   sentence is ours to translate and carries its key. English is for diagnostics only.
+            throw new LocalizedArgumentException(
+                StatusCatalog.SettingsCarryNoSmtpHost,
                 "These settings carry no SMTP host, so nothing can be sent directly. Save the message as " +
                 "an .eml file instead, or add a server under Settings ▸ E-mail.",
                 nameof(settings));

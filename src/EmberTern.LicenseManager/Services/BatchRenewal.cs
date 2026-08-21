@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using EmberTern.LicenseManager.Data;
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.ViewModels;
 
 namespace EmberTern.LicenseManager.Services;
 
@@ -70,7 +72,7 @@ public sealed record BatchRenewalCandidate
     /// sentence therefore has to name what the operator must do, because it is now the only thing
     /// standing between them and twenty licences.</para>
     /// </summary>
-    public string? Blocker { get; init; }
+    public LocalizedText? Blocker { get; init; }
 
     /// <summary>Whether this licence would be extended.</summary>
     public bool Qualifies => Blocker is null;
@@ -237,7 +239,7 @@ public static class BatchRenewalPlanner
         };
     }
 
-    private static string? FindBlocker(
+    private static LocalizedText? FindBlocker(
         LicenseRecord licence,
         DateTimeOffset targetExpiry,
         string reason,
@@ -248,9 +250,9 @@ public static class BatchRenewalPlanner
         //    batch that could write one would be a second door into a state the single path forbids.
         if (targetExpiry <= licence.NotBefore)
         {
-            return "The target date is not after this licence's start date " +
-                   $"({licence.NotBefore.ToString(DateFormat, CultureInfo.InvariantCulture)}). " +
-                   "Choose a later target date, or remove this licence from the selection.";
+            return new LocalizedText(
+                StatusCatalog.BlockerTargetBeforeStart,
+                licence.NotBefore.ToString(DateFormat, CultureInfo.InvariantCulture));
         }
 
         // ⭐⭐ THE OPERATION IS CALLED EXTEND, AND THIS IS WHERE THAT WORD IS ENFORCED.
@@ -263,10 +265,9 @@ public static class BatchRenewalPlanner
         //    with it.
         if (targetExpiry <= licence.ExpiresAt)
         {
-            return "Already valid until " +
-                   $"{licence.ExpiresAt.ToString(DateFormat, CultureInfo.InvariantCulture)}, " +
-                   "so the target date would not extend it. Choose a later target date, or remove this " +
-                   "licence from the selection.";
+            return new LocalizedText(
+                StatusCatalog.BlockerAlreadyValidUntil,
+                licence.ExpiresAt.ToString(DateFormat, CultureInfo.InvariantCulture));
         }
 
         // ⭐ The UNCHANGED policy, once per licence. This is what catches the case where the licence row

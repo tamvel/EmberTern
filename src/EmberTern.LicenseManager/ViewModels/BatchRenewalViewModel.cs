@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.LicenseManager.Data;
+using EmberTern.LicenseManager.Localization;
 using EmberTern.LicenseManager.Services;
 
 namespace EmberTern.LicenseManager.ViewModels;
@@ -44,7 +45,11 @@ public sealed record BatchRenewalRow
     public bool Qualifies => Candidate.Qualifies;
 
     /// <summary>⭐ Why not, when not — never blank on a blocked row (D‑3).</summary>
-    public string Blocker => Candidate.Blocker ?? string.Empty;
+    /// <remarks>
+    /// ⚠ Rendered on read (L8.2): the candidate holds the KEY, and this projects it to the words the row
+    /// shows. ⏭ The preview grid is rebuilt on every tick, so it needs no notification of its own.
+    /// </remarks>
+    public string Blocker => Candidate.Blocker?.ToString() ?? string.Empty;
 
     /// <summary>Whether there is a blocker to show.</summary>
     public bool IsBlocked => !Candidate.Qualifies;
@@ -107,6 +112,14 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
         // ⭐ The preview follows the ticks, always. A preview the operator has to remember to refresh is
         //    a preview that will eventually describe a different operation from the one about to run.
         _browser.CheckedChanged += (_, _) => Rebuild();
+
+        // ⚠ Weak + static handler: this view model outlives nothing in particular, and Loc.LanguageChanged
+        //   is a static event. See LanguageChange.SubscribeWeak.
+        LanguageChange.SubscribeWeak(this, static batch =>
+        {
+            batch.OnPropertyChanged(nameof(LastResult));
+            batch.OnPropertyChanged(nameof(BlockerSummary));
+        });
     }
 
     /// <summary>Every ticked licence and what would happen to it — including the ones standing in the way.</summary>
@@ -128,12 +141,16 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
     [ObservableProperty]
     private string _note = string.Empty;
 
+    // ⚠ The OUTCOME, not its rendering (L8.2). Storing the sentence here would freeze the panel in the
+    //   language the batch happened to run in — and this text is deliberately long-lived on screen, so it
+    //   is the most likely of all of them to still be showing when the language changes.
+    private StatusMessage? _lastResultMessage;
+
     /// <summary>What the last completed batch did, or empty. ⭐ Kept on screen after the message fades.</summary>
-    [ObservableProperty]
-    private string _lastResult = string.Empty;
+    public string LastResult => _lastResultMessage?.Text ?? string.Empty;
 
     /// <summary>Whether there is a result to show.</summary>
-    public bool HasResult => !string.IsNullOrEmpty(LastResult);
+    public bool HasResult => _lastResultMessage is not null;
 
     // ⚠ The plan the OPERATOR was shown. The command compares a fresh plan against this one, so the
     //   approval is of a specific operation rather than of a moment.
@@ -180,6 +197,14 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
     }
 
     /// <summary>Why the action is unavailable, in one line — never a disabled button with no explanation.</summary>
+    /// <remarks>
+    /// ⚠⚠ <b>Each count carries its WHOLE sentence, not a fragment</b> (L8.2). The singular and plural
+    /// readings used to be built by concatenating a clause onto a shared tail, which would have handed the
+    /// translator half a sentence as an argument — forbidden, because word order is the translator's
+    /// decision and Polish does not put the clause where English does.
+    /// ⏭ L8.5 collapses the two keys into one plural FAMILY (`one` / `few` / `many`); they are two whole
+    /// keys here only because L8.2 may not change a single English character, and a family would.
+    /// </remarks>
     public string BlockerSummary
     {
         get
@@ -189,12 +214,9 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
                 return string.Empty;
             }
 
-            var blocked = plan.Blocked.Count == 1
-                ? "1 selected licence cannot be extended to this date"
-                : $"{plan.Blocked.Count} selected licences cannot be extended to this date";
-
-            return $"{blocked}, so the whole operation is held. Nothing is issued in part — remove them " +
-                   "from the selection, or choose a different target date.";
+            return plan.Blocked.Count == 1
+                ? Loc.Text(StatusCatalog.BlockedOne.Value)
+                : Loc.Format(StatusCatalog.BlockedMany.Value, plan.Blocked.Count);
         }
     }
 
@@ -242,25 +264,26 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
         if (plan is null || approved is null || !plan.Matches(approved))
         {
             Rebuild();
-            _report(StatusMessage.Warning(
-                "The selection or the target date changed since this preview was built, so nothing was " +
-                "issued. The preview below is up to date — check it and run the operation again."));
+            _report(StatusMessage.Warning(StatusCatalog.PreviewOutOfDate));
             return;
         }
 
         if (!plan.CanExecute)
         {
             Rebuild();
-            _report(StatusMessage.Warning(
-                plan.IsEmpty
-                    ? "Tick at least one licence to extend."
-                    : BlockerSummary));
+
+            // ⚠ The blocked branch reuses BlockerSummary's already-resolved sentence rather than a key of
+            //   its own: the strip and the panel beneath it must say the same thing, and two keys is how
+            //   they stop doing so.
+            _report(plan.IsEmpty
+                ? StatusMessage.Warning(StatusCatalog.TickAtLeastOneLicence)
+                : BlockedMessage());
             return;
         }
 
         if (!TryBuildRequests(plan, out var requests, out var problem))
         {
-            _report(StatusMessage.Error(problem));
+            _report(problem!);
             return;
         }
 
@@ -271,22 +294,19 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
         }
         catch (RegisterIntegrityException e)
         {
-            _report(StatusMessage.Error(
-                $"Nothing was issued and the register is unchanged. {e.Message}"));
+            _report(StatusMessage.Error(StatusCatalog.NothingIssuedRegisterUnchanged, e.Message));
             return;
         }
         catch (ArgumentException e)
         {
-            _report(StatusMessage.Error(
-                $"Nothing was issued and the register is unchanged. {e.Message}"));
+            _report(StatusMessage.Error(StatusCatalog.NothingIssuedRegisterUnchanged, e.Message));
             return;
         }
         catch (CryptographicException e)
         {
             // The issuer refused to hand out an artifact it could not verify. Phase 1 is pure, so this
             // leaves the register untouched — which is exactly what the operator needs to be told.
-            _report(StatusMessage.Error(
-                $"Nothing was issued and the register is unchanged. {e.Message}"));
+            _report(StatusMessage.Error(StatusCatalog.NothingIssuedRegisterUnchanged, e.Message));
             return;
         }
 
@@ -295,7 +315,12 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
 
     partial void OnTargetDateChanged(DateTime? value) => Rebuild();
 
-    partial void OnLastResultChanged(string value) => OnPropertyChanged(nameof(HasResult));
+    private void SetLastResult(StatusMessage? message)
+    {
+        _lastResultMessage = message;
+        OnPropertyChanged(nameof(LastResult));
+        OnPropertyChanged(nameof(HasResult));
+    }
 
     /// <summary>
     /// Reads the register and plans what the ticked licences would become.
@@ -339,7 +364,7 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
     // ⚠ Built for the WHOLE plan before anything is signed. A customer that cannot be read is a register
     //   fault, and finding it here means it costs nothing — no signature, no row, nothing to undo.
     private bool TryBuildRequests(
-        BatchRenewalPlan plan, out List<IssueRequest> requests, out string problem)
+        BatchRenewalPlan plan, out List<IssueRequest> requests, out StatusMessage? problem)
     {
         requests = new List<IssueRequest>(plan.Candidates.Count);
 
@@ -348,10 +373,12 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
             var customer = _register.GetCustomer(candidate.Summary.License.CustomerId);
             if (customer is null)
             {
-                problem =
-                    $"Licence {candidate.ShortId} refers to customer " +
-                    $"{candidate.Summary.License.CustomerId}, which the register does not hold. Nothing " +
-                    "was issued.";
+                // ⚠ A MESSAGE, not a rendered sentence: the caller puts it on the strip, where it may sit
+                //   across a language change.
+                problem = StatusMessage.Error(
+                    StatusCatalog.LicenceRefersToUnknownCustomer,
+                    candidate.ShortId,
+                    candidate.Summary.License.CustomerId);
                 return false;
             }
 
@@ -366,25 +393,42 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
             });
         }
 
-        problem = string.Empty;
+        problem = null;
         return true;
     }
+
+    /// <summary>The blocked-plan warning, as the message the strip stores.</summary>
+    private StatusMessage BlockedMessage() =>
+        _previewed is { } plan && plan.Blocked.Count != 1
+            ? StatusMessage.Warning(StatusCatalog.BlockedMany, plan.Blocked.Count)
+            : StatusMessage.Warning(StatusCatalog.BlockedOne);
 
     // ⭐ Everything below runs only after the transaction committed, so every sentence here is true.
     private void Complete(BatchRenewalPlan plan, IssueBatchResult result)
     {
         var count = result.Artifacts.Count;
-        var licences = count == 1 ? "1 licence" : $"{count} licences";
-        var firstIssues = plan.FirstIssues == 0
-            ? string.Empty
-            : $" {plan.FirstIssues} of them received a first artifact.";
 
-        LastResult =
-            $"{licences} extended to {plan.TargetDay}. {count} artifact(s) recorded as batch " +
-            $"{result.BatchId}.{firstIssues} " +
-            "Nothing was written to disk — export the files from the register when you are ready to send them.";
+        // ⚠⚠ FOUR whole sentences rather than one assembled from clauses (L8.2). The old code concatenated
+        //    a singular/plural opener and an optional first-issue clause onto a shared tail; handing any of
+        //    those to the catalog as an ARGUMENT would be shipping half a sentence, and word order is the
+        //    translator's decision. ⏭ L8.5 folds the count pairs into plural families — it cannot happen
+        //    here, because a family changes the English and L8.2 may not.
+        var message = (count == 1, plan.FirstIssues == 0) switch
+        {
+            (true, true) => StatusMessage.Success(
+                StatusCatalog.BatchCompletedOne, plan.TargetDay, count, result.BatchId),
+            (true, false) => StatusMessage.Success(
+                StatusCatalog.BatchCompletedOneWithFirstIssues,
+                plan.TargetDay, count, result.BatchId, plan.FirstIssues),
+            (false, true) => StatusMessage.Success(
+                StatusCatalog.BatchCompletedMany, count, plan.TargetDay, count, result.BatchId),
+            (false, false) => StatusMessage.Success(
+                StatusCatalog.BatchCompletedManyWithFirstIssues,
+                count, plan.TargetDay, count, result.BatchId, plan.FirstIssues),
+        };
 
-        _report(StatusMessage.Success(LastResult));
+        SetLastResult(message);
+        _report(message);
 
         Note = string.Empty;
 

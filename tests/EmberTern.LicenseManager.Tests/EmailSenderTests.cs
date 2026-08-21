@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using EmberTern.Licensing;
 using EmberTern.LicenseManager.Data;
 using EmberTern.LicenseManager.Email;
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.ViewModels;
 using Xunit;
 
 namespace EmberTern.LicenseManager.Tests;
@@ -131,7 +133,13 @@ public sealed class EmailSenderTests : IDisposable
         var noHost = Settings with { Host = string.Empty };
 
         Assert.False(noHost.CanSendDirectly);
-        Assert.Throws<ArgumentException>(() => new SmtpLicenseEmailSender(noHost));
+
+        // ⭐ The refusal is OURS and the operator reads it unframed on the strip, so since L8.2 it carries
+        //   its catalog key rather than only an English sentence. ⚠ Asserted on the DERIVED type and on the
+        //   key: `ArgumentException` alone would still pass if the key were dropped again.
+        var refusal = Assert.Throws<LocalizedArgumentException>(() => new SmtpLicenseEmailSender(noHost));
+
+        Assert.Equal(StatusCatalog.SettingsCarryNoSmtpHost, refusal.Key);
     }
 
     /// <summary>⭐ It names where it delivers, so "sent" never has to mean "somewhere".</summary>

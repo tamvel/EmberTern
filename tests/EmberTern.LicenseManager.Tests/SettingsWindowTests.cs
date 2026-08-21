@@ -338,13 +338,19 @@ public sealed class SettingsWindowTests : IDisposable
             await model.ForgetCommand.ExecuteAsync(null);
 
             Assert.NotNull(asked);
-            Assert.Contains("Forget", asked!.Title, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("permanently", asked.Message, StringComparison.OrdinalIgnoreCase);
-            Assert.Contains("password", asked.Message, StringComparison.OrdinalIgnoreCase);
+
+            // ⭐ Asserted through the view model that actually renders the request, not on the request's
+            //   keys: since L8.2 a ConfirmRequest carries KEYS, so reading the words back is the only way
+            //   to prove the dialog still says what it said — including that the arguments arrive.
+            var words = new ConfirmViewModel(asked!);
+
+            Assert.Contains("Forget", words.Title, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("permanently", words.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("password", words.Message, StringComparison.OrdinalIgnoreCase);
 
             // The action's button NAMES the action rather than saying "OK" or "Yes".
-            Assert.Contains("Forget", asked.ConfirmLabel, StringComparison.OrdinalIgnoreCase);
-            Assert.Equal("Cancel", asked.CancelLabel);
+            Assert.Contains("Forget", words.ConfirmLabel, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("Cancel", words.CancelLabel);
             return true;
         }, default);
 
@@ -396,15 +402,21 @@ public sealed class SettingsWindowTests : IDisposable
         {
             HeadlessTheme.UseTheme(theme);
 
-            var request = new ConfirmRequest("Forget SMTP settings?", "It will be gone.", "Forget settings");
-            var dialog = new ConfirmDialog { DataContext = new ConfirmViewModel(request) };
+            var request = new ConfirmRequest(
+                ConfirmCatalog.ForgetSmtpTitle,
+                ConfirmCatalog.ForgetSmtpMessage,
+                ConfirmCatalog.ForgetSmtpAction);
+            var model = new ConfirmViewModel(request);
+            var dialog = new ConfirmDialog { DataContext = model };
             dialog.Show();
             dialog.UpdateLayout();
 
-            Assert.Equal(request.Title, ViewProbe.Named<TextBlock>(dialog, "ConfirmTitle").Text);
-            Assert.Equal(request.Message, ViewProbe.Named<TextBlock>(dialog, "ConfirmMessage").Text);
-            Assert.Equal(request.ConfirmLabel, ViewProbe.Named<Button>(dialog, "ConfirmAccept").Content);
-            Assert.Equal(request.CancelLabel, ViewProbe.Named<Button>(dialog, "ConfirmCancel").Content);
+            // ⚠ Compared against the RESOLVED words, because the request now carries keys — and the four
+            //   controls must show what the view model resolves, which is the whole binding claim.
+            Assert.Equal(model.Title, ViewProbe.Named<TextBlock>(dialog, "ConfirmTitle").Text);
+            Assert.Equal(model.Message, ViewProbe.Named<TextBlock>(dialog, "ConfirmMessage").Text);
+            Assert.Equal(model.ConfirmLabel, ViewProbe.Named<Button>(dialog, "ConfirmAccept").Content);
+            Assert.Equal(model.CancelLabel, ViewProbe.Named<Button>(dialog, "ConfirmCancel").Content);
 
             Assert.Equal(
                 HeadlessTheme.Brush("BackgroundBrush")!.Color,
@@ -424,7 +436,10 @@ public sealed class SettingsWindowTests : IDisposable
             var dialog = new ConfirmDialog
             {
                 DataContext = new ConfirmViewModel(
-                    new ConfirmRequest("Forget SMTP settings?", "It will be gone.", "Forget settings")),
+                    new ConfirmRequest(
+                        ConfirmCatalog.ForgetSmtpTitle,
+                        ConfirmCatalog.ForgetSmtpMessage,
+                        ConfirmCatalog.ForgetSmtpAction)),
             };
             dialog.Show();
 
@@ -442,7 +457,8 @@ public sealed class SettingsWindowTests : IDisposable
     [Fact]
     public void AnUnansweredConfirmationMeansNo()
     {
-        var model = new ConfirmViewModel(new ConfirmRequest("t", "m", "Do it"));
+        var model = new ConfirmViewModel(new ConfirmRequest(
+            ConfirmCatalog.ForgetSmtpTitle, ConfirmCatalog.ForgetSmtpMessage, ConfirmCatalog.ForgetSmtpAction));
 
         Assert.False(model.Result);
 

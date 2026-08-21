@@ -381,7 +381,7 @@ public sealed class RegisterQueryTests : IDisposable
 
         Assert.Contains(
             _register.CheckIntegrity(),
-            p => p.Contains("no current one is marked", StringComparison.Ordinal));
+            p => p.ToString().Contains("no current one is marked", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -397,7 +397,7 @@ public sealed class RegisterQueryTests : IDisposable
 
         Assert.Contains(
             _register.CheckIntegrity(),
-            p => p.Contains("not its newest", StringComparison.Ordinal));
+            p => p.ToString().Contains("not its newest", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -415,7 +415,7 @@ public sealed class RegisterQueryTests : IDisposable
 
         Assert.Contains(
             _register.CheckIntegrity(),
-            p => p.Contains("does not belong to it", StringComparison.Ordinal));
+            p => p.ToString().Contains("does not belong to it", StringComparison.Ordinal));
     }
 
     // ── Upgrading a register written by L3 ──────────────────────────────────────────────────────────

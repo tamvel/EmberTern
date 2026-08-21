@@ -4,6 +4,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using EmberTern.LicenseManager.Services;
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.ViewModels;
 
 namespace EmberTern.LicenseManager.Email;
 
@@ -31,7 +33,8 @@ public enum SmtpSettingsState
 /// <param name="State">Which of the four answers.</param>
 /// <param name="Settings">Whatever could be recovered. Never <see langword="null"/>.</param>
 /// <param name="Problem">A sentence for the operator, or <see langword="null"/> when nothing is wrong.</param>
-public sealed record SmtpSettingsLoad(SmtpSettingsState State, SmtpSettings Settings, string? Problem);
+public sealed record SmtpSettingsLoad(
+    SmtpSettingsState State, SmtpSettings Settings, LocalizedText? Problem);
 
 /// <summary>
 /// Reads and writes <c>smtp.dat</c>.
@@ -120,13 +123,15 @@ public sealed class SmtpSettingsStore
             return new SmtpSettingsLoad(
                 SmtpSettingsState.Unreadable,
                 SmtpSettings.Empty,
-                $"The e-mail settings file could not be read: {e.Message}");
+                new LocalizedText(StatusCatalog.SmtpFileNotRead, e.Message));
         }
 
         if (stored is null)
         {
             return new SmtpSettingsLoad(
-                SmtpSettingsState.Unreadable, SmtpSettings.Empty, "The e-mail settings file is empty.");
+                SmtpSettingsState.Unreadable,
+                SmtpSettings.Empty,
+                new LocalizedText(StatusCatalog.SmtpFileEmpty));
         }
 
         if (stored.Version > CurrentVersion)
@@ -136,8 +141,7 @@ public sealed class SmtpSettingsStore
             return new SmtpSettingsLoad(
                 SmtpSettingsState.Unreadable,
                 SmtpSettings.Empty,
-                $"These e-mail settings were written by a newer License Manager (version {stored.Version}). " +
-                "Update this application, or delete the file to configure e-mail again.");
+                new LocalizedText(StatusCatalog.SmtpFileFromNewerBuild, stored.Version));
         }
 
         var settings = new SmtpSettings
@@ -166,9 +170,7 @@ public sealed class SmtpSettingsStore
             return new SmtpSettingsLoad(
                 SmtpSettingsState.PasswordUnavailable,
                 settings,
-                "The stored password could not be decrypted. It is protected for this Windows account on " +
-                "this computer, so a settings file copied from elsewhere cannot be read. Enter the " +
-                "password again to store it for this account.");
+                new LocalizedText(StatusCatalog.SmtpPasswordNotDecrypted));
         }
 
         return new SmtpSettingsLoad(SmtpSettingsState.Loaded, settings with { Password = password }, null);

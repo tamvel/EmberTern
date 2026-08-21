@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.LicenseManager.Email;
 using EmberTern.LicenseManager.Settings;
+using EmberTern.LicenseManager.Localization;
 
 namespace EmberTern.LicenseManager.ViewModels;
 
@@ -234,10 +235,11 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
     /// ⚠ Said in the window because DPAPI's non-portability is invisible until it bites — the same
     /// warning EmberTern gives for connection passwords.
     /// </summary>
-    public string ProtectionNote =>
-        "The password is encrypted with Windows DPAPI for this Windows account on this computer. " +
-        "It cannot be read by another account, on another machine, or from a copy of the file — this " +
-        "is deliberate, and it means the password has to be entered again after moving to a new machine.";
+    /// <remarks>
+    /// ⚠ A property reading the catalog, never a captured string — the <c>static readonly</c> lesson
+    /// (L8.2). It is bound directly by the Settings window as well as used as a fallback message below.
+    /// </remarks>
+    public string ProtectionNote => Loc.Text(StatusCatalog.DpapiProtectionNote.Value);
 
     // ── Actions ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -252,7 +254,7 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
         {
             // ⭐ Every problem at once, not the first one — an operator fixing four fields one
             //    error-message at a time is four round trips through a window they cannot see past.
-            Message = StatusMessage.Warning(string.Join(" ", problems));
+            Message = StatusMessage.Warning(StatusCatalog.Verbatim, new LocalizedSentences(problems));
             return;
         }
 
@@ -262,14 +264,13 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
         }
         catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
         {
-            Message = StatusMessage.Error($"The e-mail settings could not be saved: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.EmailSettingsNotSaved, e.Message);
             return;
         }
 
-        Message = StatusMessage.Success(
-            string.IsNullOrWhiteSpace(settings.Host)
-                ? "Saved. Messages can be delivered as .eml files."
-                : $"Saved. Messages will be sent through {settings.Host}.");
+        Message = string.IsNullOrWhiteSpace(settings.Host)
+            ? StatusMessage.Success(StatusCatalog.SavedFileDelivery)
+            : StatusMessage.Success(StatusCatalog.SavedThroughHost, settings.Host);
     }
 
     /// <summary>Throws away the edits and re-reads what is on disk.</summary>
@@ -280,7 +281,7 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
 
         if (Message is null)
         {
-            Message = StatusMessage.Info("Reloaded the saved settings.");
+            Message = StatusMessage.Info(StatusCatalog.SettingsReloaded);
         }
     }
 
@@ -311,16 +312,14 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
     {
         if (Confirm is null)
         {
-            Message = StatusMessage.Warning(
-                "This action needs a confirmation and none could be shown, so nothing was changed.");
+            Message = StatusMessage.Warning(StatusCatalog.ConfirmationUnavailableNothingChanged);
             return;
         }
 
         var confirmed = await Confirm(new ConfirmRequest(
-            "Forget SMTP settings?",
-            "This will permanently remove the saved SMTP configuration, including the stored password. " +
-            "You can enter the settings again later.",
-            "Forget settings")).ConfigureAwait(true);
+            ConfirmCatalog.ForgetSmtpTitle,
+            ConfirmCatalog.ForgetSmtpMessage,
+            ConfirmCatalog.ForgetSmtpAction)).ConfigureAwait(true);
 
         if (!confirmed)
         {
@@ -335,12 +334,12 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
         }
         catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
         {
-            Message = StatusMessage.Error($"The e-mail settings could not be deleted: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.EmailSettingsNotDeleted, e.Message);
             return;
         }
 
         Apply(SmtpSettings.Empty);
-        Message = StatusMessage.Info("E-mail is no longer configured.");
+        Message = StatusMessage.Info(StatusCatalog.EmailNoLongerConfigured);
     }
 
     // ── The configuration test ──────────────────────────────────────────────────────────────────────
@@ -397,9 +396,7 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
 
         if (!SmtpSettings.LooksLikeAddress(recipient))
         {
-            Message = StatusMessage.Warning(
-                $"'{recipient}' does not look like an e-mail address. Enter the address the test message " +
-                "should arrive at.");
+            Message = StatusMessage.Warning(StatusCatalog.NotAnEmailAddress, recipient);
             return;
         }
 
@@ -407,30 +404,28 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
         var problems = settings.Validate();
         if (problems.Count > 0)
         {
-            Message = StatusMessage.Warning(string.Join(" ", problems));
+            Message = StatusMessage.Warning(StatusCatalog.Verbatim, new LocalizedSentences(problems));
             return;
         }
 
         if (!settings.CanSendDirectly)
         {
-            Message = StatusMessage.Warning(
-                "There is no SMTP host to test. Enter a server above — file delivery needs no test, " +
-                "because it never contacts anything.");
+            Message = StatusMessage.Warning(StatusCatalog.NoSmtpHostToTest);
             return;
         }
 
         if (Confirm is null)
         {
-            Message = StatusMessage.Warning(
-                "This action needs a confirmation and none could be shown, so nothing was sent.");
+            Message = StatusMessage.Warning(StatusCatalog.ConfirmationUnavailableNothingSent);
             return;
         }
 
         var confirmed = await Confirm(new ConfirmRequest(
-            "Send a test message?",
-            $"A test message will be sent to {recipient} through {settings.Host}, using the settings on " +
-            "this page. No licence is attached and nothing is recorded against any customer.",
-            "Send test")).ConfigureAwait(true);
+            ConfirmCatalog.TestMessageTitle,
+            ConfirmCatalog.TestMessageMessage,
+            ConfirmCatalog.TestMessageAction,
+            recipient,
+            settings.Host)).ConfigureAwait(true);
 
         if (!confirmed)
         {
@@ -438,7 +433,7 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
         }
 
         IsTesting = true;
-        Message = StatusMessage.Info($"Sending a test message to {recipient}…");
+        Message = StatusMessage.Info(StatusCatalog.SendingTestMessage, recipient);
 
         SendOutcome outcome;
         try
@@ -449,7 +444,7 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
         }
         catch (ArgumentException e)
         {
-            Message = StatusMessage.Warning(e.Message);
+            Message = StatusMessage.FromError(e, MessageSeverity.Warning);
             return;
         }
         finally
@@ -458,15 +453,12 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
         }
 
         Message = outcome.Sent
-            ? StatusMessage.Success(
-                $"Test email sent successfully to {recipient} through {outcome.Delivered}. " +
-                "The SMTP configuration works.")
+            ? StatusMessage.Success(StatusCatalog.TestEmailSent, recipient, outcome.Delivered)
 
             // ⚠ The server's own words, and what they mean for the operator's next step. ⛔ Never
             //   interpreted — a wrong password and a blocked app password differ only in that text.
             : StatusMessage.Error(
-                $"The test message could not be sent: {outcome.Error} The SMTP configuration on this page " +
-                "did not work — check the host, the port, the transport security and the sign-in details.");
+                StatusCatalog.TestMessageNotSent, outcome.Error);
     }
 
     // ── Plumbing ────────────────────────────────────────────────────────────────────────────────────
@@ -493,7 +485,7 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
         }
         catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
         {
-            Message = StatusMessage.Error($"The e-mail settings could not be read: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.EmailSettingsNotRead, e.Message);
             return;
         }
 
@@ -514,14 +506,18 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
 
             case SmtpSettingsState.PasswordUnavailable:
                 Apply(load.Settings);
-                Message = StatusMessage.Warning(load.Problem ?? ProtectionNote);
+                Message = load.Problem is { } problem
+                    ? StatusMessage.Warning(problem.Key, [.. problem.Arguments])
+                    : StatusMessage.Warning(StatusCatalog.DpapiProtectionNote);
                 break;
 
             default:
                 // ⛔ The form is NOT filled from a file that could not be understood. Showing recovered
                 //    fragments beside an error invites a save that overwrites whatever is really there.
                 Apply(SmtpSettings.Empty);
-                Message = StatusMessage.Error(load.Problem ?? "The e-mail settings could not be read.");
+                Message = load.Problem is { } unreadable
+                    ? StatusMessage.Error(unreadable.Key, [.. unreadable.Arguments])
+                    : StatusMessage.Error(StatusCatalog.EmailSettingsNotReadShort);
                 break;
         }
     }

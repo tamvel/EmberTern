@@ -171,9 +171,15 @@ public sealed class IssuingWorkflowTests : IDisposable
     {
         // ⛔ Overwriting a keystore cannot be undone: every licence in the field was signed by the key it
         //    held, and nothing can renew them afterwards.
-        Assert.Throws<InvalidOperationException>(() =>
+        // ⚠ The DERIVED type since L8.2: the refusal reaches the unlock window's strip as our own
+        //   sentence, so it carries its catalog key. Asserting the key too keeps the localization from
+        //   being dropped without a red.
+        var refusal = Assert.Throws<EmberTern.LicenseManager.Localization.LocalizedOperationException>(() =>
             EmberTern.LicenseManager.Services.SigningSession.Create(
                 _manager.Paths, "R2", "another passphrase entirely", _manager.Now));
+
+        Assert.Equal(
+            EmberTern.LicenseManager.ViewModels.StatusCatalog.KeystoreAlreadyExists, refusal.Key);
     }
 
     [Fact]

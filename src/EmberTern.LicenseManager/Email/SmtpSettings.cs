@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.ViewModels;
 
 namespace EmberTern.LicenseManager.Email;
 
@@ -109,9 +111,9 @@ public sealed record SmtpSettings
     /// <para>⭐ It answers about the settings ALONE. Whether the server accepts them is a question only
     /// the server can answer, and this deliberately does not pretend otherwise.</para>
     /// </summary>
-    public IReadOnlyList<string> Validate()
+    public IReadOnlyList<LocalizedText> Validate()
     {
-        var problems = new List<string>();
+        var problems = new List<LocalizedText>();
 
         // ⚠ Checked, but never REPAIRED here: an unrecognised code resolves to the default at the moment a
         //   message is composed (MessageLanguages.Resolve). A settings file is allowed to carry a language
@@ -119,45 +121,42 @@ public sealed record SmtpSettings
         //   over a preference that has a safe answer.
         if (!MessageLanguages.IsSupported(MessageLanguage))
         {
-            problems.Add($"The message language '{MessageLanguage}' is not one this version can write.");
+            problems.Add(new LocalizedText(StatusCatalog.SmtpUnknownMessageLanguage, MessageLanguage));
         }
 
         if (string.IsNullOrWhiteSpace(FromAddress))
         {
-            problems.Add("A sender address is required — it is what the customer replies to.");
+            problems.Add(new LocalizedText(StatusCatalog.SmtpSenderRequired));
         }
         else if (!LooksLikeAddress(FromAddress))
         {
-            problems.Add($"The sender address does not look like an e-mail address: {FromAddress}");
+            problems.Add(new LocalizedText(StatusCatalog.SmtpSenderNotAnAddress, FromAddress));
         }
 
         if (!string.IsNullOrWhiteSpace(Host))
         {
             if (Port is < 1 or > 65535)
             {
-                problems.Add(string.Create(
-                    CultureInfo.InvariantCulture, $"The port must be between 1 and 65535, not {Port}."));
+                problems.Add(new LocalizedText(
+                    StatusCatalog.SmtpPortOutOfRange,
+                    Port.ToString(CultureInfo.InvariantCulture)));
             }
 
             // ⛔ The one combination that is refused rather than warned about: a password on a connection
             //    that never becomes encrypted is a password on the wire.
             if (Security == SmtpSecurity.None && !string.IsNullOrWhiteSpace(Username))
             {
-                problems.Add(
-                    "A username cannot be used without STARTTLS — the password would travel unencrypted. " +
-                    "Either enable STARTTLS or clear the username.");
+                problems.Add(new LocalizedText(StatusCatalog.SmtpUsernameNeedsStartTls));
             }
 
             if (!string.IsNullOrWhiteSpace(Password) && string.IsNullOrWhiteSpace(Username))
             {
-                problems.Add("A password without a username cannot be used. Enter the account that signs in.");
+                problems.Add(new LocalizedText(StatusCatalog.SmtpPasswordNeedsUsername));
             }
         }
         else if (!string.IsNullOrWhiteSpace(Username) || !string.IsNullOrWhiteSpace(Password))
         {
-            problems.Add(
-                "Credentials were entered but no server. Enter the SMTP host, or clear the credentials " +
-                "and deliver the message as a file instead.");
+            problems.Add(new LocalizedText(StatusCatalog.SmtpCredentialsWithoutServer));
         }
 
         return problems;

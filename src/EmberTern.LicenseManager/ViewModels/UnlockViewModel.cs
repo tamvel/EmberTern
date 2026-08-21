@@ -69,7 +69,7 @@ public sealed partial class UnlockViewModel : MessageHostViewModel
     {
         if (Passphrase.Length == 0)
         {
-            Message = StatusMessage.Warning("Enter the keystore passphrase.");
+            Message = StatusMessage.Warning(StatusCatalog.EnterKeystorePassphrase);
             return;
         }
 
@@ -84,20 +84,16 @@ public sealed partial class UnlockViewModel : MessageHostViewModel
             //    cipher at all — throwing it away here would waste it.
             Message = e.Failure switch
             {
-                KeyStoreFailure.WrongPassphrase => StatusMessage.Error(
-                    "That passphrase does not open the keystore. Check it and try again."),
-                KeyStoreFailure.NotAKeyStore => StatusMessage.Error(
-                    $"The file at {_paths.KeyStore} is not an EmberTern keystore."),
-                KeyStoreFailure.UnsupportedVersion => StatusMessage.Error(
-                    "The keystore was written by a newer License Manager. Update this application."),
-                KeyStoreFailure.Corrupt => StatusMessage.Error(
-                    "The keystore is damaged. Restore it from an offline backup and verify the restore."),
-                _ => StatusMessage.Error($"The keystore could not be opened ({e.Failure})."),
+                KeyStoreFailure.WrongPassphrase => StatusMessage.Error(StatusCatalog.PassphraseDoesNotOpenKeystore),
+                KeyStoreFailure.NotAKeyStore => StatusMessage.Error(StatusCatalog.NotAKeystore, _paths.KeyStore),
+                KeyStoreFailure.UnsupportedVersion => StatusMessage.Error(StatusCatalog.KeystoreFromNewerBuild),
+                KeyStoreFailure.Corrupt => StatusMessage.Error(StatusCatalog.KeystoreDamaged),
+                _ => StatusMessage.Error(StatusCatalog.KeystoreNotOpened, e.Failure),
             };
         }
         catch (System.IO.IOException e)
         {
-            Message = StatusMessage.Error($"The keystore could not be read: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.KeystoreNotRead, e.Message);
         }
     }
 
@@ -107,7 +103,7 @@ public sealed partial class UnlockViewModel : MessageHostViewModel
     {
         if (string.IsNullOrWhiteSpace(KeyId))
         {
-            Message = StatusMessage.Warning("A key id is required — it travels in every licence.");
+            Message = StatusMessage.Warning(StatusCatalog.KeyIdRequired);
             return;
         }
 
@@ -116,15 +112,13 @@ public sealed partial class UnlockViewModel : MessageHostViewModel
             // ⚠ A length floor, not a complexity ruleset. The passphrase is the ONLY thing between an
             //    attacker with the file and the ability to mint licences, and it is meant to be six
             //    generated words rather than something anyone types from memory (§24.1).
-            Message = StatusMessage.Warning(
-                "Use a long passphrase — six generated words, kept in a password manager and on paper. " +
-                "It cannot be reset, and losing it means no licence can ever be renewed.");
+            Message = StatusMessage.Warning(StatusCatalog.NewKeyPassphraseHint);
             return;
         }
 
         if (!string.Equals(Passphrase, PassphraseConfirmation, StringComparison.Ordinal))
         {
-            Message = StatusMessage.Warning("The two passphrases do not match.");
+            Message = StatusMessage.Warning(StatusCatalog.PassphrasesDoNotMatch);
             return;
         }
 
@@ -134,11 +128,14 @@ public sealed partial class UnlockViewModel : MessageHostViewModel
         }
         catch (InvalidOperationException e)
         {
-            Message = StatusMessage.Error(e.Message);
+            // ⭐ The refusal is OURS — SigningSession throws it carrying its catalog key — so it RESOLVES
+            //   rather than being printed. Handing e.Message to the strip here is exactly how a perfectly
+            //   translated sentence stays English forever (see StatusMessage.FromError).
+            Message = StatusMessage.FromError(e, MessageSeverity.Error);
         }
         catch (System.IO.IOException e)
         {
-            Message = StatusMessage.Error($"The keystore could not be written: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.KeystoreNotWritten, e.Message);
         }
     }
 

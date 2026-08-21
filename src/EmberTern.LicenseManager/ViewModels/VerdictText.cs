@@ -20,16 +20,21 @@ internal static class VerdictText
     private const string DateFormat = "yyyy-MM-dd";
 
     /// <summary>The verdict as a severity and a sentence.</summary>
+    /// <remarks>
+    /// ⚠ The expiry date is rendered INVARIANTLY here and handed over as a finished string, never as a
+    /// <c>DateOnly</c>. <c>Loc.Format</c> formats its arguments under the reader's culture, so passing the
+    /// value itself would let the interface language decide how a licence's date reads — and the ISO form
+    /// is a technical contract (`terminology.md` §4.4), pinned by <c>DatePresentationTests</c>.
+    /// </remarks>
     internal static StatusMessage Describe(LicenseVerdict verdict) => verdict.Status switch
     {
         LicenseStatus.Valid => StatusMessage.Success(
-            "EmberTern would accept it: valid until " +
-            $"{verdict.Payload!.ExpiresAt.ToString(DateFormat, CultureInfo.InvariantCulture)}, " +
-            $"licensed to {verdict.Payload.Licensee}."),
-        LicenseStatus.Grace => StatusMessage.Warning(
-            "EmberTern would accept it, but it is past its expiry and inside the grace period."),
-        LicenseStatus.Expired => StatusMessage.Warning("EmberTern would report it as expired."),
-        LicenseStatus.NotYetValid => StatusMessage.Info("EmberTern would report it as not yet valid."),
-        _ => StatusMessage.Error($"EmberTern would refuse it ({verdict.Failure})."),
+            StatusCatalog.VerdictValid,
+            verdict.Payload!.ExpiresAt.ToString(DateFormat, CultureInfo.InvariantCulture),
+            verdict.Payload.Licensee),
+        LicenseStatus.Grace => StatusMessage.Warning(StatusCatalog.VerdictGrace),
+        LicenseStatus.Expired => StatusMessage.Warning(StatusCatalog.VerdictExpired),
+        LicenseStatus.NotYetValid => StatusMessage.Info(StatusCatalog.VerdictNotYetValid),
+        _ => StatusMessage.Error(StatusCatalog.VerdictRefused, verdict.Failure),
     };
 }

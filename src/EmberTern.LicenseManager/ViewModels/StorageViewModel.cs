@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EmberTern.LicenseManager.Data;
+using EmberTern.LicenseManager.Localization;
 using EmberTern.LicenseManager.Services;
 
 namespace EmberTern.LicenseManager.ViewModels;
@@ -134,15 +136,13 @@ public sealed partial class StorageViewModel : MessageHostViewModel
             // ⚠ A length floor, not a complexity ruleset — the same standard the keystore ceremony
             //    applies, for the same reason: this passphrase is the only thing between anyone holding
             //    the file and every customer's details.
-            Message = StatusMessage.Warning(
-                "Use a long passphrase for the backup — six generated words, kept in a password manager. " +
-                "It cannot be reset, and a backup nobody can open is not a backup.");
+            Message = StatusMessage.Warning(StatusCatalog.BackupPassphraseHint);
             return;
         }
 
         if (!string.Equals(BackupPassphrase, BackupPassphraseConfirmation, StringComparison.Ordinal))
         {
-            Message = StatusMessage.Warning("The two passphrases do not match.");
+            Message = StatusMessage.Warning(StatusCatalog.PassphrasesDoNotMatch);
             return;
         }
 
@@ -167,21 +167,20 @@ public sealed partial class StorageViewModel : MessageHostViewModel
             BackupPassphraseConfirmation = string.Empty;
 
             Message = StatusMessage.Success(
-                $"Encrypted backup written to {report.Path} — {report.Customers} customer(s), " +
-                $"{report.Licenses} licence(s), {report.Artifacts} artifact(s) and " +
-                $"{report.AuditEntries} audit entries, verified row for row against the register.");
+                StatusCatalog.BackupWritten,
+                report.Path, report.Customers, report.Licenses, report.Artifacts, report.AuditEntries);
         }
         catch (RegisterIntegrityException e)
         {
-            Message = StatusMessage.Error(e.Message);
+            Message = StatusMessage.FromError(e, MessageSeverity.Error);
         }
         catch (IOException e)
         {
-            Message = StatusMessage.Error($"The backup could not be written: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.BackupNotWritten, e.Message);
         }
         catch (UnauthorizedAccessException e)
         {
-            Message = StatusMessage.Error($"The backup could not be written: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.BackupNotWritten, e.Message);
         }
     }
 
@@ -209,18 +208,15 @@ public sealed partial class StorageViewModel : MessageHostViewModel
 
             // ⚠ The warning is part of the success message, not a separate dialog nobody reads. The file
             //    holds every issued token in the clear, and the operator has just chosen where to put it.
-            Message = StatusMessage.Warning(
-                $"Plain JSONL export written to {report.Path} — {report.Lines} line(s). " +
-                "⛔ NOT encrypted: it carries every issued licence token in readable form. " +
-                "It is a diagnostic escape hatch, not a backup.");
+            Message = StatusMessage.Warning(StatusCatalog.JsonlExportWritten, report.Path, report.Lines);
         }
         catch (IOException e)
         {
-            Message = StatusMessage.Error($"The export could not be written: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.ExportNotWritten, e.Message);
         }
         catch (UnauthorizedAccessException e)
         {
-            Message = StatusMessage.Error($"The export could not be written: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.ExportNotWritten, e.Message);
         }
     }
 
@@ -330,8 +326,7 @@ public sealed partial class StorageViewModel : MessageHostViewModel
         //    file is free rather than believing this call worked.
         if (ActiveRegisterCloser is { } close && !close())
         {
-            Message = StatusMessage.Error(
-                "The register could not be closed, so it was not replaced. Nothing has been changed.");
+            Message = StatusMessage.Error(StatusCatalog.RegisterNotClosed);
             return;
         }
 
@@ -342,11 +337,9 @@ public sealed partial class StorageViewModel : MessageHostViewModel
             RestorePassphrase = string.Empty;
 
             Message = StatusMessage.Success(
-                $"The active register was replaced — {report.Counts.Customers} customer(s), " +
-                $"{report.Counts.Licenses} licence(s), {report.Counts.Artifacts} artifact(s) and " +
-                $"{report.Counts.AuditEntries} audit entries, verified again after it was written. " +
-                $"⭐ Your previous register was kept as {report.PreservedRegisterPath}. " +
-                "The License Manager will now close — start it again to use the restored register.");
+                StatusCatalog.RegisterReplaced,
+                report.Counts.Customers, report.Counts.Licenses, report.Counts.Artifacts,
+                report.Counts.AuditEntries, report.PreservedRegisterPath);
 
             ShutdownRequested?.Invoke();
         }
@@ -358,9 +351,7 @@ public sealed partial class StorageViewModel : MessageHostViewModel
             //    register ON DISK is either the restored one or the one they started with, never a half
             //    state. ⛔ Deliberately NOT shutting down here — the message is the only place they can
             //    learn what happened, and a shutdown would take it off the screen before it was read.
-            Message = StatusMessage.Error(
-                text + " ⚠ The License Manager has closed its register and must be restarted. " +
-                "Your register on disk was not left in a half-finished state.");
+            Message = StatusMessage.Error(StatusCatalog.RegisterClosedAndMustRestart, text);
         }
     }
 
@@ -392,14 +383,13 @@ public sealed partial class StorageViewModel : MessageHostViewModel
             RestorePassphrase = string.Empty;
 
             Message = StatusMessage.Success(
-                $"Restored into {report.Directory} — {report.Counts.Customers} customer(s), " +
-                $"{report.Counts.Licenses} licence(s), {report.Counts.Artifacts} artifact(s) and " +
-                $"{report.Counts.AuditEntries} audit entries, and it passes the integrity check. " +
-                $"⭐ {RegisterPath} was not changed.");
+                StatusCatalog.RestoredElsewhere,
+                report.Directory, report.Counts.Customers, report.Counts.Licenses,
+                report.Counts.Artifacts, report.Counts.AuditEntries, RegisterPath);
         }
         catch (Exception e) when (Explain(e) is { } text)
         {
-            Message = StatusMessage.Error(text);
+            Message = StatusMessage.Error(text.Key, [.. text.Arguments]);
         }
     }
 
@@ -431,7 +421,7 @@ public sealed partial class StorageViewModel : MessageHostViewModel
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            Message = StatusMessage.Error($"That backup could not be read: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.BackupNotRead, e.Message);
             return null;
         }
 
@@ -444,15 +434,16 @@ public sealed partial class StorageViewModel : MessageHostViewModel
         }
         catch (BackupException e)
         {
-            Message = StatusMessage.Error(Describe(e));
+            Message = StatusMessage.Error(Describe(e).Key);
             return null;
         }
 
         if (RestorePassphrase.Length == 0)
         {
             Message = StatusMessage.Warning(
-                $"That backup was taken on {header.CreatedAt:yyyy-MM-dd HH:mm} UTC " +
-                $"(register schema {header.SchemaVersion}). Enter its passphrase to restore it.");
+                StatusCatalog.BackupInspected,
+                header.CreatedAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
+                header.SchemaVersion);
             return null;
         }
 
@@ -462,18 +453,26 @@ public sealed partial class StorageViewModel : MessageHostViewModel
     // ⭐ ONE place turns a restore failure into words, so the two modes cannot describe the same
     //   condition differently. ⚠ Returns null for anything it does not claim to explain, which lets the
     //   `when` filter leave a genuinely unexpected exception unhandled rather than swallowing it.
-    private static string? Explain(Exception error) => error switch
+    private static LocalizedText? Explain(Exception error) => error switch
     {
         BackupException backup => Describe(backup),
 
         // ⭐ The problems are listed, never summarised away: an operator deciding whether a backup is
         //    salvageable needs to know WHAT disagreed.
+        // ⚠ Both halves are OURS and both resolve at read time: the refusal carries its own key (the
+        //   refusal ENUM could not serve — see RestoreRefusedException's remarks), and each problem is a
+        //   whole sentence of its own. `LocalizedSentences` joins them at format time, so the count may
+        //   vary without any of them being frozen.
         RestoreRefusedException refused => refused.Problems.Count == 0
-            ? refused.Message
-            : refused.Message + " " + string.Join(" ", refused.Problems),
+            ? new LocalizedText(refused.Key)
+            : new LocalizedText(
+                StatusCatalog.RestoreRefusedWithProblems,
+                new LocalizedText(refused.Key),
+                new LocalizedSentences(refused.Problems)),
 
-        IOException io => $"The restore could not be completed: {io.Message}",
-        UnauthorizedAccessException access => $"The restore could not be completed: {access.Message}",
+        IOException io => new LocalizedText(StatusCatalog.RestoreNotCompleted, io.Message),
+        UnauthorizedAccessException access =>
+            new LocalizedText(StatusCatalog.RestoreNotCompleted, access.Message),
         _ => null,
     };
 
@@ -495,27 +494,22 @@ public sealed partial class StorageViewModel : MessageHostViewModel
         }
         catch (IOException e)
         {
-            Message = StatusMessage.Error($"The data folder could not be opened: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.DataFolderNotOpened, e.Message);
         }
     }
 
     // ⭐ One place turns a backup failure into words, so the restore path cannot describe the same
     //   condition differently from the inspect path.
-    internal static string Describe(BackupException error) => error.Failure switch
+    // ⚠ It maps the CLASSIFIED failure to a key (L8.2). The classification is what makes that possible —
+    //   the same reason UnlockViewModel can key its keystore failures instead of printing a message.
+    internal static LocalizedText Describe(BackupException error) => error.Failure switch
     {
-        BackupFailure.WrongPassphrase =>
-            "That passphrase does not open the backup — or the file was modified after it was written. " +
-            "Check the passphrase first.",
-        BackupFailure.NotABackup =>
-            "That file is not an EmberTern register backup. ⚠ The keystore is a different file with a " +
-            "different purpose, and it is not restored here.",
-        BackupFailure.UnsupportedVersion =>
-            "That backup was written by a newer License Manager. Update this application to read it.",
-        BackupFailure.UnsupportedScheme =>
-            "That backup uses an encryption scheme this build does not implement.",
-        BackupFailure.Corrupt =>
-            "That backup file is damaged and cannot be read. Try another copy.",
-        _ => $"That backup could not be opened ({error.Failure}).",
+        BackupFailure.WrongPassphrase => new LocalizedText(StatusCatalog.BackupWrongPassphrase),
+        BackupFailure.NotABackup => new LocalizedText(StatusCatalog.BackupNotABackup),
+        BackupFailure.UnsupportedVersion => new LocalizedText(StatusCatalog.BackupFromNewerBuild),
+        BackupFailure.UnsupportedScheme => new LocalizedText(StatusCatalog.BackupUnsupportedScheme),
+        BackupFailure.Corrupt => new LocalizedText(StatusCatalog.BackupCorrupt),
+        _ => new LocalizedText(StatusCatalog.BackupNotOpened, error.Failure),
     };
 }
 

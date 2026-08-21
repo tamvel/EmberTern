@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using EmberTern.LicenseManager.Data;
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.ViewModels;
 
 namespace EmberTern.LicenseManager.Services;
 
@@ -51,22 +53,48 @@ public enum RestoreRefusal
 /// <para>⭐ Refusal is the normal outcome of a bad input here, not an exceptional one — which is why it
 /// carries a reason the surface can act on rather than only a sentence.</para>
 /// </summary>
-public sealed class RestoreRefusedException : Exception
+/// <remarks>
+/// ⚠⚠ <b>It carries a <see cref="MessageKey"/> of its own, and <see cref="Refusal"/> could NOT have served
+/// instead — that is measured, not assumed.</b> Three refusal values cover more than one sentence
+/// (<c>ActiveRegisterIsStillOpen</c> has two, <c>RestoredRegisterFailedFinalCheck</c> two,
+/// <c>TargetIsNotUsable</c> three), so keying off the enum would have silently collapsed distinct
+/// sentences into one — a change to what the operator reads, which L8.2 may not make. ⭐ The enum stays
+/// exactly as it was: it answers "what should the SURFACE do", the key answers "what does it SAY", and
+/// those are different questions.
+/// </remarks>
+public sealed class RestoreRefusedException : Exception, ILocalizedError
 {
     /// <summary>Creates the exception.</summary>
+    /// <param name="refusal">Why — for the surface to act on.</param>
+    /// <param name="key">The catalog key for the sentence the operator reads.</param>
+    /// <param name="message">⚠ The same sentence in English, for diagnostics only. ⛔ Never displayed.</param>
+    /// <param name="problems">The integrity problems found, when that is the reason.</param>
+    /// <param name="inner">The underlying failure, when there is one.</param>
     public RestoreRefusedException(
-        RestoreRefusal refusal, string message, IReadOnlyList<string>? problems = null, Exception? inner = null)
+        RestoreRefusal refusal,
+        MessageKey key,
+        string message,
+        IReadOnlyList<LocalizedText>? problems = null,
+        Exception? inner = null)
         : base(message, inner)
     {
         Refusal = refusal;
+        Key = key;
         Problems = problems ?? [];
     }
 
     /// <summary>Why.</summary>
     public RestoreRefusal Refusal { get; }
 
+    /// <inheritdoc />
+    public MessageKey Key { get; }
+
+    /// <inheritdoc />
+    /// <remarks>⚠ This exception's sentence takes no arguments; the detail is in <see cref="Problems"/>.</remarks>
+    public IReadOnlyList<object?> Arguments => [];
+
     /// <summary>The integrity problems found, when that is the reason.</summary>
-    public IReadOnlyList<string> Problems { get; }
+    public IReadOnlyList<LocalizedText> Problems { get; }
 }
 
 /// <summary>What a completed restore produced.</summary>
@@ -273,6 +301,7 @@ public sealed class RestoreWorkflow
                 //    moment they are least able to notice.
                 throw new RestoreRefusedException(
                     RestoreRefusal.RestoredRegisterIsInconsistent,
+                    StatusCatalog.RestoreBackupInconsistent,
                     "The backup restored into a register that disagrees with itself, so nothing was written.",
                     problems);
             }
@@ -325,6 +354,7 @@ public sealed class RestoreWorkflow
         {
             throw new RestoreRefusedException(
                 RestoreRefusal.ActiveRegisterIsStillOpen,
+                StatusCatalog.RestoreRegisterStillOpen,
                 "The register is still open, so it was not replaced. Close the License Manager's " +
                 "register first — nothing has been changed.",
                 inner: e);
@@ -333,6 +363,7 @@ public sealed class RestoreWorkflow
         {
             throw new RestoreRefusedException(
                 RestoreRefusal.ActiveRegisterIsStillOpen,
+                StatusCatalog.RestoreRegisterNotOpenable,
                 "The register file cannot be opened for replacement, so nothing was changed.",
                 inner: e);
         }
@@ -370,6 +401,7 @@ public sealed class RestoreWorkflow
         {
             throw new RestoreRefusedException(
                 RestoreRefusal.PreservedCopyFailed,
+                StatusCatalog.RestorePreservedCopyFailed,
                 "The existing register could not be kept safe, so it was not replaced. " +
                 "Nothing has been changed.",
                 inner: e);
@@ -382,7 +414,7 @@ public sealed class RestoreWorkflow
     private static void VerifyMaterialised(string registerPath, StagedRestore staged)
     {
         IReadOnlyList<string> content;
-        IReadOnlyList<string> problems;
+        IReadOnlyList<LocalizedText> problems;
 
         using (var restored = LicenseRegister.Open(registerPath))
         {
@@ -394,6 +426,7 @@ public sealed class RestoreWorkflow
         {
             throw new RestoreRefusedException(
                 RestoreRefusal.RestoredRegisterFailedFinalCheck,
+                StatusCatalog.RestoreFinalCheckFailed,
                 "The restored register failed its final check, so the previous one was put back.",
                 problems);
         }
@@ -402,6 +435,7 @@ public sealed class RestoreWorkflow
         {
             throw new RestoreRefusedException(
                 RestoreRefusal.RestoredRegisterFailedFinalCheck,
+                StatusCatalog.RestoreDoesNotMatchVerified,
                 "The restored register does not match what was verified, so the previous one was put back.");
         }
 
@@ -411,6 +445,7 @@ public sealed class RestoreWorkflow
             {
                 throw new RestoreRefusedException(
                     RestoreRefusal.RestoredRegisterFailedFinalCheck,
+                    StatusCatalog.RestoreDoesNotMatchVerified,
                     "The restored register does not match what was verified, so the previous one was " +
                     "put back.");
             }
@@ -447,7 +482,9 @@ public sealed class RestoreWorkflow
         if (string.IsNullOrWhiteSpace(targetDirectory))
         {
             throw new RestoreRefusedException(
-                RestoreRefusal.TargetIsNotUsable, "Choose a folder to restore into.");
+                RestoreRefusal.TargetIsNotUsable,
+                StatusCatalog.RestoreChooseFolder,
+                "Choose a folder to restore into.");
         }
 
         string target;
@@ -458,13 +495,17 @@ public sealed class RestoreWorkflow
         catch (Exception e) when (e is ArgumentException or NotSupportedException or PathTooLongException)
         {
             throw new RestoreRefusedException(
-                RestoreRefusal.TargetIsNotUsable, "That is not a usable folder path.", inner: e);
+                RestoreRefusal.TargetIsNotUsable,
+                StatusCatalog.RestoreNotAUsableFolderPath,
+                "That is not a usable folder path.",
+                inner: e);
         }
 
         if (File.Exists(target))
         {
             throw new RestoreRefusedException(
                 RestoreRefusal.TargetIsNotUsable,
+                StatusCatalog.RestorePathIsAFile,
                 "That path is a file. A restore needs a folder of its own.");
         }
 
@@ -474,6 +515,7 @@ public sealed class RestoreWorkflow
         {
             throw new RestoreRefusedException(
                 RestoreRefusal.TargetIsTheActiveRegister,
+                StatusCatalog.RestoreNeverIntoActiveFolder,
                 "A restore never writes into the active register's folder. Choose a new, empty folder; " +
                 "you can swap the restored register in yourself once you have looked at it.");
         }
@@ -483,6 +525,7 @@ public sealed class RestoreWorkflow
         {
             throw new RestoreRefusedException(
                 RestoreRefusal.TargetIsNotEmpty,
+                StatusCatalog.RestoreFolderNotEmpty,
                 "That folder is not empty. A restore always creates its register in a folder of its own, " +
                 "so nothing that is already there can be written over.");
         }
@@ -513,6 +556,7 @@ public sealed class RestoreWorkflow
             //   it claims", which are different problems with different next steps.
             throw new RestoreRefusedException(
                 RestoreRefusal.BackupIsNotARegister,
+                StatusCatalog.RestoreBackupIsNotARegister,
                 "The backup decrypted, but what came out is not a register this build can open.",
                 inner: e);
         }

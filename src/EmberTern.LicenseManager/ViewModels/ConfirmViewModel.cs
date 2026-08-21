@@ -1,6 +1,7 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EmberTern.LicenseManager.Localization;
 
 namespace EmberTern.LicenseManager.ViewModels;
 
@@ -17,12 +18,28 @@ namespace EmberTern.LicenseManager.ViewModels;
 /// they are about to do — the same rule EmberTern's terminology norm applies to every destructive
 /// confirmation it ships.
 /// </param>
-/// <param name="CancelLabel">The way out.</param>
+/// <param name="MessageArguments">
+/// The values <paramref name="Message"/> interpolates, in <c>{0}</c>…<c>{n}</c> order. ⭐ A recipient, a
+/// host, a file name — handed over as VALUES so the sentence stays one translatable unit.
+/// </param>
 public sealed record ConfirmRequest(
-    string Title,
-    string Message,
-    string ConfirmLabel,
-    string CancelLabel = "Cancel");
+    MessageKey Title,
+    MessageKey Message,
+    MessageKey ConfirmLabel,
+    params object?[] MessageArguments)
+{
+    /// <summary>
+    /// The way out.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ <b>Deliberately a property with an initialiser, and NOT a defaulted constructor parameter.</b>
+    /// It used to be <c>string CancelLabel = "Cancel"</c>, and a default parameter value is copied into
+    /// every caller at compile time — exactly like a <c>const</c> — so the word was pasted into all three
+    /// call sites and no lookup could ever reach it. ⭐ As a key resolved at display time it behaves like
+    /// every other word; a caller that ever needs a different way out sets this explicitly.
+    /// </remarks>
+    public MessageKey CancelLabel { get; init; } = ConfirmCatalog.Cancel;
+}
 
 /// <summary>
 /// The License Manager's confirmation dialog.
@@ -40,28 +57,44 @@ public sealed record ConfirmRequest(
 /// </summary>
 public sealed partial class ConfirmViewModel : ObservableObject
 {
+    private readonly ConfirmRequest _request;
+
     /// <summary>Creates the view model for a request.</summary>
     public ConfirmViewModel(ConfirmRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        Title = request.Title;
-        Message = request.Message;
-        ConfirmLabel = request.ConfirmLabel;
-        CancelLabel = request.CancelLabel;
+        _request = request;
+
+        // ⚠ Weak, and the handler is static — see LanguageChange.SubscribeWeak. A dialog is short-lived,
+        //   which is precisely the lifetime a static event would turn into a leak.
+        LanguageChange.SubscribeWeak(this, static dialog => dialog.RefreshWords());
     }
 
     /// <summary>The question.</summary>
-    public string Title { get; }
+    /// <remarks>
+    /// ⚠ Resolved on read, like every other word (L8.2). ⛔ Do not capture these into <c>string</c> fields
+    /// in the constructor: that is the <c>static readonly</c> failure — correct on first display, frozen
+    /// afterwards.
+    /// </remarks>
+    public string Title => Loc.Text(_request.Title.Value);
 
     /// <summary>What will happen.</summary>
-    public string Message { get; }
+    public string Message => Loc.Format(_request.Message.Value, [.. _request.MessageArguments]);
 
     /// <summary>The action's own name.</summary>
-    public string ConfirmLabel { get; }
+    public string ConfirmLabel => Loc.Text(_request.ConfirmLabel.Value);
 
     /// <summary>The way out.</summary>
-    public string CancelLabel { get; }
+    public string CancelLabel => Loc.Text(_request.CancelLabel.Value);
+
+    private void RefreshWords()
+    {
+        OnPropertyChanged(nameof(Title));
+        OnPropertyChanged(nameof(Message));
+        OnPropertyChanged(nameof(ConfirmLabel));
+        OnPropertyChanged(nameof(CancelLabel));
+    }
 
     /// <summary>
     /// What the operator chose. ⚠ <see langword="false"/> until they confirm, so every path that does not

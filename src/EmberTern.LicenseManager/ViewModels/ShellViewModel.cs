@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -9,6 +9,7 @@ using EmberTern.Licensing.Issuing;
 using EmberTern.LicenseManager.Data;
 using EmberTern.LicenseManager.Email;
 using EmberTern.LicenseManager.Services;
+using EmberTern.LicenseManager.Localization;
 
 namespace EmberTern.LicenseManager.ViewModels;
 
@@ -79,7 +80,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         Settings = _smtpStore is null ? null : new SettingsViewModel(_smtpStore);
 
         ReloadCustomers();
-        Message = StatusMessage.Info($"Signing with key {session.KeyId}.");
+        Message = StatusMessage.Info(StatusCatalog.SigningWithKey, session.KeyId);
     }
 
     // ── Views ───────────────────────────────────────────────────────────────────────────────────────
@@ -176,7 +177,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     {
         if (Browser.SelectedLicense?.Summary is not { } summary)
         {
-            Message = StatusMessage.Warning("Select a licence in the list first.");
+            Message = StatusMessage.Warning(StatusCatalog.SelectLicenceInListFirst);
             return;
         }
 
@@ -185,8 +186,9 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         {
             // Unreachable while the register is sound; CheckIntegrity reports exactly this shape.
             Message = StatusMessage.Error(
-                $"Licence {summary.License.LicenseId} names customer {summary.License.CustomerId}, " +
-                "which is not in the register.");
+                StatusCatalog.LicenceNamesUnknownCustomer,
+                summary.License.LicenseId,
+                summary.License.CustomerId);
             return;
         }
 
@@ -313,7 +315,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         //    SecondCustomerRegressionTests.
         ClearLicenseForm();
 
-        Message = StatusMessage.Info("New customer. The name is required — it is what gets signed.");
+        Message = StatusMessage.Info(StatusCatalog.NewCustomerHint);
     }
 
     /// <summary>Creates or updates the customer.</summary>
@@ -322,8 +324,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     {
         if (string.IsNullOrWhiteSpace(CustomerName))
         {
-            Message = StatusMessage.Warning(
-                "A customer name is required. It is signed into every licence and shown in their EmberTern.");
+            Message = StatusMessage.Warning(StatusCatalog.CustomerNameRequired);
             return;
         }
 
@@ -344,7 +345,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         });
 
         ReloadCustomers(saved.CustomerId);
-        Message = StatusMessage.Success($"Saved {saved.Name}.");
+        Message = StatusMessage.Success(StatusCatalog.CustomerSaved, saved.Name);
     }
 
     private void ReloadCustomers(string? selectId = null)
@@ -431,7 +432,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     {
         if (SelectedCustomer is null)
         {
-            Message = StatusMessage.Warning("Select or save a customer first.");
+            Message = StatusMessage.Warning(StatusCatalog.SelectOrSaveCustomerFirst);
             return;
         }
 
@@ -445,7 +446,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         LicenseNotes = string.Empty;
         History.Load(null);
         RefreshIssueReasons();
-        Message = StatusMessage.Info("New licence. Save the terms, then issue.");
+        Message = StatusMessage.Info(StatusCatalog.NewLicenceHint);
     }
 
     /// <summary>Creates or updates the licence terms.</summary>
@@ -454,13 +455,13 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     {
         if (SelectedCustomer is null)
         {
-            Message = StatusMessage.Warning("Select a customer first.");
+            Message = StatusMessage.Warning(StatusCatalog.SelectCustomerFirst);
             return;
         }
 
         if (!TryReadTerms(out var notBefore, out var expiresAt, out var problem))
         {
-            Message = StatusMessage.Warning(problem);
+            Message = StatusMessage.Warning(problem!.Key, [.. problem.Arguments]);
             return;
         }
 
@@ -482,7 +483,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         });
 
         ReloadLicenses(saved.LicenseId);
-        Message = StatusMessage.Success($"Saved licence {saved.LicenseId[..8]}….");
+        Message = StatusMessage.Success(StatusCatalog.LicenceSavedShort, saved.LicenseId[..8]);
     }
 
     /// <summary>
@@ -636,7 +637,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     {
         if (SelectedCustomer is null || SelectedLicense is null)
         {
-            Message = StatusMessage.Warning("Select a saved licence to issue.");
+            Message = StatusMessage.Warning(StatusCatalog.SelectSavedLicenceToIssue);
             return;
         }
 
@@ -652,13 +653,13 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         if (reason is null)
         {
             Message = StatusMessage.Warning(
-                "Choose why this licence is being issued again before signing a new artifact.");
+                StatusCatalog.ChooseIssueReasonFirst);
             return;
         }
 
         if (IssueReasonPolicy.Refuse(reason, change) is { } refusal)
         {
-            Message = StatusMessage.Warning(refusal);
+            Message = StatusMessage.Warning(refusal.Key, [.. refusal.Arguments]);
             return;
         }
 
@@ -670,14 +671,14 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         }
         catch (ArgumentException e)
         {
-            Message = StatusMessage.Error($"The licence could not be issued: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.LicenceNotIssued, e.Message);
             return;
         }
         catch (System.Security.Cryptography.CryptographicException e)
         {
             // The issuer refused to hand out an artifact it could not verify. This is a key or format
             // fault, and it is the one error here that is ours rather than the operator's.
-            Message = StatusMessage.Error(e.Message);
+            Message = StatusMessage.FromError(e, MessageSeverity.Error);
             return;
         }
 
@@ -689,21 +690,18 @@ public sealed partial class ShellViewModel : MessageHostViewModel
 
         if (path is null)
         {
-            Message = StatusMessage.Success(
-                $"Issued and recorded for {SelectedCustomer.Name}. Not saved to disk — " +
-                "it can be exported from the register at any time.");
+            Message = StatusMessage.Success(StatusCatalog.IssuedAndRecorded, SelectedCustomer.Name);
             return;
         }
 
         try
         {
             _workflow.SaveArtifact(result.Artifact, path);
-            Message = StatusMessage.Success($"Issued for {SelectedCustomer.Name} and saved to {path}.");
+            Message = StatusMessage.Success(StatusCatalog.IssuedAndSaved, SelectedCustomer.Name, path);
         }
         catch (System.IO.IOException e)
         {
-            Message = StatusMessage.Warning(
-                $"Issued and recorded, but the file could not be written: {e.Message}");
+            Message = StatusMessage.Warning(StatusCatalog.IssuedButFileNotWritten, e.Message);
         }
     }
 
@@ -713,14 +711,14 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     {
         if (SelectedLicense is null)
         {
-            Message = StatusMessage.Warning("Select a licence.");
+            Message = StatusMessage.Warning(StatusCatalog.SelectLicence);
             return;
         }
 
         var artifacts = _register.GetArtifacts(SelectedLicense.LicenseId);
         if (artifacts.Count == 0)
         {
-            Message = StatusMessage.Warning("This licence has never been issued.");
+            Message = StatusMessage.Warning(StatusCatalog.LicenceNeverIssued);
             return;
         }
 
@@ -734,7 +732,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         }
 
         _workflow.SaveArtifact(artifacts[0], path);
-        Message = StatusMessage.Success($"Exported the stored artifact to {path}.");
+        Message = StatusMessage.Success(StatusCatalog.ArtifactExported, path);
     }
 
     /// <summary>
@@ -753,14 +751,14 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     {
         if (SelectedLicense is null)
         {
-            Message = StatusMessage.Warning("Select a licence.");
+            Message = StatusMessage.Warning(StatusCatalog.SelectLicence);
             return;
         }
 
         var current = _register.GetCurrentArtifact(SelectedLicense.LicenseId);
         if (current is null)
         {
-            Message = StatusMessage.Warning("This licence has never been issued.");
+            Message = StatusMessage.Warning(StatusCatalog.LicenceNeverIssued);
             return;
         }
 
@@ -789,23 +787,21 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     {
         if (SelectedCustomer is not { } customer || SelectedLicense is not { } licence)
         {
-            Message = StatusMessage.Warning("Select a licence to send.");
+            Message = StatusMessage.Warning(StatusCatalog.SelectLicenceToSend);
             return null;
         }
 
         if (_smtpStore is null)
         {
             Message = StatusMessage.Warning(
-                "Sending e-mail is only available on Windows, because the SMTP password is protected " +
-                "with Windows DPAPI. Export the licence to a file instead.");
+                StatusCatalog.EmailIsWindowsOnly);
             return null;
         }
 
         var current = _register.GetCurrentArtifact(licence.LicenseId);
         if (current is null)
         {
-            Message = StatusMessage.Warning(
-                "This licence has never been issued, so there is no artifact to send. Issue it first.");
+            Message = StatusMessage.Warning(StatusCatalog.LicenceNeverIssuedNothingToSend);
             return null;
         }
 
@@ -816,7 +812,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         }
         catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
         {
-            Message = StatusMessage.Error($"The e-mail settings could not be read: {e.Message}");
+            Message = StatusMessage.Error(StatusCatalog.EmailSettingsNotRead, e.Message);
             return null;
         }
 
@@ -825,13 +821,14 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         {
             case SmtpSettingsState.NotConfigured:
                 Message = StatusMessage.Warning(
-                    "E-mail is not configured yet. Open Settings ▸ E-mail and enter at least a sender " +
-                    "address.");
+                    StatusCatalog.EmailNotConfigured);
                 return null;
 
             case SmtpSettingsState.Unreadable:
                 Message = StatusMessage.Error(
-                    load.Problem ?? "The e-mail settings could not be read, so nothing can be sent.");
+                    load.Problem is { } unreadable
+                        ? unreadable.Key
+                        : StatusCatalog.EmailSettingsNotReadNothingSent);
                 return null;
 
             default:
@@ -841,7 +838,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         var problems = LicenseMessageComposer.Problems(current, customer, load.Settings);
         if (problems.Count > 0)
         {
-            Message = StatusMessage.Warning(string.Join(" ", problems));
+            Message = StatusMessage.Warning(StatusCatalog.Verbatim, new LocalizedSentences(problems));
             return null;
         }
 
@@ -854,10 +851,9 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         {
             // ⚠ Not a refusal: the message can be composed and saved as a file, and an attempt to send
             //   will fail with the SERVER's own words rather than with our guess about them.
-            model.Message = StatusMessage.Warning(
-                load.Problem ??
-                "The stored SMTP password could not be read on this Windows account, so signing in will " +
-                "probably fail. Saving the message as an .eml file still works.");
+            model.Message = load.Problem is { } unreadablePassword
+                ? StatusMessage.Warning(unreadablePassword.Key, [.. unreadablePassword.Arguments])
+                : StatusMessage.Warning(StatusCatalog.SmtpPasswordUnreadableSendWillFail);
         }
 
         Message = StatusMessage.None;
@@ -882,7 +878,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     {
         if (History.SelectedArtifact is not { } selected)
         {
-            Message = StatusMessage.Warning("Select an issue from the history first.");
+            Message = StatusMessage.Warning(StatusCatalog.SelectIssueFromHistoryFirst);
             return;
         }
 
@@ -899,11 +895,11 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         {
             _workflow.SaveArtifact(selected.Artifact, path);
             Message = StatusMessage.Success(
-                $"Exported issue {selected.Ordinal} of {selected.IssuedAt} to {path}.");
+                StatusCatalog.IssueExported, selected.Ordinal, selected.IssuedAt, path);
         }
         catch (System.IO.IOException e)
         {
-            Message = StatusMessage.Warning($"The file could not be written: {e.Message}");
+            Message = StatusMessage.Warning(StatusCatalog.FileNotWritten, e.Message);
         }
     }
 
@@ -915,14 +911,14 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     // ── Helpers ─────────────────────────────────────────────────────────────────────────────────────
 
     private bool TryReadTerms(
-        out DateTimeOffset notBefore, out DateTimeOffset expiresAt, out string problem)
+        out DateTimeOffset notBefore, out DateTimeOffset expiresAt, out LocalizedText? problem)
     {
         notBefore = default;
         expiresAt = default;
 
         if (LicenseSeats < 1)
         {
-            problem = "A licence must carry at least one seat.";
+            problem = new LocalizedText(StatusCatalog.TermsSeatsRequired);
             return false;
         }
 
@@ -931,13 +927,13 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         //   can reach here: text that does not parse never becomes a SelectedDate at all.
         if (LicenseNotBefore is not { } startDate)
         {
-            problem = "A start date is required. Pick one from the calendar, or type it into the field.";
+            problem = new LocalizedText(StatusCatalog.TermsStartDateRequired);
             return false;
         }
 
         if (LicenseExpiresAt is not { } endDate)
         {
-            problem = "An expiry date is required. Pick one from the calendar, or type it into the field.";
+            problem = new LocalizedText(StatusCatalog.TermsExpiryDateRequired);
             return false;
         }
 
@@ -950,11 +946,11 @@ public sealed partial class ShellViewModel : MessageHostViewModel
 
         if (expiresAt <= notBefore)
         {
-            problem = "The expiry must be after the start date.";
+            problem = new LocalizedText(StatusCatalog.TermsExpiryMustFollowStart);
             return false;
         }
 
-        problem = string.Empty;
+        problem = null;
         return true;
     }
 

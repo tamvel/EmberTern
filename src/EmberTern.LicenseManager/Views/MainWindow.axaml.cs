@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -82,7 +82,7 @@ public sealed partial class MainWindow : Window
 
         if (DataContext is ShellViewModel shell)
         {
-            shell.Message = StatusMessage.Success($"Copied {value} to the clipboard.");
+            shell.Message = StatusMessage.Success(StatusCatalog.CopiedToClipboard, value);
         }
     }
 

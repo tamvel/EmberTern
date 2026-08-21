@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Globalization;
@@ -6,6 +6,8 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.ViewModels;
 
 namespace EmberTern.LicenseManager.Data;
 
@@ -802,9 +804,9 @@ public sealed class LicenseRegister : IDisposable
     /// warns, ⏭ and a restore (L5.5) refuses. ⛔ There is deliberately no repair — a register that quietly
     /// fixes its own history is a register whose history cannot be trusted.</para>
     /// </summary>
-    public IReadOnlyList<string> CheckIntegrity()
+    public IReadOnlyList<LocalizedText> CheckIntegrity()
     {
-        var problems = new List<string>();
+        var problems = new List<LocalizedText>();
 
         foreach (var lid in Read(
                      """
@@ -814,7 +816,7 @@ public sealed class LicenseRegister : IDisposable
                      """,
                      static reader => reader.GetString(0)))
         {
-            problems.Add($"Licence {lid} has artifacts but no current one is marked.");
+            problems.Add(new LocalizedText(StatusCatalog.IntegrityNoCurrentArtifact, lid));
         }
 
         foreach (var lid in Read(
@@ -826,7 +828,7 @@ public sealed class LicenseRegister : IDisposable
                      """,
                      static reader => reader.GetString(0)))
         {
-            problems.Add($"Licence {lid} marks a current artifact that does not belong to it.");
+            problems.Add(new LocalizedText(StatusCatalog.IntegrityCurrentNotOwned, lid));
         }
 
         // ⚠ The pointer must name the NEWEST artifact. Appending only ever moves it forward, so anything
@@ -839,7 +841,7 @@ public sealed class LicenseRegister : IDisposable
                      """,
                      static reader => reader.GetString(0)))
         {
-            problems.Add($"Licence {lid} marks an artifact that is not its newest.");
+            problems.Add(new LocalizedText(StatusCatalog.IntegrityCurrentNotNewest, lid));
         }
 
         foreach (var lid in Read(
@@ -850,7 +852,7 @@ public sealed class LicenseRegister : IDisposable
                      """,
                      static reader => reader.GetString(0)))
         {
-            problems.Add($"Licence {lid} belongs to a customer that is not in the register.");
+            problems.Add(new LocalizedText(StatusCatalog.IntegrityCustomerMissing, lid));
         }
 
         return problems;

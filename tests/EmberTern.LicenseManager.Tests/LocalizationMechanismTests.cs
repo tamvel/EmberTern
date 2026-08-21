@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -10,6 +10,7 @@ using System.Xml.Linq;
 using EmberTern.LicenseManager.Email;
 using EmberTern.LicenseManager.Localization;
 using EmberTern.LicenseManager.Settings;
+using EmberTern.LicenseManager.ViewModels;
 using Xunit;
 
 namespace EmberTern.LicenseManager.Tests;
@@ -125,8 +126,87 @@ public sealed class LocalizationMechanismTests
     {
         var found = Catalogs().Select(c => c.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
 
-        Assert.Equal([nameof(ManagerSettingsCatalog)], found);
+        // ⚠ Updated deliberately by L8.2, which added the two catalogs the message strip and the
+        //   confirmation dialog resolve through. ⛔ This list is a TRIPWIRE, not bookkeeping: a new catalog
+        //   must fail here and be added on purpose, because a catalog nobody swept is a catalog nobody
+        //   guards.
+        Assert.Equal(
+            [nameof(ConfirmCatalog), nameof(ManagerSettingsCatalog), nameof(StatusCatalog)],
+            found);
+
         Assert.NotEmpty(WordProperties(typeof(ManagerSettingsCatalog)));
+        Assert.NotEmpty(KeyProperties(typeof(StatusCatalog)));
+        Assert.NotEmpty(KeyProperties(typeof(ConfirmCatalog)));
+    }
+
+    /// <summary>
+    /// ⭐⭐ Every <see cref="MessageKey"/> a catalog offers names an entry that ACTUALLY EXISTS.
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠⚠ <b>This is the guard L8.2 could not have shipped without, and the reason is a trap the
+    /// design walks straight past.</b> <see cref="Loc.Text"/> answers a missing key with THE KEY ITSELF.
+    /// Had the migration left a sentence sitting where a key belongs — or had a key been mistyped — the
+    /// catalog would have returned that text and the window would have rendered it perfectly. Every
+    /// existing assertion would have stayed green while nothing was localized at all.</para>
+    /// <para>⭐ So the question asked here is not "does it resolve to something", it is "is there an ENTRY":
+    /// <see cref="Loc.Find"/> answers <see langword="null"/> for a missing key, which is the only signal
+    /// that distinguishes a real translation from the fallback.</para>
+    /// <para>⚠ It sweeps the catalogs by reflection, so a key added tomorrow is covered without editing
+    /// this test — and <see cref="TheCatalogs_AreActuallyFound"/> stops the sweep from silently going
+    /// empty.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryMessageKey_NamesARealCatalogEntry()
+    {
+        var missing = new List<string>();
+        var swept = 0;
+
+        foreach (var catalog in Catalogs())
+        {
+            var prefix = catalog.GetCustomAttribute<StringCatalogAttribute>()!.KeyPrefix;
+
+            foreach (var member in KeyProperties(catalog))
+            {
+                swept++;
+                var key = (MessageKey)member.GetValue(null)!;
+
+                // ⭐ The member name IS the key's tail — a mismatch means the two are being kept in step
+                //    by hand, which is the fact that goes stale (#284).
+                Assert.Equal(prefix + member.Name, key.Value);
+
+                if (Loc.Find(key.Value) is null)
+                {
+                    missing.Add($"{catalog.Name}.{member.Name} → '{key.Value}'");
+                }
+            }
+        }
+
+        Assert.True(swept > 0, "No MessageKey members were found — the sweep is measuring nothing.");
+
+        Assert.True(
+            missing.Count == 0,
+            "These keys have no entry in Strings.resx. Loc.Text answers a missing key with the key "
+            + "itself, so the application would render the key and no other test would notice:\n  "
+            + string.Join("\n  ", missing));
+    }
+
+    /// <summary>⛔ No catalog key is a field either — same reasoning as <see cref="NoCatalogWord_IsAField"/>.</summary>
+    /// <remarks>
+    /// ⚠ A <c>static readonly MessageKey</c> would be harmless TODAY, because a key does not move with the
+    /// language. ⭐ It is still forbidden: the value of one rule for both catalogs is that no reader has to
+    /// work out which kind of member they are looking at, and a <c>MessageKey</c> field is one refactor
+    /// away from becoming a resolved string.
+    /// </remarks>
+    [Fact]
+    public void NoCatalogKey_IsAField()
+    {
+        var fields = Catalogs()
+            .SelectMany(c => c.GetFields(BindingFlags.Public | BindingFlags.Static)
+                .Where(f => f.FieldType == typeof(MessageKey))
+                .Select(f => $"{c.Name}.{f.Name}"))
+            .ToArray();
+
+        Assert.Empty(fields);
     }
 
     /// <summary>⛔ Two catalogs must never share a prefix — the split exists to keep their keys apart.</summary>
@@ -430,6 +510,20 @@ public sealed class LocalizationMechanismTests
     private static IReadOnlyList<PropertyInfo> WordProperties(Type catalog) =>
         catalog.GetProperties(BindingFlags.Public | BindingFlags.Static)
             .Where(p => p.PropertyType == typeof(string) && p.GetMethod is not null)
+            .ToList();
+
+    /// <summary>
+    /// Every public static <see cref="MessageKey"/> property on a catalog — i.e. its deferred sentences.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ A separate sweep from <see cref="WordProperties"/> ON PURPOSE, and the reason is a near miss:
+    /// that helper filters on <c>typeof(string)</c>, so when L8.2 added catalogs whose members are
+    /// <see cref="MessageKey"/>, every existing guard skipped them IN SILENCE — 143 keys that looked
+    /// guarded and were not. ⭐ A filter that quietly matches nothing is the shape to distrust.
+    /// </remarks>
+    private static IReadOnlyList<PropertyInfo> KeyProperties(Type catalog) =>
+        catalog.GetProperties(BindingFlags.Public | BindingFlags.Static)
+            .Where(p => p.PropertyType == typeof(MessageKey) && p.GetMethod is not null)
             .ToList();
 
     /// <summary>The English base's entries, read from the .resx itself rather than through the catalog.</summary>

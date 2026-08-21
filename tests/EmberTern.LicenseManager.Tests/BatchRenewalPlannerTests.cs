@@ -71,7 +71,7 @@ public sealed class BatchRenewalPlannerTests
 
         var candidate = Candidate(plan, "lid-1");
         Assert.False(candidate.Qualifies);
-        Assert.Contains("would not extend it", candidate.Blocker);
+        Assert.Contains("would not extend it", candidate.Blocker!.ToString());
         Assert.False(plan.CanExecute);
     }
 
@@ -85,7 +85,7 @@ public sealed class BatchRenewalPlannerTests
 
         var candidate = Candidate(plan, "lid-1");
         Assert.False(candidate.Qualifies);
-        Assert.Contains("start date", candidate.Blocker);
+        Assert.Contains("start date", candidate.Blocker!.ToString());
     }
 
     [Fact]
@@ -137,7 +137,7 @@ public sealed class BatchRenewalPlannerTests
         //   still refuses, because the artifact the customer holds already expires exactly then.
         var candidate = Candidate(plan, "lid-1");
         Assert.False(candidate.Qualifies);
-        Assert.Contains("has not moved", candidate.Blocker);
+        Assert.Contains("has not moved", candidate.Blocker!.ToString());
     }
 
     [Fact]

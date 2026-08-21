@@ -170,16 +170,17 @@ public sealed partial class SendLicenceViewModel : MessageHostViewModel
 
         if (Confirm is null)
         {
-            Message = StatusMessage.Warning(
-                "This action needs a confirmation and none could be shown, so nothing was sent.");
+            Message = StatusMessage.Warning(StatusCatalog.ConfirmationUnavailableNothingSent);
             return;
         }
 
         var confirmed = await Confirm(new ConfirmRequest(
-            "Send this licence?",
-            $"The message and {Composed.AttachmentFileName} will be sent to {Composed.ToAddress} " +
-            $"through {_settings.Host}. This cannot be recalled.",
-            "Send")).ConfigureAwait(true);
+            ConfirmCatalog.SendLicenceTitle,
+            ConfirmCatalog.SendLicenceMessage,
+            ConfirmCatalog.SendLicenceAction,
+            Composed.AttachmentFileName,
+            Composed.ToAddress,
+            _settings.Host)).ConfigureAwait(true);
 
         if (!confirmed)
         {
@@ -188,7 +189,7 @@ public sealed partial class SendLicenceViewModel : MessageHostViewModel
         }
 
         IsSending = true;
-        Message = StatusMessage.Info($"Sending to {Composed.ToAddress}…");
+        Message = StatusMessage.Info(StatusCatalog.SendingTo, Composed.ToAddress);
 
         SendOutcome outcome;
         try
@@ -202,7 +203,7 @@ public sealed partial class SendLicenceViewModel : MessageHostViewModel
             // The sender refused to be built at all — settings with no host. ⚠ Not a delivery failure, so
             // it is not recorded as one.
             IsSending = false;
-            Message = StatusMessage.Warning(e.Message);
+            Message = StatusMessage.FromError(e, MessageSeverity.Warning);
             return;
         }
         finally
@@ -213,15 +214,12 @@ public sealed partial class SendLicenceViewModel : MessageHostViewModel
         if (outcome.Sent)
         {
             IsSent = true;
-            Message = StatusMessage.Success(
-                $"Sent to {Composed.ToAddress} through {outcome.Delivered}. Recorded in the audit log.");
+            Message = StatusMessage.Success(StatusCatalog.SentThrough, Composed.ToAddress, outcome.Delivered);
             return;
         }
 
         // ⚠ The server's own words, and the way out beside them — §14.1's rule for a failed send.
-        Message = StatusMessage.Error(
-            $"The message was not sent: {outcome.Error} The attempt is recorded in the audit log. " +
-            "You can save the message as an .eml file and send it from your own mail client instead.");
+        Message = StatusMessage.Error(StatusCatalog.MessageNotSent, outcome.Error);
     }
 
     /// <summary>
@@ -241,7 +239,7 @@ public sealed partial class SendLicenceViewModel : MessageHostViewModel
 
         if (SaveFilePicker is null)
         {
-            Message = StatusMessage.Warning("No place to save was offered, so nothing was written.");
+            Message = StatusMessage.Warning(StatusCatalog.NoSaveLocationOffered);
             return;
         }
 
@@ -258,10 +256,8 @@ public sealed partial class SendLicenceViewModel : MessageHostViewModel
             .ConfigureAwait(true);
 
         Message = outcome.Sent
-            ? StatusMessage.Success(
-                $"Saved to {outcome.Delivered}. Open it in your mail client and send it — the licence is " +
-                "attached and the message is ready.")
-            : StatusMessage.Error($"The file could not be written: {outcome.Error}");
+            ? StatusMessage.Success(StatusCatalog.MessageSavedToFile, outcome.Delivered)
+            : StatusMessage.Error(StatusCatalog.FileNotWritten, outcome.Error);
     }
 
     /// <summary>Closes the window.</summary>

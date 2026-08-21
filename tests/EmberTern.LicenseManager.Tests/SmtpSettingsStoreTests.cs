@@ -99,7 +99,7 @@ public sealed class SmtpSettingsStoreTests : IDisposable
         var load = _store.Load();
 
         Assert.Equal(SmtpSettingsState.Unreadable, load.State);
-        Assert.Contains("newer", load.Problem, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("newer", load.Problem!.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

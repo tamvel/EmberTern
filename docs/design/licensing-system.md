@@ -4224,3 +4224,175 @@ proof of zero change is the existing assertions staying green, not a re-reading 
 ⏭ Then **L8.3** (146 XAML literals), **L8.4** (≈300 C# texts, the nine counted sentences, and §53.6's two
 obligations), **L8.5** (the Polish, and the moment the Application-language picker is enabled), **L8.6**
 (QA in EN/PL × Dark/Light).
+
+---
+
+## 55. L8.2 — `StatusMessage` as key + arguments, as built (2026-08-21)
+
+> **State: ✅ ACCEPTED — the user's QA, 2026-08-21.** ⛔ L8 as a whole is NOT closed: L8.3 … L8.6 remain.
+> ⚠ There was deliberately nothing to look at: L8.2's visible effect is *zero*, and that is the acceptance
+> criterion rather than a shortcoming — which is why acceptance rested on the mechanical proof in §55.8
+> rather than on a screen.
+
+⭐⭐ **The contract changed, and 104 call sites followed it.** `StatusMessage(string Text, MessageSeverity)`
+became **key + arguments + severity**, resolved at the moment of the read (ratified decision **D‑2 = B**).
+A message already on the strip now follows a language change instead of freezing in the language it was
+raised in — the defect the product still carries in Data Import (#353), removed here before any Polish
+exists to expose it.
+
+### 55.1 ⭐⭐ The type that made the migration safe, and why it is not a `string`
+
+`MessageKey` is a `readonly record struct` with **no implicit conversion from `string`**, which is the
+single most important decision in this sub-stage. ⚠⚠ Had the key stayed a `string`, every one of the 104
+call sites would have gone on compiling with the SENTENCE sitting where the key belongs — and `Loc.Text`
+answers a missing entry **with the key itself**, so each of them would have rendered *perfectly*. The
+application would have looked untouched, every existing assertion would have stayed green, and nothing
+would have been localized.
+
+⭐ Instead the old shape stopped compiling: **226 errors across the 104 sites**, and the compiler became the
+worklist. ⛔ Do not add that conversion later "for convenience"; it hands the failure mode straight back.
+
+The runtime half of the same guard is `EveryMessageKey_NamesARealCatalogEntry`, which asks `Loc.Find`
+(null on a miss) rather than `Loc.Text` (never null) — the only call that distinguishes a real entry from
+the fallback.
+
+### 55.2 The measured shape, and what each part cost
+
+| | |
+|---|---|
+| `StatusMessage.*` call sites | **104** in 8 files — 32 pure literals · 44 interpolated · 7 concatenated · **21 expressions** |
+| Distinct sentences behind them | **77** (73 after four cross-file duplicates were given one home) |
+| Sites putting `ex.Message` on the strip | **23** in 6 view models |
+| `ConfirmRequest` call sites | **3** |
+| Catalog entries after the stage | **11 → 160** (`Status.` 143 · `Confirm.` 10 · the L8.1 `Settings.` 11 and the plural rule set) |
+
+### 55.3 ⚠⚠ The 23 exception sites are not one problem — the classification was re-measured
+
+The hand-off's *"7 of the 23 surface our own sentence"* came from a **heuristic** over `catch` types, and it
+did not survive inspection. Read properly, the 23 split:
+
+- **11 foreign** (`IOException`, `UnauthorizedAccessException`, `CryptographicException`) — their words
+  belong to Windows or to the server. ⭐ Correct as ARGUMENTS to our keys, and that is not debt.
+- **5 catch-all** filters — same treatment.
+- ⭐ **3 sites, from exactly 2 throw sites**, print OUR OWN sentence *unframed*: `SigningSession.Create`'s
+  keystore refusal and `SmtpLicenseEmailSender`'s no-host refusal. Those two now throw
+  `LocalizedOperationException` / `LocalizedArgumentException` (`ILocalizedError`), and the catch sites call
+  `StatusMessage.FromError`.
+- The remainder were never exception messages at all: they were **our own composed strings** (`Explain`,
+  `load.Problem`, `Validate()`'s list, `IssueReasonPolicy.Refuse`) — decision **P2**, not P1.
+
+⭐ **`StatusMessage.FromError` is the ONE seam** where an exception becomes a line: an `ILocalizedError`
+resolves by KEY, anything else travels as the single argument of `Status.Verbatim` (`"{0}"`).
+⛔ `Status.Verbatim` is not a sentence and must never grow into one.
+
+### 55.4 ⚠ One scope expansion, forced by measurement — `RestoreRefusedException`
+
+P1 was ratified narrowly ("⛔ do not move the whole exception system"). One type had to go further anyway:
+`RestoreRefusedException`'s sentence reaches the strip through `Explain`, and **the obvious cheap fix —
+keying off its `RestoreRefusal` enum — would have CHANGED what the operator reads.** Measured: three enum
+values cover more than one sentence each (`ActiveRegisterIsStillOpen` two, `RestoredRegisterFailedFinalCheck`
+two, `TargetIsNotUsable` three), so an enum→key map silently collapses 12 throw sites into 8 sentences.
+
+⭐ So the exception carries its own `MessageKey` (12 throw sites, one file) and the enum is untouched: the
+enum answers *"what should the surface DO"*, the key answers *"what does it SAY"*. ⛔ Every other exception
+in the application kept its plain type.
+
+### 55.5 ⭐ `LocalizedText` — a sentence carried as a value, and the mechanism that makes it free
+
+Two lines are assembled from a **variable number** of our own sentences (the SMTP form reports every
+validation problem at once; the register reports every integrity disagreement at once), so no single key can
+express them. `LocalizedText` holds a key plus arguments and resolves in its `ToString`.
+
+⭐⭐ **Why that is enough: `string.Format` calls `ToString()` on its arguments AT FORMAT TIME.** Because
+`StatusMessage.Text` formats on every read, an argument that resolves in `ToString` resolves on every read
+too — live sentences nested inside a live sentence, with no second notification path and no new machinery.
+⛔ It is not licence to hand the catalog half a sentence: every element is complete, only the COUNT varies.
+
+### 55.6 ⭐ P2 in practice — a fragment that reaches the strip is L8.2's
+
+`BlockerSummary` and the batch result were built by concatenating a singular/plural opener and an optional
+clause onto a shared tail. Each combination now carries its **whole sentence** — 2 keys and 4 keys
+respectively — because word order is the translator's decision and Polish does not place the clause where
+English does. ⏭ **L8.5 folds the count pairs into plural families**; they cannot be families here, because a
+family changes the English and L8.2 may not.
+
+### 55.7 ⭐ P4 — the subscription is WEAK, and the signature enforces it
+
+`Loc.LanguageChanged` is a **static** event, i.e. a GC root. Four of the five message hosts live as long as
+the window and would have hidden the leak; **`SendLicenceViewModel` is rebuilt on every send**, so the
+operator would accumulate one dead view model per licence sent. `LanguageChange.SubscribeWeak(target,
+handler)` holds the target weakly, and the handler is passed as a **`static` lambda** — a closure over the
+subscriber would defeat the whole point, and `static` makes that a compile error rather than a leak nobody
+notices. Proved by `AShortLivedHost_IsNotKeptAliveByItsSubscription`.
+
+### 55.8 ⭐⭐ How "not one word changed" was PROVED, rather than reviewed
+
+⛔ Not by reading. Two mechanical instruments, both in the session scratchpad:
+
+1. **Generation, not transcription.** All 73 first-pass catalog values were written into `Strings.resx` by a
+   script reading `git show f72b7b0:<file>` and normalising interpolation holes to `{0}`…`{n}`. ⭐ A human
+   copying 77 sentences is exactly how one of them changes; none was ever retyped.
+2. **A whole-tree match.** Every string literal in the License Manager at `f72b7b0` was harvested
+   (concatenations composed, holes normalised) — **976 literals** — and every catalog value checked against
+   that set: **145 of 153 matched verbatim.**
+
+⚠ The 8 that could not match are the run-time-assembled ones from §55.6 plus `Status.Verbatim`, and they are
+pinned by name and expected text in `AnAssembledSentence_StillReadsExactlyAsItDidBefore` — written out in
+full on purpose, because a reconstruction sharing code with its subject proves nothing.
+
+### 55.9 The guards — eight injections, eight reds, all reverted
+
+| Injection | Red |
+|---|---|
+| ⭐⭐ `StatusMessage.Text` cached in a field | `AStandingMessage_FollowsALanguageChange` + `OurOwnExceptionSentence_ResolvesRatherThanBeingPrinted` |
+| a key deleted from `Strings.resx` | `EveryMessageKey_NamesARealCatalogEntry` |
+| a foreign `ex.Message` used AS the key | `AForeignExceptionMessage_TravelsAsAnArgumentAndNotAsAKey` |
+| `string CancelWord = "Cancel"` back on the record's constructor | `NoMember_HasADefaultedWord` |
+| `.Message` placed where a key belongs | `NoViewModel_PutsAnExceptionMessageWhereAKeyBelongs` |
+| an assembled sentence reworded | `AnAssembledSentence_StillReadsExactlyAsItDidBefore` |
+| the weak subscription made STRONG | `AShortLivedHost_IsNotKeptAliveByItsSubscription` |
+| the subscription removed | `TheStrip_AnnouncesThatItsTextChanged` |
+
+⭐ **A guard was widened because an injection did NOT fire it.** `NoMessageType_HasADefaultedWord` inspected
+three types' constructors, so a defaulted word on a plain METHOD passed. It now sweeps **every constructor
+and method in the assembly** and asserts the sweep is non-empty; measured across the whole assembly it needs
+**no exemptions**, which is the honest reason to prefer the wide rule.
+
+⚠ `TheCatalogs_AreActuallyFound` went red on purpose and was updated by hand: the catalog list is a
+**tripwire**, not bookkeeping. ⭐ And `WordProperties` filters on `typeof(string)`, so the new
+`MessageKey` catalogs were **silently unswept** by every existing guard — 143 keys that looked guarded and
+were not. `KeyProperties` is the separate sweep; a filter that quietly matches nothing is the shape to
+distrust.
+
+### 55.10 ⛔ What L8.2 deliberately did NOT do
+
+⛔ No Polish (L8.5). ⛔ The Application-language picker stays DISABLED — D‑8 stands. ⛔ No plural FAMILY, and
+no `(s)` hedge resolved (P3, L8.5). ⛔ No XAML migration (L8.3) and no sweep of the ≈300 remaining C# texts
+(L8.4) — only the fragments that reach `StatusMessage`. ⛔ `MessageLanguage`, SMTP, the senders, DPAPI, the
+cryptography and the `.etlic` format untouched. ⛔ Nothing in `EmberTern.App` or the product; the product's
+suite was not run because no product file was touched. ⛔ L7 untouched.
+
+⏭ **Out of scope and recorded rather than done:** `PreviewSummary` and the licence-form captions are direct
+XAML-bound strings and belong to L8.3/L8.4; `LicenseMessageComposer.Compose`'s internal
+`InvalidOperationException` sentence is a developer-facing refusal, not a strip message.
+
+### 55.11 Verification
+
+- ✅ Build **0 warnings / 0 errors** — **Debug** and **Release**.
+- ✅ **705 / 705** — 0 failed, 0 skipped (**685** before L8.2, **+20**).
+- ✅ **Eight defect injections, eight reds**, all reverted and re-verified green.
+- ✅ **145 / 153** catalog values matched a pre-migration literal verbatim; the other 8 pinned by test.
+- ✅ **Zero files touched** outside `src/EmberTern.LicenseManager` and its test project.
+- ⚠ **Not seen running**, and that is correct here: L8.2's visible effect is deliberately nothing. Visual QA
+  in EN/PL × Dark/Light is **L8.6** and is not meaningful before a translation exists.
+
+### 55.12 ⏭ Hand-off to L8.3
+
+**L8.3 is the 146 XAML literals.** ⭐ The mechanism it needs already exists and is proven: `{lm:Loc Key}`
+returns a real `Binding` (L8.1 §54.3), and this stage added no XAML at all — so L8.3 is a migration with no
+design left to settle.
+
+⚠ Two things L8.3 should know. **`Blocker` on a batch row is now a `LocalizedText`** projected to a string by
+the row view model; the preview grid is rebuilt on every tick, so it needs no notification — but a grid that
+ever stops rebuilding does. And **`ProtectionNote` is already on the catalog** (it was a fallback message as
+well as a bound label), so it is one fewer literal than the count suggests.

@@ -2,6 +2,8 @@ using System;
 using System.IO;
 using EmberTern.Licensing;
 using EmberTern.Licensing.Issuing;
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.ViewModels;
 
 namespace EmberTern.LicenseManager.Services;
 
@@ -45,7 +47,11 @@ public sealed class SigningSession : IDisposable
 
         if (paths.HasKeyStore)
         {
-            throw new InvalidOperationException(
+            // ⚠ A LOCALIZED refusal: this sentence is OURS and the operator reads it verbatim on the
+            //   unlock window's strip, so it carries its catalog key. The English below is for a
+            //   debugger, never for the screen (L8.2 / ILocalizedError).
+            throw new LocalizedOperationException(
+                StatusCatalog.KeystoreAlreadyExists,
                 "A keystore already exists. Creating a second signing key would leave every licence " +
                 "already issued unrenewable.");
         }

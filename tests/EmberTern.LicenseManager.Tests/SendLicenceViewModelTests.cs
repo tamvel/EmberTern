@@ -143,9 +143,15 @@ public sealed class SendLicenceViewModelTests : IDisposable
         await model.SendCommand.ExecuteAsync(null);
 
         Assert.NotNull(asked);
-        Assert.Contains("biuro@acme.test", asked!.Message, StringComparison.Ordinal);
-        Assert.Contains("EmberTern.etlic", asked.Message, StringComparison.Ordinal);
-        Assert.Equal("Send", asked.ConfirmLabel);
+
+        // ⭐ Read through the view model that renders the request. Since L8.2 the request carries KEYS and
+        //   the recipient and file name are ARGUMENTS, so resolving is the only way to prove they still
+        //   reach the sentence the operator is shown.
+        var words = new ConfirmViewModel(asked!);
+
+        Assert.Contains("biuro@acme.test", words.Message, StringComparison.Ordinal);
+        Assert.Contains("EmberTern.etlic", words.Message, StringComparison.Ordinal);
+        Assert.Equal("Send", words.ConfirmLabel);
     }
 
     // ── Sending ─────────────────────────────────────────────────────────────────────────────────────

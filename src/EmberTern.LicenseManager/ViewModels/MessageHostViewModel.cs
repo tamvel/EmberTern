@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using EmberTern.LicenseManager.Localization;
 
 namespace EmberTern.LicenseManager.ViewModels;
 
@@ -9,9 +10,25 @@ namespace EmberTern.LicenseManager.ViewModels;
 /// their own <c>IsError</c> is exactly how the "locally styled coloured TextBlock" problem starts, one
 /// harmless-looking duplication at a time — which is the reason EmberTern has a single
 /// <c>MessageBanner</c> rather than 23 message surfaces.</para>
+///
+/// <para>⭐⭐ <b>It is also the ONE place a standing message learns that the language changed</b> (L8.2).
+/// <see cref="StatusMessage"/> holds a key and its arguments, so the words already follow the language —
+/// but a binding is only re-read when something says so, and nothing about switching languages touches this
+/// view model's own properties. ⚠ Without the line below the strip keeps rendering the old language while
+/// every other word in the window has changed, and no binding error is raised: that is defect #353's exact
+/// shape in the product's Data Import, one layer earlier.</para>
 /// </summary>
 public abstract partial class MessageHostViewModel : ObservableObject
 {
+    /// <summary>Wires the strip to the language.</summary>
+    /// <remarks>
+    /// ⚠⚠ The subscription is WEAK and the handler is a <c>static</c> lambda, because
+    /// <c>Loc.LanguageChanged</c> is a static event and would otherwise root every host forever —
+    /// <c>SendLicenceViewModel</c> is rebuilt on every send. See <see cref="LanguageChange.SubscribeWeak"/>.
+    /// </remarks>
+    protected MessageHostViewModel() =>
+        LanguageChange.SubscribeWeak(this, static host => host.OnPropertyChanged(nameof(MessageText)));
+
     /// <summary>The current message, or <see langword="null"/> when there is nothing to say.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasMessage))]

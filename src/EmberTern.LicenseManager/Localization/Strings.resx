@@ -68,4 +68,463 @@
   <data name="Settings.SecurityNone" xml:space="preserve">
     <value>No encryption — internal relay only</value>
   </data>
+  <data name="Status.SigningWithKey" xml:space="preserve">
+    <value>Signing with key {0}.</value>
+  </data>
+  <data name="Status.SelectLicenceInListFirst" xml:space="preserve">
+    <value>Select a licence in the list first.</value>
+  </data>
+  <data name="Status.LicenceNamesUnknownCustomer" xml:space="preserve">
+    <value>Licence {0} names customer {1}, which is not in the register.</value>
+  </data>
+  <data name="Status.NewCustomerHint" xml:space="preserve">
+    <value>New customer. The name is required — it is what gets signed.</value>
+  </data>
+  <data name="Status.CustomerNameRequired" xml:space="preserve">
+    <value>A customer name is required. It is signed into every licence and shown in their EmberTern.</value>
+  </data>
+  <data name="Status.CustomerSaved" xml:space="preserve">
+    <value>Saved {0}.</value>
+  </data>
+  <data name="Status.SelectOrSaveCustomerFirst" xml:space="preserve">
+    <value>Select or save a customer first.</value>
+  </data>
+  <data name="Status.NewLicenceHint" xml:space="preserve">
+    <value>New licence. Save the terms, then issue.</value>
+  </data>
+  <data name="Status.SelectCustomerFirst" xml:space="preserve">
+    <value>Select a customer first.</value>
+  </data>
+  <data name="Status.LicenceSaved" xml:space="preserve">
+    <value>Saved licence {0}….</value>
+  </data>
+  <data name="Status.SelectSavedLicenceToIssue" xml:space="preserve">
+    <value>Select a saved licence to issue.</value>
+  </data>
+  <data name="Status.ChooseIssueReasonFirst" xml:space="preserve">
+    <value>Choose why this licence is being issued again before signing a new artifact.</value>
+  </data>
+  <data name="Status.LicenceNotIssued" xml:space="preserve">
+    <value>The licence could not be issued: {0}</value>
+  </data>
+  <data name="Status.IssuedAndRecorded" xml:space="preserve">
+    <value>Issued and recorded for {0}. Not saved to disk — it can be exported from the register at any time.</value>
+  </data>
+  <data name="Status.IssuedAndSaved" xml:space="preserve">
+    <value>Issued for {0} and saved to {1}.</value>
+  </data>
+  <data name="Status.IssuedButFileNotWritten" xml:space="preserve">
+    <value>Issued and recorded, but the file could not be written: {0}</value>
+  </data>
+  <data name="Status.SelectLicence" xml:space="preserve">
+    <value>Select a licence.</value>
+  </data>
+  <data name="Status.LicenceNeverIssued" xml:space="preserve">
+    <value>This licence has never been issued.</value>
+  </data>
+  <data name="Status.ArtifactExported" xml:space="preserve">
+    <value>Exported the stored artifact to {0}.</value>
+  </data>
+  <data name="Status.SelectLicenceToSend" xml:space="preserve">
+    <value>Select a licence to send.</value>
+  </data>
+  <data name="Status.EmailIsWindowsOnly" xml:space="preserve">
+    <value>Sending e-mail is only available on Windows, because the SMTP password is protected with Windows DPAPI. Export the licence to a file instead.</value>
+  </data>
+  <data name="Status.LicenceNeverIssuedNothingToSend" xml:space="preserve">
+    <value>This licence has never been issued, so there is no artifact to send. Issue it first.</value>
+  </data>
+  <data name="Status.EmailSettingsNotRead" xml:space="preserve">
+    <value>The e-mail settings could not be read: {0}</value>
+  </data>
+  <data name="Status.EmailNotConfigured" xml:space="preserve">
+    <value>E-mail is not configured yet. Open Settings ▸ E-mail and enter at least a sender address.</value>
+  </data>
+  <data name="Status.SelectIssueFromHistoryFirst" xml:space="preserve">
+    <value>Select an issue from the history first.</value>
+  </data>
+  <data name="Status.IssueExported" xml:space="preserve">
+    <value>Exported issue {0} of {1} to {2}.</value>
+  </data>
+  <data name="Status.FileNotWritten" xml:space="preserve">
+    <value>The file could not be written: {0}</value>
+  </data>
+  <data name="Status.BackupPassphraseHint" xml:space="preserve">
+    <value>Use a long passphrase for the backup — six generated words, kept in a password manager. It cannot be reset, and a backup nobody can open is not a backup.</value>
+  </data>
+  <data name="Status.PassphrasesDoNotMatch" xml:space="preserve">
+    <value>The two passphrases do not match.</value>
+  </data>
+  <data name="Status.BackupWritten" xml:space="preserve">
+    <value>Encrypted backup written to {0} — {1} customer(s), {2} licence(s), {3} artifact(s) and {4} audit entries, verified row for row against the register.</value>
+  </data>
+  <data name="Status.BackupNotWritten" xml:space="preserve">
+    <value>The backup could not be written: {0}</value>
+  </data>
+  <data name="Status.JsonlExportWritten" xml:space="preserve">
+    <value>Plain JSONL export written to {0} — {1} line(s). ⛔ NOT encrypted: it carries every issued licence token in readable form. It is a diagnostic escape hatch, not a backup.</value>
+  </data>
+  <data name="Status.ExportNotWritten" xml:space="preserve">
+    <value>The export could not be written: {0}</value>
+  </data>
+  <data name="Status.RegisterNotClosed" xml:space="preserve">
+    <value>The register could not be closed, so it was not replaced. Nothing has been changed.</value>
+  </data>
+  <data name="Status.RegisterReplaced" xml:space="preserve">
+    <value>The active register was replaced — {0} customer(s), {1} licence(s), {2} artifact(s) and {3} audit entries, verified again after it was written. ⭐ Your previous register was kept as {4}. The License Manager will now close — start it again to use the restored register.</value>
+  </data>
+  <data name="Status.RestoredElsewhere" xml:space="preserve">
+    <value>Restored into {0} — {1} customer(s), {2} licence(s), {3} artifact(s) and {4} audit entries, and it passes the integrity check. ⭐ {5} was not changed.</value>
+  </data>
+  <data name="Status.BackupNotRead" xml:space="preserve">
+    <value>That backup could not be read: {0}</value>
+  </data>
+  <data name="Status.BackupInspected" xml:space="preserve">
+    <value>That backup was taken on {0} UTC (register schema {1}). Enter its passphrase to restore it.</value>
+  </data>
+  <data name="Status.DataFolderNotOpened" xml:space="preserve">
+    <value>The data folder could not be opened: {0}</value>
+  </data>
+  <data name="Status.EmailSettingsNotSaved" xml:space="preserve">
+    <value>The e-mail settings could not be saved: {0}</value>
+  </data>
+  <data name="Status.SettingsReloaded" xml:space="preserve">
+    <value>Reloaded the saved settings.</value>
+  </data>
+  <data name="Status.ConfirmationUnavailableNothingChanged" xml:space="preserve">
+    <value>This action needs a confirmation and none could be shown, so nothing was changed.</value>
+  </data>
+  <data name="Status.EmailSettingsNotDeleted" xml:space="preserve">
+    <value>The e-mail settings could not be deleted: {0}</value>
+  </data>
+  <data name="Status.EmailNoLongerConfigured" xml:space="preserve">
+    <value>E-mail is no longer configured.</value>
+  </data>
+  <data name="Status.NotAnEmailAddress" xml:space="preserve">
+    <value>'{0}' does not look like an e-mail address. Enter the address the test message should arrive at.</value>
+  </data>
+  <data name="Status.NoSmtpHostToTest" xml:space="preserve">
+    <value>There is no SMTP host to test. Enter a server above — file delivery needs no test, because it never contacts anything.</value>
+  </data>
+  <data name="Status.ConfirmationUnavailableNothingSent" xml:space="preserve">
+    <value>This action needs a confirmation and none could be shown, so nothing was sent.</value>
+  </data>
+  <data name="Status.SendingTestMessage" xml:space="preserve">
+    <value>Sending a test message to {0}…</value>
+  </data>
+  <data name="Status.TestEmailSent" xml:space="preserve">
+    <value>Test email sent successfully to {0} through {1}. The SMTP configuration works.</value>
+  </data>
+  <data name="Status.TestMessageNotSent" xml:space="preserve">
+    <value>The test message could not be sent: {0} The SMTP configuration on this page did not work — check the host, the port, the transport security and the sign-in details.</value>
+  </data>
+  <data name="Status.EnterKeystorePassphrase" xml:space="preserve">
+    <value>Enter the keystore passphrase.</value>
+  </data>
+  <data name="Status.PassphraseDoesNotOpenKeystore" xml:space="preserve">
+    <value>That passphrase does not open the keystore. Check it and try again.</value>
+  </data>
+  <data name="Status.NotAKeystore" xml:space="preserve">
+    <value>The file at {0} is not an EmberTern keystore.</value>
+  </data>
+  <data name="Status.KeystoreFromNewerBuild" xml:space="preserve">
+    <value>The keystore was written by a newer License Manager. Update this application.</value>
+  </data>
+  <data name="Status.KeystoreDamaged" xml:space="preserve">
+    <value>The keystore is damaged. Restore it from an offline backup and verify the restore.</value>
+  </data>
+  <data name="Status.KeystoreNotOpened" xml:space="preserve">
+    <value>The keystore could not be opened ({0}).</value>
+  </data>
+  <data name="Status.KeystoreNotRead" xml:space="preserve">
+    <value>The keystore could not be read: {0}</value>
+  </data>
+  <data name="Status.KeyIdRequired" xml:space="preserve">
+    <value>A key id is required — it travels in every licence.</value>
+  </data>
+  <data name="Status.NewKeyPassphraseHint" xml:space="preserve">
+    <value>Use a long passphrase — six generated words, kept in a password manager and on paper. It cannot be reset, and losing it means no licence can ever be renewed.</value>
+  </data>
+  <data name="Status.KeystoreNotWritten" xml:space="preserve">
+    <value>The keystore could not be written: {0}</value>
+  </data>
+  <data name="Status.SendingTo" xml:space="preserve">
+    <value>Sending to {0}…</value>
+  </data>
+  <data name="Status.SentThrough" xml:space="preserve">
+    <value>Sent to {0} through {1}. Recorded in the audit log.</value>
+  </data>
+  <data name="Status.MessageNotSent" xml:space="preserve">
+    <value>The message was not sent: {0} The attempt is recorded in the audit log. You can save the message as an .eml file and send it from your own mail client instead.</value>
+  </data>
+  <data name="Status.NoSaveLocationOffered" xml:space="preserve">
+    <value>No place to save was offered, so nothing was written.</value>
+  </data>
+  <data name="Status.MessageSavedToFile" xml:space="preserve">
+    <value>Saved to {0}. Open it in your mail client and send it — the licence is attached and the message is ready.</value>
+  </data>
+  <data name="Status.PreviewOutOfDate" xml:space="preserve">
+    <value>The selection or the target date changed since this preview was built, so nothing was issued. The preview below is up to date — check it and run the operation again.</value>
+  </data>
+  <data name="Status.NothingIssuedRegisterUnchanged" xml:space="preserve">
+    <value>Nothing was issued and the register is unchanged. {0}</value>
+  </data>
+  <data name="Status.VerdictValid" xml:space="preserve">
+    <value>EmberTern would accept it: valid until {0}, licensed to {1}.</value>
+  </data>
+  <data name="Status.VerdictGrace" xml:space="preserve">
+    <value>EmberTern would accept it, but it is past its expiry and inside the grace period.</value>
+  </data>
+  <data name="Status.VerdictExpired" xml:space="preserve">
+    <value>EmberTern would report it as expired.</value>
+  </data>
+  <data name="Status.VerdictNotYetValid" xml:space="preserve">
+    <value>EmberTern would report it as not yet valid.</value>
+  </data>
+  <data name="Status.VerdictRefused" xml:space="preserve">
+    <value>EmberTern would refuse it ({0}).</value>
+  </data>
+  <data name="Status.CopiedToClipboard" xml:space="preserve">
+    <value>Copied {0} to the clipboard.</value>
+  </data>
+  <data name="Confirm.SendLicenceTitle" xml:space="preserve">
+    <value>Send this licence?</value>
+  </data>
+  <data name="Confirm.SendLicenceMessage" xml:space="preserve">
+    <value>The message and {0} will be sent to {1} through {2}. This cannot be recalled.</value>
+  </data>
+  <data name="Confirm.SendLicenceAction" xml:space="preserve">
+    <value>Send</value>
+  </data>
+  <data name="Confirm.ForgetSmtpTitle" xml:space="preserve">
+    <value>Forget SMTP settings?</value>
+  </data>
+  <data name="Confirm.ForgetSmtpMessage" xml:space="preserve">
+    <value>This will permanently remove the saved SMTP configuration, including the stored password. You can enter the settings again later.</value>
+  </data>
+  <data name="Confirm.ForgetSmtpAction" xml:space="preserve">
+    <value>Forget settings</value>
+  </data>
+  <data name="Confirm.TestMessageTitle" xml:space="preserve">
+    <value>Send a test message?</value>
+  </data>
+  <data name="Confirm.TestMessageMessage" xml:space="preserve">
+    <value>A test message will be sent to {0} through {1}, using the settings on this page. No licence is attached and nothing is recorded against any customer.</value>
+  </data>
+  <data name="Confirm.TestMessageAction" xml:space="preserve">
+    <value>Send test</value>
+  </data>
+  <data name="Confirm.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Status.TickAtLeastOneLicence" xml:space="preserve">
+    <value>Tick at least one licence to extend.</value>
+  </data>
+  <data name="Status.BlockedOne" xml:space="preserve">
+    <value>1 selected licence cannot be extended to this date, so the whole operation is held. Nothing is issued in part — remove them from the selection, or choose a different target date.</value>
+  </data>
+  <data name="Status.BlockedMany" xml:space="preserve">
+    <value>{0} selected licences cannot be extended to this date, so the whole operation is held. Nothing is issued in part — remove them from the selection, or choose a different target date.</value>
+  </data>
+  <data name="Status.LicenceRefersToUnknownCustomer" xml:space="preserve">
+    <value>Licence {0} refers to customer {1}, which the register does not hold. Nothing was issued.</value>
+  </data>
+  <data name="Status.BatchCompletedOne" xml:space="preserve">
+    <value>1 licence extended to {0}. {1} artifact(s) recorded as batch {2}. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="Status.BatchCompletedMany" xml:space="preserve">
+    <value>{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="Status.BatchCompletedOneWithFirstIssues" xml:space="preserve">
+    <value>1 licence extended to {0}. {1} artifact(s) recorded as batch {2}. {3} of them received a first artifact. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="Status.BatchCompletedManyWithFirstIssues" xml:space="preserve">
+    <value>{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. {4} of them received a first artifact. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="Status.Verbatim" xml:space="preserve">
+    <value>{0}</value>
+  </data>
+  <data name="Status.KeystoreAlreadyExists" xml:space="preserve">
+    <value>A keystore already exists. Creating a second signing key would leave every licence already issued unrenewable.</value>
+  </data>
+  <data name="Status.SettingsCarryNoSmtpHost" xml:space="preserve">
+    <value>These settings carry no SMTP host, so nothing can be sent directly. Save the message as an .eml file instead, or add a server under Settings ▸ E-mail.</value>
+  </data>
+  <data name="Status.SmtpUnknownMessageLanguage" xml:space="preserve">
+    <value>The message language '{0}' is not one this version can write.</value>
+  </data>
+  <data name="Status.SmtpSenderRequired" xml:space="preserve">
+    <value>A sender address is required — it is what the customer replies to.</value>
+  </data>
+  <data name="Status.SmtpSenderNotAnAddress" xml:space="preserve">
+    <value>The sender address does not look like an e-mail address: {0}</value>
+  </data>
+  <data name="Status.SmtpPortOutOfRange" xml:space="preserve">
+    <value>The port must be between 1 and 65535, not {0}.</value>
+  </data>
+  <data name="Status.SmtpUsernameNeedsStartTls" xml:space="preserve">
+    <value>A username cannot be used without STARTTLS — the password would travel unencrypted. Either enable STARTTLS or clear the username.</value>
+  </data>
+  <data name="Status.SmtpPasswordNeedsUsername" xml:space="preserve">
+    <value>A password without a username cannot be used. Enter the account that signs in.</value>
+  </data>
+  <data name="Status.SmtpCredentialsWithoutServer" xml:space="preserve">
+    <value>Credentials were entered but no server. Enter the SMTP host, or clear the credentials and deliver the message as a file instead.</value>
+  </data>
+  <data name="Status.BackupWrongPassphrase" xml:space="preserve">
+    <value>That passphrase does not open the backup — or the file was modified after it was written. Check the passphrase first.</value>
+  </data>
+  <data name="Status.BackupNotABackup" xml:space="preserve">
+    <value>That file is not an EmberTern register backup. ⚠ The keystore is a different file with a different purpose, and it is not restored here.</value>
+  </data>
+  <data name="Status.BackupFromNewerBuild" xml:space="preserve">
+    <value>That backup was written by a newer License Manager. Update this application to read it.</value>
+  </data>
+  <data name="Status.BackupUnsupportedScheme" xml:space="preserve">
+    <value>That backup uses an encryption scheme this build does not implement.</value>
+  </data>
+  <data name="Status.BackupCorrupt" xml:space="preserve">
+    <value>That backup file is damaged and cannot be read. Try another copy.</value>
+  </data>
+  <data name="Status.BackupNotOpened" xml:space="preserve">
+    <value>That backup could not be opened ({0}).</value>
+  </data>
+  <data name="Status.RestoreNotCompleted" xml:space="preserve">
+    <value>The restore could not be completed: {0}</value>
+  </data>
+  <data name="Status.RestoreRefusedWithProblems" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="Status.RegisterClosedAndMustRestart" xml:space="preserve">
+    <value>{0} ⚠ The License Manager has closed its register and must be restarted. Your register on disk was not left in a half-finished state.</value>
+  </data>
+  <data name="Status.RestoreBackupInconsistent" xml:space="preserve">
+    <value>The backup restored into a register that disagrees with itself, so nothing was written.</value>
+  </data>
+  <data name="Status.RestoreRegisterStillOpen" xml:space="preserve">
+    <value>The register is still open, so it was not replaced. Close the License Manager's register first — nothing has been changed.</value>
+  </data>
+  <data name="Status.RestoreRegisterNotOpenable" xml:space="preserve">
+    <value>The register file cannot be opened for replacement, so nothing was changed.</value>
+  </data>
+  <data name="Status.RestorePreservedCopyFailed" xml:space="preserve">
+    <value>The existing register could not be kept safe, so it was not replaced. Nothing has been changed.</value>
+  </data>
+  <data name="Status.RestoreFinalCheckFailed" xml:space="preserve">
+    <value>The restored register failed its final check, so the previous one was put back.</value>
+  </data>
+  <data name="Status.RestoreDoesNotMatchVerified" xml:space="preserve">
+    <value>The restored register does not match what was verified, so the previous one was put back.</value>
+  </data>
+  <data name="Status.RestoreChooseFolder" xml:space="preserve">
+    <value>Choose a folder to restore into.</value>
+  </data>
+  <data name="Status.RestoreNotAUsableFolderPath" xml:space="preserve">
+    <value>That is not a usable folder path.</value>
+  </data>
+  <data name="Status.RestorePathIsAFile" xml:space="preserve">
+    <value>That path is a file. A restore needs a folder of its own.</value>
+  </data>
+  <data name="Status.RestoreNeverIntoActiveFolder" xml:space="preserve">
+    <value>A restore never writes into the active register's folder. Choose a new, empty folder; you can swap the restored register in yourself once you have looked at it.</value>
+  </data>
+  <data name="Status.RestoreFolderNotEmpty" xml:space="preserve">
+    <value>That folder is not empty. A restore always creates its register in a folder of its own, so nothing that is already there can be written over.</value>
+  </data>
+  <data name="Status.RestoreBackupIsNotARegister" xml:space="preserve">
+    <value>The backup decrypted, but what came out is not a register this build can open.</value>
+  </data>
+  <data name="Status.IntegrityNoCurrentArtifact" xml:space="preserve">
+    <value>Licence {0} has artifacts but no current one is marked.</value>
+  </data>
+  <data name="Status.IntegrityCurrentNotOwned" xml:space="preserve">
+    <value>Licence {0} marks a current artifact that does not belong to it.</value>
+  </data>
+  <data name="Status.IntegrityCurrentNotNewest" xml:space="preserve">
+    <value>Licence {0} marks an artifact that is not its newest.</value>
+  </data>
+  <data name="Status.IntegrityCustomerMissing" xml:space="preserve">
+    <value>Licence {0} belongs to a customer that is not in the register.</value>
+  </data>
+  <data name="Status.SmtpFileNotRead" xml:space="preserve">
+    <value>The e-mail settings file could not be read: {0}</value>
+  </data>
+  <data name="Status.SmtpFileEmpty" xml:space="preserve">
+    <value>The e-mail settings file is empty.</value>
+  </data>
+  <data name="Status.SmtpFileFromNewerBuild" xml:space="preserve">
+    <value>These e-mail settings were written by a newer License Manager (version {0}). Update this application, or delete the file to configure e-mail again.</value>
+  </data>
+  <data name="Status.SmtpPasswordNotDecrypted" xml:space="preserve">
+    <value>The stored password could not be decrypted. It is protected for this Windows account on this computer, so a settings file copied from elsewhere cannot be read. Enter the password again to store it for this account.</value>
+  </data>
+  <data name="Status.SavedFileDelivery" xml:space="preserve">
+    <value>Saved. Messages can be delivered as .eml files.</value>
+  </data>
+  <data name="Status.SavedThroughHost" xml:space="preserve">
+    <value>Saved. Messages will be sent through {0}.</value>
+  </data>
+  <data name="Status.DpapiProtectionNote" xml:space="preserve">
+    <value>The password is encrypted with Windows DPAPI for this Windows account on this computer. It cannot be read by another account, on another machine, or from a copy of the file — this is deliberate, and it means the password has to be entered again after moving to a new machine.</value>
+  </data>
+  <data name="Status.EmailSettingsNotReadShort" xml:space="preserve">
+    <value>The e-mail settings could not be read.</value>
+  </data>
+  <data name="Status.ReasonRequired" xml:space="preserve">
+    <value>Choose why this licence is being issued.</value>
+  </data>
+  <data name="Status.ReasonMustBeInitial" xml:space="preserve">
+    <value>This licence has never been issued, so the first artifact can only be the initial one.</value>
+  </data>
+  <data name="Status.ReasonNotInitialAgain" xml:space="preserve">
+    <value>This licence has already been issued, so a further artifact cannot be the initial one. Choose a renewal, a terms change, or a re-issue of a lost file.</value>
+  </data>
+  <data name="Status.ReasonExpiryNotMoved" xml:space="preserve">
+    <value>The expiry has not moved since the last issue, so this is not a renewal. Change the expiry and press Save terms first, or pick a different reason.</value>
+  </data>
+  <data name="Status.ReasonNoTermsChange" xml:space="preserve">
+    <value>Nothing but the expiry differs from the last issue, so there is no terms change to record. Press Save terms if the form still holds unsaved edits, or pick a different reason.</value>
+  </data>
+  <data name="Status.ReasonNotRecorded" xml:space="preserve">
+    <value>'{0}' is not one of the recorded issuing reasons.</value>
+  </data>
+  <data name="Status.TermsSeatsRequired" xml:space="preserve">
+    <value>A licence must carry at least one seat.</value>
+  </data>
+  <data name="Status.TermsStartDateRequired" xml:space="preserve">
+    <value>A start date is required. Pick one from the calendar, or type it into the field.</value>
+  </data>
+  <data name="Status.TermsExpiryDateRequired" xml:space="preserve">
+    <value>An expiry date is required. Pick one from the calendar, or type it into the field.</value>
+  </data>
+  <data name="Status.ComposeNoCustomerEmail" xml:space="preserve">
+    <value>{0} has no e-mail address. Add one on the Customer page, or export the licence to a file and deliver it another way.</value>
+  </data>
+  <data name="Status.ComposeCustomerEmailInvalid" xml:space="preserve">
+    <value>The customer's e-mail address does not look like one: {0}</value>
+  </data>
+  <data name="Status.ComposeNoSenderAddress" xml:space="preserve">
+    <value>There is no usable sender address in the e-mail settings, and a message has to come from somewhere. Set one under Settings ▸ E-mail.</value>
+  </data>
+  <data name="Status.ComposeArtifactUnreadable" xml:space="preserve">
+    <value>The stored artifact for licence {0} could not be read, so no message can describe it. Inspect it in the issuing history before sending anything.</value>
+  </data>
+  <data name="Status.EmailSettingsNotReadNothingSent" xml:space="preserve">
+    <value>The e-mail settings could not be read, so nothing can be sent.</value>
+  </data>
+  <data name="Status.SmtpPasswordUnreadableSendWillFail" xml:space="preserve">
+    <value>The stored SMTP password could not be read on this Windows account, so signing in will probably fail. Saving the message as an .eml file still works.</value>
+  </data>
+  <data name="Status.BlockerTargetBeforeStart" xml:space="preserve">
+    <value>The target date is not after this licence's start date ({0}). Choose a later target date, or remove this licence from the selection.</value>
+  </data>
+  <data name="Status.BlockerAlreadyValidUntil" xml:space="preserve">
+    <value>Already valid until {0}, so the target date would not extend it. Choose a later target date, or remove this licence from the selection.</value>
+  </data>
+  <data name="Status.TermsExpiryMustFollowStart" xml:space="preserve">
+    <value>The expiry must be after the start date.</value>
+  </data>
+  <data name="Status.LicenceSavedShort" xml:space="preserve">
+    <value>Saved licence {0}….</value>
+  </data>
 </root>

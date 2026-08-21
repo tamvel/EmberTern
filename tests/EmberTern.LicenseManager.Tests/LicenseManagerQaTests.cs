@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
@@ -269,10 +269,10 @@ public sealed class LicenseManagerQaTests
 
             foreach (var (message, key) in new (StatusMessage Message, string Key)[]
                      {
-                         (StatusMessage.Error("boom"), "ErrorBrush"),
-                         (StatusMessage.Warning("careful"), "WarningBrush"),
-                         (StatusMessage.Success("done"), "ConnectedBrush"),
-                         (StatusMessage.Info("note"), "AccentMutedBrush"),
+                         (StatusMessage.Error(StatusCatalog.SelectLicence), "ErrorBrush"),
+                         (StatusMessage.Warning(StatusCatalog.SelectLicence), "WarningBrush"),
+                         (StatusMessage.Success(StatusCatalog.SelectLicence), "ConnectedBrush"),
+                         (StatusMessage.Info(StatusCatalog.SelectLicence), "AccentMutedBrush"),
                      })
             {
                 shell.Message = message;
@@ -297,10 +297,10 @@ public sealed class LicenseManagerQaTests
 
             foreach (var (message, key) in new (StatusMessage Message, string Key)[]
                      {
-                         (StatusMessage.Error("boom"), "Icon.BreakException"),
-                         (StatusMessage.Warning("careful"), "Icon.AlertTriangle"),
-                         (StatusMessage.Success("done"), "Icon.Check"),
-                         (StatusMessage.Info("note"), "Icon.Comment"),
+                         (StatusMessage.Error(StatusCatalog.SelectLicence), "Icon.BreakException"),
+                         (StatusMessage.Warning(StatusCatalog.SelectLicence), "Icon.AlertTriangle"),
+                         (StatusMessage.Success(StatusCatalog.SelectLicence), "Icon.Check"),
+                         (StatusMessage.Info(StatusCatalog.SelectLicence), "Icon.Comment"),
                      })
             {
                 shell.Message = message;

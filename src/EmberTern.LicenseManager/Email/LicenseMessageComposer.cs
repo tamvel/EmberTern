@@ -6,6 +6,8 @@ using System.Text.RegularExpressions;
 using EmberTern.Licensing;
 using EmberTern.LicenseManager.Data;
 using EmberTern.LicenseManager.Services;
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.ViewModels;
 
 namespace EmberTern.LicenseManager.Email;
 
@@ -51,24 +53,22 @@ public static class LicenseMessageComposer
     /// <para>⚠ Whether the server accepts the message, and whether the customer's address exists, are
     /// questions only a server can answer.</para>
     /// </summary>
-    public static IReadOnlyList<string> Problems(
+    public static IReadOnlyList<LocalizedText> Problems(
         IssuedArtifactRecord artifact, CustomerRecord customer, SmtpSettings settings)
     {
         ArgumentNullException.ThrowIfNull(artifact);
         ArgumentNullException.ThrowIfNull(customer);
         ArgumentNullException.ThrowIfNull(settings);
 
-        var problems = new List<string>();
+        var problems = new List<LocalizedText>();
 
         if (string.IsNullOrWhiteSpace(customer.Email))
         {
-            problems.Add(
-                $"{customer.Name} has no e-mail address. Add one on the Customer page, or export the " +
-                "licence to a file and deliver it another way.");
+            problems.Add(new LocalizedText(StatusCatalog.ComposeNoCustomerEmail, customer.Name));
         }
         else if (!SmtpSettings.LooksLikeAddress(customer.Email))
         {
-            problems.Add($"The customer's e-mail address does not look like one: {customer.Email}");
+            problems.Add(new LocalizedText(StatusCatalog.ComposeCustomerEmailInvalid, customer.Email));
         }
 
         // ⚠ The SENDER address only — asked through the same shallow check the settings use, so the two
@@ -76,18 +76,14 @@ public static class LicenseMessageComposer
         if (string.IsNullOrWhiteSpace(settings.FromAddress) ||
             !SmtpSettings.LooksLikeAddress(settings.FromAddress))
         {
-            problems.Add(
-                "There is no usable sender address in the e-mail settings, and a message has to come from " +
-                "somewhere. Set one under Settings ▸ E-mail.");
+            problems.Add(new LocalizedText(StatusCatalog.ComposeNoSenderAddress));
         }
 
         // ⚠ Last, because it is the one fault that is OURS rather than the operator's: an artifact whose
         //    stored token cannot be read is a register problem, and no field on any window would fix it.
         if (ReadPayload(artifact) is null)
         {
-            problems.Add(
-                $"The stored artifact for licence {artifact.LicenseId} could not be read, so no message " +
-                "can describe it. Inspect it in the issuing history before sending anything.");
+            problems.Add(new LocalizedText(StatusCatalog.ComposeArtifactUnreadable, artifact.LicenseId));
         }
 
         return problems;

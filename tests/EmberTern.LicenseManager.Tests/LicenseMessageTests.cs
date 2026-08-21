@@ -270,7 +270,7 @@ public sealed class LicenseMessageTests : IDisposable
 
         var problems = LicenseMessageComposer.Problems(artifact, customer, Settings());
 
-        Assert.Contains(problems, p => p.Contains("no e-mail address", StringComparison.Ordinal));
+        Assert.Contains(problems, p => p.ToString().Contains("no e-mail address", StringComparison.Ordinal));
         Assert.Throws<InvalidOperationException>(
             () => LicenseMessageComposer.Compose(artifact, customer, Settings()));
     }
@@ -282,7 +282,7 @@ public sealed class LicenseMessageTests : IDisposable
 
         Assert.Contains(
             LicenseMessageComposer.Problems(artifact, customer, Settings()),
-            p => p.Contains("does not look like one", StringComparison.Ordinal));
+            p => p.ToString().Contains("does not look like one", StringComparison.Ordinal));
     }
 
     /// <summary>⚠ A message has to come from somewhere — an unconfigured sender is refused.</summary>
@@ -293,7 +293,7 @@ public sealed class LicenseMessageTests : IDisposable
 
         Assert.Contains(
             LicenseMessageComposer.Problems(artifact, customer, SmtpSettings.Empty),
-            p => p.Contains("no usable sender address", StringComparison.Ordinal));
+            p => p.ToString().Contains("no usable sender address", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -332,7 +332,7 @@ public sealed class LicenseMessageTests : IDisposable
 
         Assert.Contains(
             LicenseMessageComposer.Problems(damaged, customer, Settings()),
-            p => p.Contains("could not be read", StringComparison.Ordinal));
+            p => p.ToString().Contains("could not be read", StringComparison.Ordinal));
     }
 
     // ── Purity ──────────────────────────────────────────────────────────────────────────────────

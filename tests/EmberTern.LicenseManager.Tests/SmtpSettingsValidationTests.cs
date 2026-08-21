@@ -57,7 +57,7 @@ public sealed class SmtpSettingsValidationTests
     {
         var problems = (Direct with { FromAddress = "" }).Validate();
 
-        Assert.Contains(problems, p => p.Contains("sender address", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(problems, p => p.ToString().Contains("sender address", System.StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]
@@ -81,7 +81,7 @@ public sealed class SmtpSettingsValidationTests
     {
         var problems = (Direct with { Security = SmtpSecurity.None }).Validate();
 
-        Assert.Contains(problems, p => p.Contains("STARTTLS", System.StringComparison.Ordinal));
+        Assert.Contains(problems, p => p.ToString().Contains("STARTTLS", System.StringComparison.Ordinal));
     }
 
     /// <summary>⭐ An unauthenticated internal relay over plain SMTP is legal — that is what the mode is for.</summary>
@@ -111,7 +111,7 @@ public sealed class SmtpSettingsValidationTests
     {
         var problems = (Direct with { Host = "" }).Validate();
 
-        Assert.Contains(problems, p => p.Contains("no server", System.StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(problems, p => p.ToString().Contains("no server", System.StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]
