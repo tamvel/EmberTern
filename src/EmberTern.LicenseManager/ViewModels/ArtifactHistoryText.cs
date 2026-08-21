@@ -62,8 +62,14 @@ internal static class HistoryCatalog
     public static string Summary(int count) => Loc.FormatCount(KeyPrefix + nameof(Summary), count);
 
     /// <summary>⭐ The size of the token as the customer receives it, armor included.</summary>
-    public static string TokenSizeAsDelivered(string bytes) =>
-        Loc.Format(KeyPrefix + nameof(TokenSizeAsDelivered), bytes);
+    /// <param name="bytes">The count. ⚠ The PLURAL PIVOT only — Polish needs three forms of "bajt".</param>
+    /// <param name="formatted">
+    /// ⚠⚠ The same number, already formatted INVARIANTLY by its producer, and what the sentence actually
+    /// prints. A byte count echoes a technical field, so it must not pick up the reader's thousands
+    /// separator — which is what <c>{0}</c> would do. ⛔ Do not "simplify" this into one argument.
+    /// </param>
+    public static string TokenSizeAsDelivered(long bytes, string formatted) =>
+        Loc.FormatCount(KeyPrefix + nameof(TokenSizeAsDelivered), bytes, formatted);
 
     /// <summary>
     /// ⚠ Stated, not hidden: a payload the parser cannot read is the single most interesting row in the

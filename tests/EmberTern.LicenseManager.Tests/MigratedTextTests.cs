@@ -140,7 +140,7 @@ public sealed class MigratedTextTests
     {
         Assert.Equal(
             "licence.etlic · 512 bytes · application/octet-stream",
-            SendCatalog.Attachment("licence.etlic", "512", "application/octet-stream"));
+            SendCatalog.Attachment("licence.etlic", 512, "512", "application/octet-stream"));
 
         Assert.Equal(
             "Written in 'pl'. The language applies to every customer and is changed under "
@@ -233,7 +233,7 @@ public sealed class MigratedTextTests
 
     [Fact]
     public void TheTokenSizeReadsExactlyAsItDidBefore() =>
-        Assert.Equal("512 bytes as delivered", HistoryCatalog.TokenSizeAsDelivered("512"));
+        Assert.Equal("512 bytes as delivered", HistoryCatalog.TokenSizeAsDelivered(512, "512"));
 
     [Fact]
     public void TheFileDialogWordsReadExactlyAsTheyDidBefore()

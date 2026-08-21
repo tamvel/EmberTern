@@ -267,25 +267,33 @@ internal static class StatusCatalog
     public static MessageKey TickAtLeastOneLicence => Key(nameof(TickAtLeastOneLicence));
 
     /// <summary>1 selected licence cannot be extended to this date, so the whole operation is held. Nothing i...</summary>
-    public static MessageKey BlockedOne => Key(nameof(BlockedOne));
+    /// <remarks>
+    /// ⭐ A counted FAMILY since L8.5 (C‑1): English has two arms and Polish needs three, so the pair
+    /// <c>…One</c> / <c>…Many</c> could not survive translation. ⚠ There is no flat entry for this key —
+    /// its variants live under <c>.one</c> / <c>.other</c> in English and <c>.one</c> / <c>.few</c> /
+    /// <c>.many</c> in Polish.
+    /// </remarks>
+    public static MessageKey Blocked => Key(nameof(Blocked));
 
     /// <summary>{0} selected licences cannot be extended to this date, so the whole operation is held. Nothin...</summary>
-    public static MessageKey BlockedMany => Key(nameof(BlockedMany));
+
 
     /// <summary>Licence {0} refers to customer {1}, which the register does not hold. Nothing was issued.</summary>
     public static MessageKey LicenceRefersToUnknownCustomer => Key(nameof(LicenceRefersToUnknownCustomer));
 
     /// <summary>1 licence extended to {0}. {1} artifact(s) recorded as batch {2}. Nothing was written to disk...</summary>
-    public static MessageKey BatchCompletedOne => Key(nameof(BatchCompletedOne));
+    /// <remarks>⭐ A counted family since L8.5 — see <see cref="Blocked"/>.</remarks>
+    public static MessageKey BatchCompleted => Key(nameof(BatchCompleted));
 
     /// <summary>{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. Nothing was written to d...</summary>
-    public static MessageKey BatchCompletedMany => Key(nameof(BatchCompletedMany));
+
 
     /// <summary>1 licence extended to {0}. {1} artifact(s) recorded as batch {2}. {3} of them received a firs...</summary>
-    public static MessageKey BatchCompletedOneWithFirstIssues => Key(nameof(BatchCompletedOneWithFirstIssues));
+    /// <remarks>⭐ A counted family since L8.5 — see <see cref="Blocked"/>.</remarks>
+    public static MessageKey BatchCompletedWithFirstIssues => Key(nameof(BatchCompletedWithFirstIssues));
 
     /// <summary>{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. {4} of them received a f...</summary>
-    public static MessageKey BatchCompletedManyWithFirstIssues => Key(nameof(BatchCompletedManyWithFirstIssues));
+
 
     /// <summary>{0}</summary>
     public static MessageKey Verbatim => Key(nameof(Verbatim));

@@ -11,6 +11,7 @@ using EmberTern.LicenseManager.Email;
 using EmberTern.LicenseManager.Services;
 using EmberTern.LicenseManager.Localization;
 
+using EmberTern.LicenseManager.Settings;
 namespace EmberTern.LicenseManager.ViewModels;
 
 /// <summary>
@@ -77,7 +78,9 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         // ⚠ The OS check is the composition root's job, not the view model's: the whole application is
         //    DPAPI-bound on Windows (LocalDpapiProtector), and this is where that is known.
         _smtpStore = OperatingSystem.IsWindows() ? SmtpSettingsStore.At(paths) : null;
-        Settings = _smtpStore is null ? null : new SettingsViewModel(_smtpStore);
+        Settings = _smtpStore is null
+            ? null
+            : new SettingsViewModel(_smtpStore, ApplicationLanguageService.At(paths));
 
         ReloadCustomers();
         Message = StatusMessage.Info(StatusCatalog.SigningWithKey, session.KeyId);

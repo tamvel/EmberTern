@@ -61,11 +61,22 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
 {
     private readonly SmtpSettingsStore _store;
 
+    // ⭐ The ONE way a language choice leaves this window. Null when nothing can store it.
+    private readonly ApplicationLanguageService? _applicationLanguage;
+
     /// <summary>Creates the view model over a store.</summary>
     /// <remarks>⚠ Reads immediately, so the window opens on the truth rather than on blanks.</remarks>
-    public SettingsViewModel(SmtpSettingsStore store)
+    /// <param name="store">Where the e-mail settings live.</param>
+    /// <param name="applicationLanguage">
+    /// ⭐ How an interface-language choice is stored and applied. ⚠ <see langword="null"/> leaves the picker
+    /// disabled — a view model with nowhere to store a choice must not offer to make one, which is the
+    /// same reasoning D‑8 applied to the whole row before there was any Polish to show.
+    /// </param>
+    public SettingsViewModel(
+        SmtpSettingsStore store, ApplicationLanguageService? applicationLanguage = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
+        _applicationLanguage = applicationLanguage;
 
         SecurityOptions = new ReadOnlyCollection<SmtpSecurityOption>(
         [
@@ -146,22 +157,43 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
     public IReadOnlyList<LanguageOption> ApplicationLanguageOptions { get; }
 
     /// <summary>
-    /// What the interface-language picker shows.
-    ///
-    /// <para>⛔ Read-only on purpose. The setter a picker would need does not exist, so there is no path —
-    /// not even an accidental one — by which a choice made here could be persisted and then do nothing.
-    /// ⚠ That is the whole of D‑8: the row is honest about being unavailable rather than pretending.</para>
-    ///
-    /// <para>⭐ Resolved by CODE from the catalog's default, never by an index into the list. An index is a
-    /// fact about the list's order, which is a presentation decision — and this one used to read
-    /// <c>[1]</c>, which meant English only because the MESSAGE catalog happens to list Polish first.</para>
+    /// Which language the interface is shown in.
     /// </summary>
-    public LanguageOption ApplicationLanguage =>
-        ApplicationLanguageOptions.First(o => o.Code == ApplicationLanguages.Default);
+    /// <remarks>
+    /// <para>⭐⭐ <b>Real since L8.5 — D‑8 is discharged, not bypassed.</b> That decision showed the row and
+    /// stored nothing because there was no Polish to show; a preference that changes nothing is the
+    /// <c>ClientLibraryPath</c> defect. Now there is Polish, so the row stores and applies.</para>
+    ///
+    /// <para>⭐ Resolved by CODE, never by an index into the list — an index is a fact about presentation
+    /// order, and this one used to read <c>[1]</c>, which meant English only because the MESSAGE catalog
+    /// happens to list Polish first.</para>
+    ///
+    /// <para>⛔ The setter does NOT call <c>Loc.Apply</c>: it hands the choice to
+    /// <see cref="ApplicationLanguageService"/>, which owns the one path a language is applied by. A view
+    /// model applying its own language would be the second such path, and two is how a stored preference
+    /// and a rendered window start disagreeing.</para>
+    /// </remarks>
+    public LanguageOption ApplicationLanguage
+    {
+        get => ApplicationLanguageOptions.First(
+            o => o.Code == (_applicationLanguage?.Stored ?? ApplicationLanguages.Default));
 
-    /// <summary>Why the interface-language picker is disabled, in words the operator can act on.</summary>
-    public string ApplicationLanguageUnavailable =>
-        ManagerSettingsCatalog.ApplicationLanguageUnavailable;
+        set
+        {
+            if (_applicationLanguage is null || value is null ||
+                string.Equals(value.Code, ApplicationLanguage.Code, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _applicationLanguage.Choose(value.Code);
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>Whether an interface-language choice can be stored at all.</summary>
+    /// <remarks>⚠ False only where the view model was built without a preferences store — see the ctor.</remarks>
+    public bool CanChooseApplicationLanguage => _applicationLanguage is not null;
 
     /// <summary>
     /// The language a licence e-mail is written in.

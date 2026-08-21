@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Resources;
 using System.Threading.Tasks;
@@ -188,10 +188,11 @@ public sealed class LocalizationLivenessTests
                 Loc.Apply(store.Load().Language);
                 Assert.Equal(ApplicationLanguages.Polish, Loc.Culture.TwoLetterISOLanguageName);
 
-                // ⚠ Polish has no translation yet — L8.5 introduces it — so the words are still English.
-                //   ⭐ That is the correct answer and worth pinning: an untranslated key must fall back
-                //   neutral-ward rather than render blank or throw.
-                Assert.Equal("Settings", ManagerSettingsCatalog.WindowTitle);
+                // ⭐⭐ L8.5 shipped the Polish catalog, so this is now the whole claim end to end: a code
+                //    stored in ui.json reaches a catalog READ as Polish words. Until L8.5 this line pinned
+                //    the fallback ("Settings"), which was the correct answer while there was nothing to
+                //    fall forward to.
+                Assert.Equal("Ustawienia", ManagerSettingsCatalog.WindowTitle);
 
                 return true;
             }

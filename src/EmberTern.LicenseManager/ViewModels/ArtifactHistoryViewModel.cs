@@ -288,10 +288,11 @@ public sealed partial class ArtifactHistoryViewModel : ObservableObject
         //    goes in the file, so this is the number the customer receives.
         // ⚠ The COUNT is formatted invariantly by its producer and handed over as a string: it echoes a
         //   technical field, so no format specifier in a resource value may touch it (Loc.Format's rule).
+        var delivered = System.Text.Encoding.UTF8.GetByteCount(LicenseArmor.Wrap(artifact.Token));
+
         TokenSize = HistoryCatalog.TokenSizeAsDelivered(
-            string.Create(
-                CultureInfo.InvariantCulture,
-                $"{System.Text.Encoding.UTF8.GetByteCount(LicenseArmor.Wrap(artifact.Token))}"));
+            delivered,
+            delivered.ToString(CultureInfo.InvariantCulture));
 
         // ⭐⭐ TWO SOURCES, EACH ANSWERING WHAT ONLY IT CAN.
         //

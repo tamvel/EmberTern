@@ -1,0 +1,1212 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    EmberTern License Manager — polskie zasoby (satelita kultury `pl`).
+
+    ⭐ SATELITA TŁUMACZY WPISY, NIGDY ICH NIE WPROWADZA. `ResourceManager` sięga w stronę neutralną
+       automatycznie, więc wpis nieprzetłumaczony renderuje się po angielsku, a nie pusto — to dlatego
+       angielska baza musi zostać KOMPLETNA, a ten plik nie może zawierać klucza, którego tam nie ma.
+
+    ⚠⚠ RODZINY LICZBY MNOGIEJ: `one` / `few` / `many`, ⛔ ANI JEDNEGO `other`. Polska gramatyka ma trzy
+       formy (`Localization.PluralRuleSet` = `one-few-many`), a angielska dwie — producent zdania nigdy
+       nie mówi, ile ich potrzeba, bo to fakt o JĘZYKU. Ta konwencja jest zmierzona w katalogu produktu
+       (`EmberTern.App/Localization/Strings.pl.resx`), nie wybrana tutaj.
+
+    ⚠ Liczba, z którą zdanie się zgadza, jest ZAWSZE argumentem {0} — tam ją wstawia `Loc.FormatCount`.
+       Tam, gdzie ta sama liczba musi być też WYPISANA inwariantnie (rozmiar w bajtach), {0} jest osią
+       gramatyczną, a wypisywana jest osobna, już sformatowana wartość.
+
+    ⛔ Czego ten plik nie tłumaczy, bo jest kontraktem technicznym: wartości persystowane, akcje i notatki
+       audytu, nazwy plików i formatów, daty ISO, branding, oraz nazwy języków w pickerze
+       (`English` / `Polski`, każdy nazwany w sobie). Lista: `docs/design/terminology.md` §4.4.
+  -->
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="ArtifactStanding.Current" xml:space="preserve">
+    <value>bieżący</value>
+  </data>
+  <data name="ArtifactStanding.Superseded" xml:space="preserve">
+    <value>zastąpiony</value>
+  </data>
+  <data name="Batch.FirstIssues.few" xml:space="preserve">
+    <value>{0} z nich nie były jeszcze wystawione i otrzymają pierwszy artefakt.</value>
+  </data>
+  <data name="Batch.FirstIssues.many" xml:space="preserve">
+    <value>{0} z nich nie było jeszcze wystawionych i otrzyma pierwszy artefakt.</value>
+  </data>
+  <data name="Batch.FirstIssues.one" xml:space="preserve">
+    <value>{0} z nich nie była jeszcze wystawiona i otrzyma pierwszy artefakt.</value>
+  </data>
+  <data name="Batch.TickAndChooseDate" xml:space="preserve">
+    <value>Zaznacz licencje na liście i wybierz datę docelową.</value>
+  </data>
+  <data name="Batch.TickLicences" xml:space="preserve">
+    <value>Zaznacz licencje do przedłużenia.</value>
+  </data>
+  <data name="Batch.WouldBeExtended.few" xml:space="preserve">
+    <value>{0} licencje zostaną przedłużone do {1}.</value>
+  </data>
+  <data name="Batch.WouldBeExtended.many" xml:space="preserve">
+    <value>{0} licencji zostanie przedłużonych do {1}.</value>
+  </data>
+  <data name="Batch.WouldBeExtended.one" xml:space="preserve">
+    <value>{0} licencja zostanie przedłużona do {1}.</value>
+  </data>
+  <data name="Common.Close" xml:space="preserve">
+    <value>Zamknij</value>
+  </data>
+  <data name="Confirm.Cancel" xml:space="preserve">
+    <value>Anuluj</value>
+  </data>
+  <data name="Confirm.ForgetSmtpAction" xml:space="preserve">
+    <value>Usuń zapisane ustawienia</value>
+  </data>
+  <data name="Confirm.ForgetSmtpMessage" xml:space="preserve">
+    <value>Trwale usunie to zapisaną konfigurację SMTP razem z przechowywanym hasłem. Ustawienia można wprowadzić później ponownie.</value>
+  </data>
+  <data name="Confirm.ForgetSmtpTitle" xml:space="preserve">
+    <value>Usunąć zapisane ustawienia SMTP?</value>
+  </data>
+  <data name="Confirm.SendLicenceAction" xml:space="preserve">
+    <value>Wyślij</value>
+  </data>
+  <data name="Confirm.SendLicenceMessage" xml:space="preserve">
+    <value>Wiadomość razem z {0} zostanie wysłana do {1} przez {2}. Nie da się tego odwołać.</value>
+  </data>
+  <data name="Confirm.SendLicenceTitle" xml:space="preserve">
+    <value>Wysłać tę licencję?</value>
+  </data>
+  <data name="Confirm.TestMessageAction" xml:space="preserve">
+    <value>Wyślij test</value>
+  </data>
+  <data name="Confirm.TestMessageMessage" xml:space="preserve">
+    <value>Wiadomość testowa zostanie wysłana do {0} przez {1}, z użyciem ustawień z tej strony. Nie jest załączana żadna licencja i nic nie jest zapisywane przy żadnym kliencie.</value>
+  </data>
+  <data name="Confirm.TestMessageTitle" xml:space="preserve">
+    <value>Wysłać wiadomość testową?</value>
+  </data>
+  <data name="FileType.ChooseBackupTitle" xml:space="preserve">
+    <value>Wybierz kopię zapasową rejestru</value>
+  </data>
+  <data name="FileType.ChooseRestoreFolderTitle" xml:space="preserve">
+    <value>Wybierz NOWY, pusty folder do przywrócenia</value>
+  </data>
+  <data name="FileType.EmailMessage" xml:space="preserve">
+    <value>Wiadomość e-mail</value>
+  </data>
+  <data name="FileType.JsonLines" xml:space="preserve">
+    <value>JSON Lines</value>
+  </data>
+  <data name="FileType.Licence" xml:space="preserve">
+    <value>Licencja EmberTern</value>
+  </data>
+  <data name="FileType.RegisterBackup" xml:space="preserve">
+    <value>Kopia zapasowa rejestru EmberTern</value>
+  </data>
+  <data name="FileType.SaveLicenceTitle" xml:space="preserve">
+    <value>Zapisz licencję</value>
+  </data>
+  <data name="FileType.SaveMessageTitle" xml:space="preserve">
+    <value>Zapisz wiadomość</value>
+  </data>
+  <data name="FileType.SaveTitle" xml:space="preserve">
+    <value>Zapisz</value>
+  </data>
+  <data name="Filter.AlreadyExpired" xml:space="preserve">
+    <value>Już wygasłe</value>
+  </data>
+  <data name="Filter.AnyExpiry" xml:space="preserve">
+    <value>Dowolny termin</value>
+  </data>
+  <data name="Filter.AnyStatus" xml:space="preserve">
+    <value>Dowolny stan</value>
+  </data>
+  <data name="Filter.ExpiringWithin30Days" xml:space="preserve">
+    <value>Wygasające w ciągu 30 dni</value>
+  </data>
+  <data name="Filter.ExpiringWithin90Days" xml:space="preserve">
+    <value>Wygasające w ciągu 90 dni</value>
+  </data>
+  <data name="Filter.ExpiringWithinAYear" xml:space="preserve">
+    <value>Wygasające w ciągu roku</value>
+  </data>
+  <data name="Filter.ExpiringWithinDays" xml:space="preserve">
+    <value>Wygasające w ciągu {0} dni</value>
+  </data>
+  <data name="Filter.IssuedAtLeastOnce" xml:space="preserve">
+    <value>Wystawione co najmniej raz</value>
+  </data>
+  <data name="Filter.IssuedOrNot" xml:space="preserve">
+    <value>Wystawione lub nie</value>
+  </data>
+  <data name="Filter.NeverIssued" xml:space="preserve">
+    <value>Nigdy nie wystawione</value>
+  </data>
+  <data name="History.NeverIssued" xml:space="preserve">
+    <value>Nigdy nie wystawiono. Klientowi nie wysłano jeszcze nic dla tej licencji.</value>
+  </data>
+  <data name="History.Summary.few" xml:space="preserve">
+    <value>{0} wydania w historii, wszystkie zachowane. Bieżący plik jest oznaczony poniżej; wcześniejsze zostały zastąpione, nigdy nadpisane ani usunięte.</value>
+  </data>
+  <data name="History.Summary.many" xml:space="preserve">
+    <value>{0} wydań w historii, wszystkie zachowane. Bieżący plik jest oznaczony poniżej; wcześniejsze zostały zastąpione, nigdy nadpisane ani usunięte.</value>
+  </data>
+  <data name="History.Summary.one" xml:space="preserve">
+    <value>{0} wydanie w historii. Bieżący plik jest oznaczony poniżej; wcześniejsze zostały zastąpione, nigdy nadpisane ani usunięte.</value>
+  </data>
+  <data name="History.TokenSizeAsDelivered.few" xml:space="preserve">
+    <value>{1} bajty w dostarczonej postaci</value>
+  </data>
+  <data name="History.TokenSizeAsDelivered.many" xml:space="preserve">
+    <value>{1} bajtów w dostarczonej postaci</value>
+  </data>
+  <data name="History.TokenSizeAsDelivered.one" xml:space="preserve">
+    <value>{1} bajt w dostarczonej postaci</value>
+  </data>
+  <data name="History.UnreadablePayload" xml:space="preserve">
+    <value>— nieczytelny ładunek —</value>
+  </data>
+  <data name="LicenceStatus.Active" xml:space="preserve">
+    <value>Aktywna</value>
+  </data>
+  <data name="LicenceStatus.Blocked" xml:space="preserve">
+    <value>Zablokowana</value>
+  </data>
+  <data name="Licences.Checked.few" xml:space="preserve">
+    <value>Wybrano {0} licencje.</value>
+  </data>
+  <data name="Licences.Checked.many" xml:space="preserve">
+    <value>Wybrano {0} licencji.</value>
+  </data>
+  <data name="Licences.Checked.one" xml:space="preserve">
+    <value>Wybrano {0} licencję.</value>
+  </data>
+  <data name="Licences.CheckedWithHidden.few" xml:space="preserve">
+    <value>Wybrano {0} licencje — w tym {1} poza bieżącymi filtrami.</value>
+  </data>
+  <data name="Licences.CheckedWithHidden.many" xml:space="preserve">
+    <value>Wybrano {0} licencji — w tym {1} poza bieżącymi filtrami.</value>
+  </data>
+  <data name="Licences.CheckedWithHidden.one" xml:space="preserve">
+    <value>Wybrano {0} licencję — w tym {1} poza bieżącymi filtrami.</value>
+  </data>
+  <data name="Licences.Count.few" xml:space="preserve">
+    <value>{0} licencje.</value>
+  </data>
+  <data name="Licences.Count.many" xml:space="preserve">
+    <value>{0} licencji.</value>
+  </data>
+  <data name="Licences.Count.one" xml:space="preserve">
+    <value>{0} licencja.</value>
+  </data>
+  <data name="Licences.DetailIssuedOnce" xml:space="preserve">
+    <value>{0} — wystawiono raz, {1}.</value>
+  </data>
+  <data name="Licences.DetailIssuedTimes" xml:space="preserve">
+    <value>{0} — wystawiono {1} razy, ostatnio {2}.</value>
+  </data>
+  <data name="Licences.DetailNeverIssued" xml:space="preserve">
+    <value>{0} — nigdy nie wystawiono.</value>
+  </data>
+  <data name="Licences.NoneMatchesTheseFilters" xml:space="preserve">
+    <value>Żadna licencja nie pasuje do tych filtrów.</value>
+  </data>
+  <data name="Licences.NoneSelected" xml:space="preserve">
+    <value>Nie wybrano żadnej licencji.</value>
+  </data>
+  <data name="Licences.RegisterHoldsNoneYet" xml:space="preserve">
+    <value>Rejestr nie zawiera jeszcze żadnych licencji.</value>
+  </data>
+  <data name="Localization.PluralRuleSet" xml:space="preserve">
+    <value>one-few-many</value>
+  </data>
+  <data name="Main.About" xml:space="preserve">
+    <value>O programie</value>
+  </data>
+  <data name="Main.Address" xml:space="preserve">
+    <value>Adres</value>
+  </data>
+  <data name="Main.ApplicationMenu" xml:space="preserve">
+    <value>Menu aplikacji</value>
+  </data>
+  <data name="Main.Clear" xml:space="preserve">
+    <value>Wyczyść</value>
+  </data>
+  <data name="Main.ClearSelection" xml:space="preserve">
+    <value>Wyczyść zaznaczenie</value>
+  </data>
+  <data name="Main.Contact" xml:space="preserve">
+    <value>Kontakt</value>
+  </data>
+  <data name="Main.CopyIdentifier" xml:space="preserve">
+    <value>Kopiuj identyfikator</value>
+  </data>
+  <data name="Main.CopyLicenceId" xml:space="preserve">
+    <value>Kopiuj identyfikator licencji</value>
+  </data>
+  <data name="Main.CopySignedPayload" xml:space="preserve">
+    <value>Kopiuj podpisany ładunek</value>
+  </data>
+  <data name="Main.CopyWholeToken" xml:space="preserve">
+    <value>Kopiuj cały token</value>
+  </data>
+  <data name="Main.Customer" xml:space="preserve">
+    <value>Klient</value>
+  </data>
+  <data name="Main.CustomerEMailIdentifierLicenceId" xml:space="preserve">
+    <value>Klient, e-mail, identyfikator, identyfikator licencji lub notatki</value>
+  </data>
+  <data name="Main.Customers" xml:space="preserve">
+    <value>Klienci</value>
+  </data>
+  <data name="Main.EMail" xml:space="preserve">
+    <value>E-mail</value>
+  </data>
+  <data name="Main.Expiry" xml:space="preserve">
+    <value>Wygasa</value>
+  </data>
+  <data name="Main.ExportIssue" xml:space="preserve">
+    <value>Eksportuj to wydanie…</value>
+  </data>
+  <data name="Main.ExportLatest" xml:space="preserve">
+    <value>Eksportuj najnowsze…</value>
+  </data>
+  <data name="Main.ExtendInclusive" xml:space="preserve">
+    <value>Przedłuż do (włącznie)</value>
+  </data>
+  <data name="Main.ExtendIssue" xml:space="preserve">
+    <value>Przedłuż i wystaw</value>
+  </data>
+  <data name="Main.ExtendSelectedLicences" xml:space="preserve">
+    <value>Przedłuż wybrane licencje</value>
+  </data>
+  <data name="Main.FindLicence" xml:space="preserve">
+    <value>Znajdź licencję</value>
+  </data>
+  <data name="Main.FirstName" xml:space="preserve">
+    <value>Imię</value>
+  </data>
+  <data name="Main.Held" xml:space="preserve">
+    <value>Wstrzymane</value>
+  </data>
+  <data name="Main.Identifier" xml:space="preserve">
+    <value>Identyfikator</value>
+  </data>
+  <data name="Main.IncludeLicenceBatchOperation" xml:space="preserve">
+    <value>Uwzględnij tę licencję w operacji zbiorczej</value>
+  </data>
+  <data name="Main.InspectLatest" xml:space="preserve">
+    <value>Sprawdź najnowsze</value>
+  </data>
+  <data name="Main.IssueNoteOptionalRecordedAuditLog" xml:space="preserve">
+    <value>Notatka wystawienia — opcjonalna, zapisywana w logu audytu</value>
+  </data>
+  <data name="Main.IssueSave" xml:space="preserve">
+    <value>Wystaw i zapisz…</value>
+  </data>
+  <data name="Main.Issuing" xml:space="preserve">
+    <value>Wystawianie</value>
+  </data>
+  <data name="Main.IssuingHistory" xml:space="preserve">
+    <value>Historia wystawień</value>
+  </data>
+  <data name="Main.LastName" xml:space="preserve">
+    <value>Nazwisko</value>
+  </data>
+  <data name="Main.LicenceId" xml:space="preserve">
+    <value>Identyfikator licencji</value>
+  </data>
+  <data name="Main.Licences" xml:space="preserve">
+    <value>Licencje</value>
+  </data>
+  <data name="Main.LicensedTo" xml:space="preserve">
+    <value>Licencjobiorca</value>
+  </data>
+  <data name="Main.MaximiseRestore" xml:space="preserve">
+    <value>Maksymalizuj / przywróć</value>
+  </data>
+  <data name="Main.Minimise" xml:space="preserve">
+    <value>Minimalizuj</value>
+  </data>
+  <data name="Main.NameRequiredWhatGetsSigned" xml:space="preserve">
+    <value>Nazwa — wymagana, i to ona jest podpisywana</value>
+  </data>
+  <data name="Main.New" xml:space="preserve">
+    <value>Nowy</value>
+  </data>
+  <data name="Main.NewLicence" xml:space="preserve">
+    <value>Nowa licencja</value>
+  </data>
+  <data name="Main.NotAvailableYet" xml:space="preserve">
+    <value>Jeszcze niedostępne</value>
+  </data>
+  <data name="Main.NoteOptional" xml:space="preserve">
+    <value>Notatka (opcjonalna)</value>
+  </data>
+  <data name="Main.NotesAdministrativeOnly" xml:space="preserve">
+    <value>Notatki — tylko administracyjne</value>
+  </data>
+  <data name="Main.NotesAdministrativeOnlyNeverTravelLicence" xml:space="preserve">
+    <value>Notatki — tylko administracyjne, nigdy nie trafiają do licencji</value>
+  </data>
+  <data name="Main.OpenCustomers" xml:space="preserve">
+    <value>Otwórz w Klientach</value>
+  </data>
+  <data name="Main.Product" xml:space="preserve">
+    <value>Produkt</value>
+  </data>
+  <data name="Main.ReasonIssue" xml:space="preserve">
+    <value>Powód wystawienia</value>
+  </data>
+  <data name="Main.RecordedAsRenewalAsInitialIssue" xml:space="preserve">
+    <value>Zapisywane jako Odnowienie — albo jako Pierwsze wystawienie dla licencji, która nigdy nie była wystawiona.</value>
+  </data>
+  <data name="Main.SaveCustomer" xml:space="preserve">
+    <value>Zapisz klienta</value>
+  </data>
+  <data name="Main.SaveTerms" xml:space="preserve">
+    <value>Zapisz warunki</value>
+  </data>
+  <data name="Main.Search" xml:space="preserve">
+    <value>Szukaj</value>
+  </data>
+  <data name="Main.Seats" xml:space="preserve">
+    <value>Stanowiska</value>
+  </data>
+  <data name="Main.SelectAllShown" xml:space="preserve">
+    <value>Zaznacz wszystkie widoczne</value>
+  </data>
+  <data name="Main.SendLicence" xml:space="preserve">
+    <value>Wyślij licencję…</value>
+  </data>
+  <data name="Main.Settings" xml:space="preserve">
+    <value>Ustawienia…</value>
+  </data>
+  <data name="Main.ShowsMessageWillSentStoredLicence" xml:space="preserve">
+    <value>Pokazuje wiadomość, która zostanie wysłana, z załączoną zapisaną licencją</value>
+  </data>
+  <data name="Main.SignedPayload" xml:space="preserve">
+    <value>Podpisany ładunek</value>
+  </data>
+  <data name="Main.SignedWith" xml:space="preserve">
+    <value>Podpisano kluczem</value>
+  </data>
+  <data name="Main.Standing" xml:space="preserve">
+    <value>Termin</value>
+  </data>
+  <data name="Main.Status" xml:space="preserve">
+    <value>Stan</value>
+  </data>
+  <data name="Main.StorageBackupRestoreJsonlExportData" xml:space="preserve">
+    <value>Dane — kopia zapasowa, przywracanie, eksport JSONL i folder danych</value>
+  </data>
+  <data name="Main.SwitchBetweenLightDarkTheme" xml:space="preserve">
+    <value>Przełącz między motywem jasnym i ciemnym</value>
+  </data>
+  <data name="Main.TheCustomerAlreadyHasExactFile" xml:space="preserve">
+    <value>Klient ma już dokładnie ten plik. Lepiej użyć „Eksportuj to wydanie…” w historii wystawień poniżej — wysyła ponownie dokładnie ten artefakt, który został dostarczony, bajt po bajcie, bez podpisywania nowego. Wystaw nowy tylko wtedy, gdy klient potrzebuje świeżo podpisanego zamiennika.</value>
+  </data>
+  <data name="Main.TicketWhoAskedWhyNowStored" xml:space="preserve">
+    <value>Zgłoszenie, kto poprosił, dlaczego teraz — zapisywane w linii audytu operacji zbiorczej</value>
+  </data>
+  <data name="Main.Token" xml:space="preserve">
+    <value>Token</value>
+  </data>
+  <data name="Main.Valid" xml:space="preserve">
+    <value>Ważna</value>
+  </data>
+  <data name="Main.ValidFrom" xml:space="preserve">
+    <value>Ważna od</value>
+  </data>
+  <data name="Main.ValidUntilInclusive" xml:space="preserve">
+    <value>Ważna do (włącznie)</value>
+  </data>
+  <data name="Main.WhatEmberternWouldSayAboutToday" xml:space="preserve">
+    <value>Co EmberTern powiedziałby o niej dzisiaj</value>
+  </data>
+  <data name="Reason.Initial" xml:space="preserve">
+    <value>Pierwsze wystawienie</value>
+  </data>
+  <data name="Reason.InitialExplained" xml:space="preserve">
+    <value>Pierwszy artefakt dla tej licencji. Klientowi nie wysłano jeszcze nic.</value>
+  </data>
+  <data name="Reason.ReissueLost" xml:space="preserve">
+    <value>Ponowne wystawienie — utracony plik</value>
+  </data>
+  <data name="Reason.ReissueLostExplained" xml:space="preserve">
+    <value>Klient utracił swoją kopię pliku, który poza tym jest nadal poprawny.</value>
+  </data>
+  <data name="Reason.Renewal" xml:space="preserve">
+    <value>Odnowienie</value>
+  </data>
+  <data name="Reason.RenewalExplained" xml:space="preserve">
+    <value>Termin ważności się przesunął. Najpierw użyj „Zapisz warunki” z nowym terminem — wystawienie podpisuje zapisane warunki.</value>
+  </data>
+  <data name="Reason.TermsChange" xml:space="preserve">
+    <value>Zmiana warunków</value>
+  </data>
+  <data name="Reason.TermsChangeExplained" xml:space="preserve">
+    <value>Zmieniło się coś innego niż termin ważności: stanowiska, data początkowa albo nazwa licencjobiorcy.</value>
+  </data>
+  <data name="Row.Seats.few" xml:space="preserve">
+    <value>{0} stanowiska</value>
+  </data>
+  <data name="Row.Seats.many" xml:space="preserve">
+    <value>{0} stanowisk</value>
+  </data>
+  <data name="Row.Seats.one" xml:space="preserve">
+    <value>{0} stanowisko</value>
+  </data>
+  <data name="Row.StandingExpiredDaysAgo" xml:space="preserve">
+    <value>Wygasła {0} dni temu</value>
+  </data>
+  <data name="Row.StandingExpiredYesterday" xml:space="preserve">
+    <value>Wygasła wczoraj</value>
+  </data>
+  <data name="Row.StandingExpiresInDays" xml:space="preserve">
+    <value>Wygasa za {0} dni</value>
+  </data>
+  <data name="Row.StandingExpiresToday" xml:space="preserve">
+    <value>Wygasa dziś</value>
+  </data>
+  <data name="Row.StandingExpiresTomorrow" xml:space="preserve">
+    <value>Wygasa jutro</value>
+  </data>
+  <data name="Row.StandingNeverIssued" xml:space="preserve">
+    <value>Nigdy nie wystawiona</value>
+  </data>
+  <data name="Send.Attached" xml:space="preserve">
+    <value>Załącznik</value>
+  </data>
+  <data name="Send.Attachment.few" xml:space="preserve">
+    <value>{1} · {2} bajty · {3}</value>
+  </data>
+  <data name="Send.Attachment.many" xml:space="preserve">
+    <value>{1} · {2} bajtów · {3}</value>
+  </data>
+  <data name="Send.Attachment.one" xml:space="preserve">
+    <value>{1} · {2} bajt · {3}</value>
+  </data>
+  <data name="Send.DeliveryDirect" xml:space="preserve">
+    <value>Wysyłanie przez {0}:{1}.</value>
+  </data>
+  <data name="Send.DeliveryNoServer" xml:space="preserve">
+    <value>Nie skonfigurowano serwera SMTP, więc tę wiadomość można tylko zapisać jako plik .eml i wysłać z własnego programu pocztowego. Dodaj serwer w Ustawienia ▸ E-mail, aby wysyłać bezpośrednio.</value>
+  </data>
+  <data name="Send.From" xml:space="preserve">
+    <value>Od</value>
+  </data>
+  <data name="Send.LanguageNote" xml:space="preserve">
+    <value>Napisana w języku „{0}”. Język dotyczy wszystkich klientów i zmienia się go w Ustawienia ▸ E-mail.</value>
+  </data>
+  <data name="Send.Message" xml:space="preserve">
+    <value>Wiadomość</value>
+  </data>
+  <data name="Send.PreviewNote" xml:space="preserve">
+    <value>To jest dokładnie to, co zostanie wysłane. Razem z wiadomością podróżuje jej wersja HTML dla programów pocztowych, które ją pokazują; programy usuwające HTML pokażą tekst powyżej.</value>
+  </data>
+  <data name="Send.SaveAsEml" xml:space="preserve">
+    <value>Zapisz jako .eml…</value>
+  </data>
+  <data name="Send.Send" xml:space="preserve">
+    <value>Wyślij</value>
+  </data>
+  <data name="Send.SendLicence" xml:space="preserve">
+    <value>Wyślij licencję</value>
+  </data>
+  <data name="Send.SendsMessageItsAttachmentAfterConfirmation" xml:space="preserve">
+    <value>Wysyła tę wiadomość razem z załącznikiem, po potwierdzeniu</value>
+  </data>
+  <data name="Send.Subject" xml:space="preserve">
+    <value>Temat</value>
+  </data>
+  <data name="Send.To" xml:space="preserve">
+    <value>Do</value>
+  </data>
+  <data name="Send.WritesExactMessageAsFileYou" xml:space="preserve">
+    <value>Zapisuje dokładnie tę wiadomość jako plik, który możesz otworzyć i wysłać z własnego programu pocztowego</value>
+  </data>
+  <data name="Settings.ApplicationLanguage" xml:space="preserve">
+    <value>Język aplikacji</value>
+  </data>
+  <data name="Settings.DeletesStoredEMailConfigurationIncluding" xml:space="preserve">
+    <value>Usuwa zapisaną konfigurację e-mail razem z hasłem</value>
+  </data>
+  <data name="Settings.DeliveryBoth" xml:space="preserve">
+    <value>Wysyłanie bezpośrednie i dostarczanie plikiem są dostępne.</value>
+  </data>
+  <data name="Settings.DeliveryFileOnly" xml:space="preserve">
+    <value>Tylko dostarczanie plikiem: wiadomość można zapisać jako plik .eml i wysłać z własnego programu pocztowego. Dodaj serwer poniżej, aby wysyłać bezpośrednio.</value>
+  </data>
+  <data name="Settings.DeliveryNotConfigured" xml:space="preserve">
+    <value>Jeszcze nieskonfigurowane. Adres nadawcy to minimum — bez niego nie da się nawet złożyć wiadomości.</value>
+  </data>
+  <data name="Settings.DiscardsEditsReloadsWhatSaved" xml:space="preserve">
+    <value>Odrzuca zmiany i wczytuje ponownie to, co zapisane</value>
+  </data>
+  <data name="Settings.Email" xml:space="preserve">
+    <value>E-mail</value>
+  </data>
+  <data name="Settings.ForgetSettings" xml:space="preserve">
+    <value>Usuń zapisane ustawienia</value>
+  </data>
+  <data name="Settings.FromAddressWhatCustomerReplies" xml:space="preserve">
+    <value>Adres nadawcy — na ten adres odpowie klient</value>
+  </data>
+  <data name="Settings.FromNameOptional" xml:space="preserve">
+    <value>Nazwa nadawcy (opcjonalna)</value>
+  </data>
+  <data name="Settings.General" xml:space="preserve">
+    <value>Ogólne</value>
+  </data>
+  <data name="Settings.ItIndependentInterfaceLanguageAppliesEvery" xml:space="preserve">
+    <value>Jest niezależny od języka interfejsu i dotyczy wszystkich klientów — przełącz go przed wysłaniem do klienta czytającego w drugim języku.</value>
+  </data>
+  <data name="Settings.ItSendsRealMessageThroughSettings" xml:space="preserve">
+    <value>Wysyła prawdziwą wiadomość przez ustawienia z tej strony, niezależnie od tego, czy zostały zapisane. Nie jest załączana żadna licencja i nic nie jest zapisywane przy żadnym kliencie.</value>
+  </data>
+  <data name="Settings.Language" xml:space="preserve">
+    <value>Język</value>
+  </data>
+  <data name="Settings.LicencjeTwojafirmaPl" xml:space="preserve">
+    <value>licencje@twojafirma.pl</value>
+  </data>
+  <data name="Settings.MessageLanguage" xml:space="preserve">
+    <value>Język wiadomości</value>
+  </data>
+  <data name="Settings.MessageLanguageDescription" xml:space="preserve">
+    <value>Język, w którym pisana jest wiadomość e-mail z licencją. Jest niezależny od języka interfejsu i dotyczy wszystkich klientów — przełącz go przed wysłaniem do klienta czytającego w drugim języku.</value>
+  </data>
+  <data name="Settings.PasswordGmailMailboxAppPasswordNot" xml:space="preserve">
+    <value>Hasło — dla skrzynki Gmail jest to hasło aplikacji, nie hasło konta</value>
+  </data>
+  <data name="Settings.Port" xml:space="preserve">
+    <value>Port</value>
+  </data>
+  <data name="Settings.RevertAction" xml:space="preserve">
+    <value>Przywróć zapisane</value>
+  </data>
+  <data name="Settings.SaveAction" xml:space="preserve">
+    <value>Zapisz</value>
+  </data>
+  <data name="Settings.SecurityNone" xml:space="preserve">
+    <value>Bez szyfrowania — tylko przekaźnik wewnętrzny</value>
+  </data>
+  <data name="Settings.SecurityStartTls" xml:space="preserve">
+    <value>STARTTLS (zalecane)</value>
+  </data>
+  <data name="Settings.SendTestEmail" xml:space="preserve">
+    <value>Wyślij wiadomość testową…</value>
+  </data>
+  <data name="Settings.SendTestMessageYourOwnAddress" xml:space="preserve">
+    <value>Wyślij wiadomość testową na - własny adres, nigdy na adres klienta</value>
+  </data>
+  <data name="Settings.Sender" xml:space="preserve">
+    <value>Nadawca</value>
+  </data>
+  <data name="Settings.SendsTestMessageAddressAboveAfter" xml:space="preserve">
+    <value>Wysyła wiadomość testową na adres powyżej, po potwierdzeniu</value>
+  </data>
+  <data name="Settings.ServerLeaveEmptyDeliverByFile" xml:space="preserve">
+    <value>Serwer — pozostaw pusty, aby dostarczać wyłącznie plikiem</value>
+  </data>
+  <data name="Settings.SignIn" xml:space="preserve">
+    <value>Logowanie</value>
+  </data>
+  <data name="Settings.SmtpHost" xml:space="preserve">
+    <value>Host SMTP</value>
+  </data>
+  <data name="Settings.SmtpSettings" xml:space="preserve">
+    <value>Ustawienia SMTP</value>
+  </data>
+  <data name="Settings.StoredIn" xml:space="preserve">
+    <value>Przechowywane w</value>
+  </data>
+  <data name="Settings.TestConfiguration" xml:space="preserve">
+    <value>Przetestuj konfigurację</value>
+  </data>
+  <data name="Settings.TheLanguageLicenceEMailWritten" xml:space="preserve">
+    <value>Język, w którym pisana jest wiadomość e-mail z licencją</value>
+  </data>
+  <data name="Settings.TransportSecurity" xml:space="preserve">
+    <value>Zabezpieczenie połączenia</value>
+  </data>
+  <data name="Settings.UsernameAccountSigns" xml:space="preserve">
+    <value>Użytkownik — konto, które się loguje</value>
+  </data>
+  <data name="Settings.WindowTitle" xml:space="preserve">
+    <value>Ustawienia</value>
+  </data>
+  <data name="Settings.YouExampleCom" xml:space="preserve">
+    <value>you@example.com</value>
+  </data>
+  <data name="Status.ArtifactExported" xml:space="preserve">
+    <value>Wyeksportowano zapisany artefakt do {0}.</value>
+  </data>
+  <data name="Status.ArtifactIatNotAfterCurrent" xml:space="preserve">
+    <value>Artefakt licencji {0} nosi iat {1}, który nie jest późniejszy niż {2} bieżącego artefaktu. EmberTern odmówiłby zainstalowania go jako zamiennika, więc jest odrzucany tutaj, a nie zapisywany jako dostarczony.</value>
+  </data>
+  <data name="Status.BackupCorrupt" xml:space="preserve">
+    <value>Ten plik kopii zapasowej jest uszkodzony i nie da się go odczytać. Spróbuj innej kopii.</value>
+  </data>
+  <data name="Status.BackupFromNewerBuild" xml:space="preserve">
+    <value>Ta kopia zapasowa została zapisana przez nowszy License Manager. Zaktualizuj tę aplikację, aby ją odczytać.</value>
+  </data>
+  <data name="Status.BackupInspected" xml:space="preserve">
+    <value>Ta kopia zapasowa została wykonana {0} UTC (schemat rejestru {1}). Podaj jej hasło dostępu, aby ją przywrócić.</value>
+  </data>
+  <data name="Status.BackupNotABackup" xml:space="preserve">
+    <value>Ten plik nie jest kopią zapasową rejestru EmberTern. ⚠ Magazyn kluczy to inny plik o innym przeznaczeniu i nie jest tu przywracany.</value>
+  </data>
+  <data name="Status.BackupNotOpened" xml:space="preserve">
+    <value>Nie udało się otworzyć tej kopii zapasowej ({0}).</value>
+  </data>
+  <data name="Status.BackupNotRead" xml:space="preserve">
+    <value>Nie udało się odczytać tej kopii zapasowej: {0}</value>
+  </data>
+  <data name="Status.BackupNotWritten" xml:space="preserve">
+    <value>Nie udało się zapisać kopii zapasowej: {0}</value>
+  </data>
+  <data name="Status.BackupPassphraseHint" xml:space="preserve">
+    <value>Użyj długiego hasła dostępu do kopii zapasowej — sześć wygenerowanych słów, przechowywanych w menedżerze haseł. Nie da się go zresetować, a kopia zapasowa, której nikt nie otworzy, nie jest kopią zapasową.</value>
+  </data>
+  <data name="Status.BackupUnsupportedScheme" xml:space="preserve">
+    <value>Ta kopia zapasowa używa schematu szyfrowania, którego ta wersja nie obsługuje.</value>
+  </data>
+  <data name="Status.BackupWritten" xml:space="preserve">
+    <value>Zaszyfrowana kopia zapasowa zapisana do {0} — klientów: {1}, licencji: {2}, artefaktów: {3}, wpisów audytu: {4}; sprawdzona wiersz po wierszu względem rejestru.</value>
+  </data>
+  <data name="Status.BackupWrongPassphrase" xml:space="preserve">
+    <value>To hasło dostępu nie otwiera kopii zapasowej — albo plik został zmodyfikowany po zapisaniu. Sprawdź najpierw hasło dostępu.</value>
+  </data>
+  <data name="Status.BatchCompleted.few" xml:space="preserve">
+    <value>{0} licencje przedłużono do {1}. Artefaktów zapisanych jako operacja zbiorcza {3}: {2}. Nic nie zostało zapisane na dysku — wyeksportuj pliki z rejestru, kiedy będziesz gotów je wysłać.</value>
+  </data>
+  <data name="Status.BatchCompleted.many" xml:space="preserve">
+    <value>{0} licencji przedłużono do {1}. Artefaktów zapisanych jako operacja zbiorcza {3}: {2}. Nic nie zostało zapisane na dysku — wyeksportuj pliki z rejestru, kiedy będziesz gotów je wysłać.</value>
+  </data>
+  <data name="Status.BatchCompleted.one" xml:space="preserve">
+    <value>{0} licencję przedłużono do {1}. Artefaktów zapisanych jako operacja zbiorcza {3}: {2}. Nic nie zostało zapisane na dysku — wyeksportuj pliki z rejestru, kiedy będziesz gotów je wysłać.</value>
+  </data>
+  <data name="Status.BatchCompletedWithFirstIssues.few" xml:space="preserve">
+    <value>{0} licencje przedłużono do {1}. Artefaktów zapisanych jako operacja zbiorcza {3}: {2}. Pierwszy artefakt otrzymało z nich: {4}. Nic nie zostało zapisane na dysku — wyeksportuj pliki z rejestru, kiedy będziesz gotów je wysłać.</value>
+  </data>
+  <data name="Status.BatchCompletedWithFirstIssues.many" xml:space="preserve">
+    <value>{0} licencji przedłużono do {1}. Artefaktów zapisanych jako operacja zbiorcza {3}: {2}. Pierwszy artefakt otrzymało z nich: {4}. Nic nie zostało zapisane na dysku — wyeksportuj pliki z rejestru, kiedy będziesz gotów je wysłać.</value>
+  </data>
+  <data name="Status.BatchCompletedWithFirstIssues.one" xml:space="preserve">
+    <value>{0} licencję przedłużono do {1}. Artefaktów zapisanych jako operacja zbiorcza {3}: {2}. Pierwszy artefakt otrzymało z nich: {4}. Nic nie zostało zapisane na dysku — wyeksportuj pliki z rejestru, kiedy będziesz gotów je wysłać.</value>
+  </data>
+  <data name="Status.BatchUnitPairsMismatchedTerms" xml:space="preserve">
+    <value>Jednostka operacji zbiorczej łączy warunki licencji {0} z artefaktem dla {1}.</value>
+  </data>
+  <data name="Status.Blocked.few" xml:space="preserve">
+    <value>{0} wybranych licencji nie można przedłużyć do tej daty, więc cała operacja jest wstrzymana. Nic nie jest wystawiane częściowo — usuń je z zaznaczenia albo wybierz inną datę docelową.</value>
+  </data>
+  <data name="Status.Blocked.many" xml:space="preserve">
+    <value>{0} wybranych licencji nie można przedłużyć do tej daty, więc cała operacja jest wstrzymana. Nic nie jest wystawiane częściowo — usuń je z zaznaczenia albo wybierz inną datę docelową.</value>
+  </data>
+  <data name="Status.Blocked.one" xml:space="preserve">
+    <value>{0} wybranej licencji nie można przedłużyć do tej daty, więc cała operacja jest wstrzymana. Nic nie jest wystawiane częściowo — usuń ją z zaznaczenia albo wybierz inną datę docelową.</value>
+  </data>
+  <data name="Status.BlockerAlreadyValidUntil" xml:space="preserve">
+    <value>Ważna już do {0}, więc data docelowa jej nie przedłuży. Wybierz późniejszą datę docelową albo usuń tę licencję z zaznaczenia.</value>
+  </data>
+  <data name="Status.BlockerTargetBeforeStart" xml:space="preserve">
+    <value>Data docelowa nie jest późniejsza niż data początkowa tej licencji ({0}). Wybierz późniejszą datę docelową albo usuń tę licencję z zaznaczenia.</value>
+  </data>
+  <data name="Status.ChooseIssueReasonFirst" xml:space="preserve">
+    <value>Wybierz powód ponownego wystawienia tej licencji, zanim podpiszesz nowy artefakt.</value>
+  </data>
+  <data name="Status.ComposeArtifactUnreadable" xml:space="preserve">
+    <value>Nie udało się odczytać zapisanego artefaktu licencji {0}, więc żadna wiadomość nie może go opisać. Sprawdź go w historii wystawień, zanim cokolwiek wyślesz.</value>
+  </data>
+  <data name="Status.ComposeCustomerEmailInvalid" xml:space="preserve">
+    <value>Adres e-mail klienta nie wygląda na adres: {0}</value>
+  </data>
+  <data name="Status.ComposeNoCustomerEmail" xml:space="preserve">
+    <value>{0} nie ma adresu e-mail. Dodaj go na stronie Klient albo wyeksportuj licencję do pliku i dostarcz ją inaczej.</value>
+  </data>
+  <data name="Status.ComposeNoSenderAddress" xml:space="preserve">
+    <value>W ustawieniach e-mail nie ma użytecznego adresu nadawcy, a wiadomość musi skądś przychodzić. Ustaw go w Ustawienia ▸ E-mail.</value>
+  </data>
+  <data name="Status.ConfirmationUnavailableNothingChanged" xml:space="preserve">
+    <value>Ta operacja wymaga potwierdzenia, którego nie udało się pokazać, więc nic nie zostało zmienione.</value>
+  </data>
+  <data name="Status.ConfirmationUnavailableNothingSent" xml:space="preserve">
+    <value>Ta operacja wymaga potwierdzenia, którego nie udało się pokazać, więc nic nie zostało wysłane.</value>
+  </data>
+  <data name="Status.CopiedToClipboard" xml:space="preserve">
+    <value>Skopiowano {0} do schowka.</value>
+  </data>
+  <data name="Status.CustomerNameRequired" xml:space="preserve">
+    <value>Nazwa klienta jest wymagana. Jest podpisywana w każdej licencji i widoczna w jego EmberTern.</value>
+  </data>
+  <data name="Status.CustomerSaved" xml:space="preserve">
+    <value>Zapisano {0}.</value>
+  </data>
+  <data name="Status.DataFolderNotOpened" xml:space="preserve">
+    <value>Nie udało się otworzyć folderu danych: {0}</value>
+  </data>
+  <data name="Status.DpapiProtectionNote" xml:space="preserve">
+    <value>Hasło jest szyfrowane mechanizmem Windows DPAPI dla tego konta Windows na tym komputerze. Nie da się go odczytać z innego konta, na innej maszynie ani z kopii pliku — jest to zamierzone i oznacza, że po przeniesieniu na nowy komputer hasło trzeba wpisać ponownie.</value>
+  </data>
+  <data name="Status.EmailIsWindowsOnly" xml:space="preserve">
+    <value>Wysyłanie poczty jest dostępne tylko w systemie Windows, ponieważ hasło SMTP jest chronione mechanizmem Windows DPAPI. Wyeksportuj licencję do pliku.</value>
+  </data>
+  <data name="Status.EmailNoLongerConfigured" xml:space="preserve">
+    <value>E-mail nie jest już skonfigurowany.</value>
+  </data>
+  <data name="Status.EmailNotConfigured" xml:space="preserve">
+    <value>E-mail nie jest jeszcze skonfigurowany. Otwórz Ustawienia ▸ E-mail i wpisz co najmniej adres nadawcy.</value>
+  </data>
+  <data name="Status.EmailSettingsNotDeleted" xml:space="preserve">
+    <value>Nie udało się usunąć ustawień e-mail: {0}</value>
+  </data>
+  <data name="Status.EmailSettingsNotRead" xml:space="preserve">
+    <value>Nie udało się odczytać ustawień e-mail: {0}</value>
+  </data>
+  <data name="Status.EmailSettingsNotReadNothingSent" xml:space="preserve">
+    <value>Nie udało się odczytać ustawień e-mail, więc nie można nic wysłać.</value>
+  </data>
+  <data name="Status.EmailSettingsNotReadShort" xml:space="preserve">
+    <value>Nie udało się odczytać ustawień e-mail.</value>
+  </data>
+  <data name="Status.EmailSettingsNotSaved" xml:space="preserve">
+    <value>Nie udało się zapisać ustawień e-mail: {0}</value>
+  </data>
+  <data name="Status.EnterKeystorePassphrase" xml:space="preserve">
+    <value>Podaj hasło dostępu magazynu kluczy.</value>
+  </data>
+  <data name="Status.ExportNotWritten" xml:space="preserve">
+    <value>Nie udało się zapisać eksportu: {0}</value>
+  </data>
+  <data name="Status.FileNotWritten" xml:space="preserve">
+    <value>Nie udało się zapisać pliku: {0}</value>
+  </data>
+  <data name="Status.IntegrityCurrentNotNewest" xml:space="preserve">
+    <value>Licencja {0} wskazuje artefakt, który nie jest jej najnowszym.</value>
+  </data>
+  <data name="Status.IntegrityCurrentNotOwned" xml:space="preserve">
+    <value>Licencja {0} wskazuje jako bieżący artefakt, który do niej nie należy.</value>
+  </data>
+  <data name="Status.IntegrityCustomerMissing" xml:space="preserve">
+    <value>Licencja {0} należy do klienta, którego nie ma w rejestrze.</value>
+  </data>
+  <data name="Status.IntegrityNoCurrentArtifact" xml:space="preserve">
+    <value>Licencja {0} ma artefakty, ale żaden nie jest oznaczony jako bieżący.</value>
+  </data>
+  <data name="Status.IssueExported" xml:space="preserve">
+    <value>Wyeksportowano wydanie {0} z {1} do {2}.</value>
+  </data>
+  <data name="Status.IssuedAndRecorded" xml:space="preserve">
+    <value>Wystawiono i zapisano w rejestrze dla {0}. Nie zapisano na dysku — artefakt można wyeksportować z rejestru w dowolnym momencie.</value>
+  </data>
+  <data name="Status.IssuedAndSaved" xml:space="preserve">
+    <value>Wystawiono dla {0} i zapisano do {1}.</value>
+  </data>
+  <data name="Status.IssuedButFileNotWritten" xml:space="preserve">
+    <value>Wystawiono i zapisano w rejestrze, ale nie udało się zapisać pliku: {0}</value>
+  </data>
+  <data name="Status.JsonlExportWritten" xml:space="preserve">
+    <value>Zwykły eksport JSONL zapisany do {0} — linii: {1}. ⛔ NIEZASZYFROWANY: zawiera każdy wystawiony token licencji w czytelnej postaci. To diagnostyczne wyjście awaryjne, nie kopia zapasowa.</value>
+  </data>
+  <data name="Status.KeyIdRequired" xml:space="preserve">
+    <value>Identyfikator klucza jest wymagany — podróżuje w każdej licencji.</value>
+  </data>
+  <data name="Status.KeystoreAlreadyExists" xml:space="preserve">
+    <value>Magazyn kluczy już istnieje. Utworzenie drugiego klucza podpisującego sprawiłoby, że żadnej już wystawionej licencji nie dałoby się odnowić.</value>
+  </data>
+  <data name="Status.KeystoreDamaged" xml:space="preserve">
+    <value>Magazyn kluczy jest uszkodzony. Przywróć go z kopii offline i sprawdź przywracanie.</value>
+  </data>
+  <data name="Status.KeystoreFromNewerBuild" xml:space="preserve">
+    <value>Magazyn kluczy został zapisany przez nowszy License Manager. Zaktualizuj tę aplikację.</value>
+  </data>
+  <data name="Status.KeystoreNotOpened" xml:space="preserve">
+    <value>Nie udało się otworzyć magazynu kluczy ({0}).</value>
+  </data>
+  <data name="Status.KeystoreNotRead" xml:space="preserve">
+    <value>Nie udało się odczytać magazynu kluczy: {0}</value>
+  </data>
+  <data name="Status.KeystoreNotWritten" xml:space="preserve">
+    <value>Nie udało się zapisać magazynu kluczy: {0}</value>
+  </data>
+  <data name="Status.LicenceAppearsTwiceInBatch" xml:space="preserve">
+    <value>Licencja {0} występuje dwa razy w jednej operacji zbiorczej. Dwa artefakty wystawione w tej samej operacji nosiłyby to samo iat, a drugi nigdy nie mógłby zastąpić pierwszego u klienta.</value>
+  </data>
+  <data name="Status.LicenceBelongsToAnotherCustomer" xml:space="preserve">
+    <value>Licencja {0} należy do klienta {1} i nie może zostać przeniesiona do {2}. Artefakty już dla niej wystawione noszą nazwę pierwotnego klienta, więc rejestr przestałby się zgadzać z tym, co zostało dostarczone.</value>
+  </data>
+  <data name="Status.LicenceNamesUnknownCustomer" xml:space="preserve">
+    <value>Licencja {0} wskazuje klienta {1}, którego nie ma w rejestrze.</value>
+  </data>
+  <data name="Status.LicenceNeverIssued" xml:space="preserve">
+    <value>Ta licencja nigdy nie była wystawiona.</value>
+  </data>
+  <data name="Status.LicenceNeverIssuedNothingToSend" xml:space="preserve">
+    <value>Ta licencja nigdy nie była wystawiona, więc nie ma artefaktu do wysłania. Najpierw ją wystaw.</value>
+  </data>
+  <data name="Status.LicenceNotIssued" xml:space="preserve">
+    <value>Nie udało się wystawić licencji: {0}</value>
+  </data>
+  <data name="Status.LicenceRefersToUnknownCustomer" xml:space="preserve">
+    <value>Licencja {0} wskazuje klienta {1}, którego rejestr nie zawiera. Nic nie zostało wystawione.</value>
+  </data>
+  <data name="Status.LicenceSaved" xml:space="preserve">
+    <value>Zapisano licencję {0}….</value>
+  </data>
+  <data name="Status.LicenceSavedShort" xml:space="preserve">
+    <value>Zapisano licencję {0}….</value>
+  </data>
+  <data name="Status.MessageNotSent" xml:space="preserve">
+    <value>Wiadomość nie została wysłana: {0} Próba jest zapisana w logu audytu. Możesz zamiast tego zapisać wiadomość jako plik .eml i wysłać ją z własnego programu pocztowego.</value>
+  </data>
+  <data name="Status.MessageSavedToFile" xml:space="preserve">
+    <value>Zapisano do {0}. Otwórz plik w programie pocztowym i wyślij — licencja jest załączona, a wiadomość gotowa.</value>
+  </data>
+  <data name="Status.NewCustomerHint" xml:space="preserve">
+    <value>Nowy klient. Nazwa jest wymagana — to ona jest podpisywana.</value>
+  </data>
+  <data name="Status.NewKeyPassphraseHint" xml:space="preserve">
+    <value>Użyj długiego hasła dostępu — sześć wygenerowanych słów, przechowywanych w menedżerze haseł i na papierze. Nie da się go zresetować, a jego utrata oznacza, że żadnej licencji nie będzie już można odnowić.</value>
+  </data>
+  <data name="Status.NewLicenceHint" xml:space="preserve">
+    <value>Nowa licencja. Zapisz warunki, a potem wystaw.</value>
+  </data>
+  <data name="Status.NoSaveLocationOffered" xml:space="preserve">
+    <value>Nie wskazano miejsca zapisu, więc nic nie zostało zapisane.</value>
+  </data>
+  <data name="Status.NoSmtpHostToTest" xml:space="preserve">
+    <value>Nie ma hosta SMTP do przetestowania. Wpisz serwer powyżej — dostarczanie plikiem nie wymaga testu, bo nigdy się z niczym nie łączy.</value>
+  </data>
+  <data name="Status.NotAKeystore" xml:space="preserve">
+    <value>Plik {0} nie jest magazynem kluczy EmberTern.</value>
+  </data>
+  <data name="Status.NotAnEmailAddress" xml:space="preserve">
+    <value>„{0}” nie wygląda na adres e-mail. Podaj adres, na który ma dotrzeć wiadomość testowa.</value>
+  </data>
+  <data name="Status.NothingIssuedRegisterUnchanged" xml:space="preserve">
+    <value>Nic nie zostało wystawione, a rejestr jest bez zmian. {0}</value>
+  </data>
+  <data name="Status.PassphraseDoesNotOpenKeystore" xml:space="preserve">
+    <value>To hasło dostępu nie otwiera magazynu kluczy. Sprawdź je i spróbuj ponownie.</value>
+  </data>
+  <data name="Status.PassphrasesDoNotMatch" xml:space="preserve">
+    <value>Oba hasła dostępu nie są takie same.</value>
+  </data>
+  <data name="Status.PreviewOutOfDate" xml:space="preserve">
+    <value>Zaznaczenie albo data docelowa zmieniły się od zbudowania tego podglądu, więc nic nie zostało wystawione. Podgląd poniżej jest aktualny — sprawdź go i uruchom operację ponownie.</value>
+  </data>
+  <data name="Status.ReasonExpiryNotMoved" xml:space="preserve">
+    <value>Termin ważności nie przesunął się od ostatniego wystawienia, więc to nie jest odnowienie. Zmień termin i najpierw użyj „Zapisz warunki”, albo wybierz inny powód.</value>
+  </data>
+  <data name="Status.ReasonMustBeInitial" xml:space="preserve">
+    <value>Ta licencja nigdy nie była wystawiona, więc pierwszy artefakt może być tylko pierwszym wystawieniem.</value>
+  </data>
+  <data name="Status.ReasonNoTermsChange" xml:space="preserve">
+    <value>Od ostatniego wystawienia różni się tylko termin ważności, więc nie ma zmiany warunków do zapisania. Użyj „Zapisz warunki”, jeśli formularz nadal zawiera niezapisane zmiany, albo wybierz inny powód.</value>
+  </data>
+  <data name="Status.ReasonNotInitialAgain" xml:space="preserve">
+    <value>Ta licencja była już wystawiona, więc kolejny artefakt nie może być pierwszym wystawieniem. Wybierz odnowienie, zmianę warunków albo ponowne wystawienie utraconego pliku.</value>
+  </data>
+  <data name="Status.ReasonNotRecorded" xml:space="preserve">
+    <value>„{0}” nie jest jednym z zapisywanych powodów wystawienia.</value>
+  </data>
+  <data name="Status.ReasonRequired" xml:space="preserve">
+    <value>Wybierz powód wystawienia tej licencji.</value>
+  </data>
+  <data name="Status.RegisterClosedAndMustRestart" xml:space="preserve">
+    <value>{0} ⚠ License Manager zamknął swój rejestr i musi zostać uruchomiony ponownie. Rejestr na dysku nie został pozostawiony w stanie nieukończonym.</value>
+  </data>
+  <data name="Status.RegisterHasIntegrityProblems" xml:space="preserve">
+    <value>Rejestr ma problemy ze spójnością, więc nie została wykonana jego kopia zapasowa: {0}</value>
+  </data>
+  <data name="Status.RegisterIsInconsistent" xml:space="preserve">
+    <value>Rejestr jest niespójny.</value>
+  </data>
+  <data name="Status.RegisterNotClosed" xml:space="preserve">
+    <value>Nie udało się zamknąć rejestru, więc nie został zastąpiony. Nic nie zostało zmienione.</value>
+  </data>
+  <data name="Status.RegisterReplaced" xml:space="preserve">
+    <value>Aktywny rejestr został zastąpiony — klientów: {0}, licencji: {1}, artefaktów: {2}, wpisów audytu: {3}; sprawdzony ponownie po zapisaniu. ⭐ Poprzedni rejestr został zachowany jako {4}. License Manager zamknie się teraz — uruchom go ponownie, aby użyć przywróconego rejestru.</value>
+  </data>
+  <data name="Status.RestoreBackupInconsistent" xml:space="preserve">
+    <value>Kopia zapasowa przywróciła się do rejestru, który jest niespójny sam ze sobą, więc nic nie zostało zapisane.</value>
+  </data>
+  <data name="Status.RestoreBackupIsNotARegister" xml:space="preserve">
+    <value>Kopia zapasowa odszyfrowała się, ale to, co z niej wyszło, nie jest rejestrem, który ta wersja potrafi otworzyć.</value>
+  </data>
+  <data name="Status.RestoreChooseFolder" xml:space="preserve">
+    <value>Wybierz folder, do którego przywrócić.</value>
+  </data>
+  <data name="Status.RestoreDoesNotMatchVerified" xml:space="preserve">
+    <value>Przywrócony rejestr nie odpowiada temu, co zostało sprawdzone, więc poprzedni został przywrócony na miejsce.</value>
+  </data>
+  <data name="Status.RestoreFinalCheckFailed" xml:space="preserve">
+    <value>Przywrócony rejestr nie przeszedł końcowej kontroli, więc poprzedni został przywrócony na miejsce.</value>
+  </data>
+  <data name="Status.RestoreFolderNotEmpty" xml:space="preserve">
+    <value>Ten folder nie jest pusty. Przywracanie zawsze tworzy swój rejestr we własnym folderze, żeby nic z tego, co już tam jest, nie zostało nadpisane.</value>
+  </data>
+  <data name="Status.RestoreNeverIntoActiveFolder" xml:space="preserve">
+    <value>Przywracanie nigdy nie zapisuje do folderu aktywnego rejestru. Wybierz nowy, pusty folder; przywrócony rejestr możesz podmienić samodzielnie, kiedy go przejrzysz.</value>
+  </data>
+  <data name="Status.RestoreNotAUsableFolderPath" xml:space="preserve">
+    <value>To nie jest użyteczna ścieżka folderu.</value>
+  </data>
+  <data name="Status.RestoreNotCompleted" xml:space="preserve">
+    <value>Nie udało się ukończyć przywracania: {0}</value>
+  </data>
+  <data name="Status.RestorePathIsAFile" xml:space="preserve">
+    <value>Ta ścieżka wskazuje plik. Przywracanie potrzebuje własnego folderu.</value>
+  </data>
+  <data name="Status.RestorePreservedCopyFailed" xml:space="preserve">
+    <value>Nie udało się bezpiecznie zachować istniejącego rejestru, więc nie został zastąpiony. Nic nie zostało zmienione.</value>
+  </data>
+  <data name="Status.RestoreRefusedWithProblems" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="Status.RestoreRegisterNotOpenable" xml:space="preserve">
+    <value>Nie można otworzyć pliku rejestru do zastąpienia, więc nic nie zostało zmienione.</value>
+  </data>
+  <data name="Status.RestoreRegisterStillOpen" xml:space="preserve">
+    <value>Rejestr jest nadal otwarty, więc nie został zastąpiony. Najpierw zamknij rejestr License Managera — nic nie zostało zmienione.</value>
+  </data>
+  <data name="Status.RestoredElsewhere" xml:space="preserve">
+    <value>Przywrócono do {0} — klientów: {1}, licencji: {2}, artefaktów: {3}, wpisów audytu: {4}; kontrola spójności przeszła pomyślnie. ⭐ {5} nie zostało zmienione.</value>
+  </data>
+  <data name="Status.SavedFileDelivery" xml:space="preserve">
+    <value>Zapisano. Wiadomości można dostarczać jako pliki .eml.</value>
+  </data>
+  <data name="Status.SavedThroughHost" xml:space="preserve">
+    <value>Zapisano. Wiadomości będą wysyłane przez {0}.</value>
+  </data>
+  <data name="Status.SelectCustomerFirst" xml:space="preserve">
+    <value>Najpierw wybierz klienta.</value>
+  </data>
+  <data name="Status.SelectIssueFromHistoryFirst" xml:space="preserve">
+    <value>Najpierw wybierz wydanie z historii.</value>
+  </data>
+  <data name="Status.SelectLicence" xml:space="preserve">
+    <value>Wybierz licencję.</value>
+  </data>
+  <data name="Status.SelectLicenceInListFirst" xml:space="preserve">
+    <value>Najpierw wybierz licencję na liście.</value>
+  </data>
+  <data name="Status.SelectLicenceToSend" xml:space="preserve">
+    <value>Wybierz licencję do wysłania.</value>
+  </data>
+  <data name="Status.SelectOrSaveCustomerFirst" xml:space="preserve">
+    <value>Najpierw wybierz albo zapisz klienta.</value>
+  </data>
+  <data name="Status.SelectSavedLicenceToIssue" xml:space="preserve">
+    <value>Wybierz zapisaną licencję do wystawienia.</value>
+  </data>
+  <data name="Status.SendingTestMessage" xml:space="preserve">
+    <value>Wysyłanie wiadomości testowej do {0}…</value>
+  </data>
+  <data name="Status.SendingTo" xml:space="preserve">
+    <value>Wysyłanie do {0}…</value>
+  </data>
+  <data name="Status.SentThrough" xml:space="preserve">
+    <value>Wysłano do {0} przez {1}. Zapisano w logu audytu.</value>
+  </data>
+  <data name="Status.SettingsCarryNoSmtpHost" xml:space="preserve">
+    <value>Te ustawienia nie zawierają hosta SMTP, więc nie da się nic wysłać bezpośrednio. Zapisz wiadomość jako plik .eml albo dodaj serwer w Ustawienia ▸ E-mail.</value>
+  </data>
+  <data name="Status.SettingsReloaded" xml:space="preserve">
+    <value>Wczytano ponownie zapisane ustawienia.</value>
+  </data>
+  <data name="Status.SigningWithKey" xml:space="preserve">
+    <value>Podpisywanie kluczem {0}.</value>
+  </data>
+  <data name="Status.SmtpCredentialsWithoutServer" xml:space="preserve">
+    <value>Wpisano dane logowania, ale nie serwer. Podaj host SMTP albo wyczyść dane logowania i dostarcz wiadomość plikiem.</value>
+  </data>
+  <data name="Status.SmtpFileEmpty" xml:space="preserve">
+    <value>Plik ustawień e-mail jest pusty.</value>
+  </data>
+  <data name="Status.SmtpFileFromNewerBuild" xml:space="preserve">
+    <value>Te ustawienia e-mail zostały zapisane przez nowszy License Manager (wersja {0}). Zaktualizuj tę aplikację albo usuń plik, aby skonfigurować e-mail ponownie.</value>
+  </data>
+  <data name="Status.SmtpFileNotRead" xml:space="preserve">
+    <value>Nie udało się odczytać pliku ustawień e-mail: {0}</value>
+  </data>
+  <data name="Status.SmtpPasswordNeedsUsername" xml:space="preserve">
+    <value>Hasło bez nazwy użytkownika jest bezużyteczne. Podaj konto, które się loguje.</value>
+  </data>
+  <data name="Status.SmtpPasswordNotDecrypted" xml:space="preserve">
+    <value>Nie udało się odszyfrować przechowywanego hasła. Jest chronione dla tego konta Windows na tym komputerze, więc pliku ustawień skopiowanego z innego miejsca nie da się odczytać. Wpisz hasło ponownie, aby zapisać je dla tego konta.</value>
+  </data>
+  <data name="Status.SmtpPasswordUnreadableSendWillFail" xml:space="preserve">
+    <value>Nie udało się odczytać przechowywanego hasła SMTP na tym koncie Windows, więc logowanie najprawdopodobniej się nie uda. Zapisanie wiadomości jako pliku .eml nadal działa.</value>
+  </data>
+  <data name="Status.SmtpPortOutOfRange" xml:space="preserve">
+    <value>Port musi być z zakresu od 1 do 65535, a nie {0}.</value>
+  </data>
+  <data name="Status.SmtpSenderNotAnAddress" xml:space="preserve">
+    <value>Adres nadawcy nie wygląda na adres e-mail: {0}</value>
+  </data>
+  <data name="Status.SmtpSenderRequired" xml:space="preserve">
+    <value>Adres nadawcy jest wymagany — na ten adres odpowie klient.</value>
+  </data>
+  <data name="Status.SmtpUnknownMessageLanguage" xml:space="preserve">
+    <value>Język wiadomości „{0}” nie jest obsługiwany przez tę wersję.</value>
+  </data>
+  <data name="Status.SmtpUsernameNeedsStartTls" xml:space="preserve">
+    <value>Nie można użyć nazwy użytkownika bez STARTTLS — hasło podróżowałoby nieszyfrowane. Włącz STARTTLS albo wyczyść nazwę użytkownika.</value>
+  </data>
+  <data name="Status.SnapshotDoesNotReproduceRegister" xml:space="preserve">
+    <value>Migawka nie odtwarza rejestru wiersz po wierszu. Nic nie zostało zapisane.</value>
+  </data>
+  <data name="Status.SnapshotRowCountMismatch" xml:space="preserve">
+    <value>Migawka zawiera wierszy: {0}, a rejestr: {1}. Nic nie zostało zapisane.</value>
+  </data>
+  <data name="Status.TermsExpiryDateRequired" xml:space="preserve">
+    <value>Termin ważności jest wymagany. Wybierz go z kalendarza albo wpisz w pole.</value>
+  </data>
+  <data name="Status.TermsExpiryMustFollowStart" xml:space="preserve">
+    <value>Termin ważności musi być późniejszy niż data początkowa.</value>
+  </data>
+  <data name="Status.TermsSeatsRequired" xml:space="preserve">
+    <value>Licencja musi obejmować co najmniej jedno stanowisko.</value>
+  </data>
+  <data name="Status.TermsStartDateRequired" xml:space="preserve">
+    <value>Data początkowa jest wymagana. Wybierz ją z kalendarza albo wpisz w pole.</value>
+  </data>
+  <data name="Status.TestEmailSent" xml:space="preserve">
+    <value>Wiadomość testowa wysłana pomyślnie do {0} przez {1}. Konfiguracja SMTP działa.</value>
+  </data>
+  <data name="Status.TestMessageNotSent" xml:space="preserve">
+    <value>Nie udało się wysłać wiadomości testowej: {0} Konfiguracja SMTP z tej strony nie zadziałała — sprawdź host, port, zabezpieczenie połączenia i dane logowania.</value>
+  </data>
+  <data name="Status.TickAtLeastOneLicence" xml:space="preserve">
+    <value>Zaznacz co najmniej jedną licencję do przedłużenia.</value>
+  </data>
+  <data name="Status.Verbatim" xml:space="preserve">
+    <value>{0}</value>
+  </data>
+  <data name="Status.VerdictExpired" xml:space="preserve">
+    <value>EmberTern zgłosi ją jako wygasłą.</value>
+  </data>
+  <data name="Status.VerdictGrace" xml:space="preserve">
+    <value>EmberTern ją przyjmie, ale jest po terminie ważności i w okresie karencji.</value>
+  </data>
+  <data name="Status.VerdictNotYetValid" xml:space="preserve">
+    <value>EmberTern zgłosi ją jako jeszcze nieaktywną.</value>
+  </data>
+  <data name="Status.VerdictRefused" xml:space="preserve">
+    <value>EmberTern jej nie przyjmie ({0}).</value>
+  </data>
+  <data name="Status.VerdictValid" xml:space="preserve">
+    <value>EmberTern uzna ją za aktywną: ważna do {0}, licencjobiorca {1}.</value>
+  </data>
+  <data name="Storage.AReadableUnencryptedCopyEveryRow" xml:space="preserve">
+    <value>Czytelna, NIEZASZYFROWANA kopia każdego wiersza. Diagnostyczne wyjście awaryjne, nie kopia zapasowa.</value>
+  </data>
+  <data name="Storage.BackupAction" xml:space="preserve">
+    <value>Utwórz kopię zapasową…</value>
+  </data>
+  <data name="Storage.BackupContents" xml:space="preserve">
+    <value>klientów: {0} · licencji: {1} · wystawionych artefaktów (cała historia): {2} · wskaźników bieżącego artefaktu: {3} · wpisów audytu: {4}.</value>
+  </data>
+  <data name="Storage.BackupPassphraseAgain" xml:space="preserve">
+    <value>Hasło dostępu kopii zapasowej ponownie</value>
+  </data>
+  <data name="Storage.BackupPassphraseItsOwnSecretNot" xml:space="preserve">
+    <value>Hasło dostępu kopii zapasowej — własny sekret, nie hasło magazynu kluczy</value>
+  </data>
+  <data name="Storage.BackupTab" xml:space="preserve">
+    <value>Kopia zapasowa</value>
+  </data>
+  <data name="Storage.EncryptedBackup" xml:space="preserve">
+    <value>Zaszyfrowana kopia zapasowa</value>
+  </data>
+  <data name="Storage.ExportJsonl" xml:space="preserve">
+    <value>Eksportuj JSONL…</value>
+  </data>
+  <data name="Storage.ModeReplaceActive" xml:space="preserve">
+    <value>Zastąp aktywny rejestr</value>
+  </data>
+  <data name="Storage.ModeRestoreElsewhere" xml:space="preserve">
+    <value>Przywróć w innym miejscu</value>
+  </data>
+  <data name="Storage.OpenDataFolder" xml:space="preserve">
+    <value>Otwórz folder danych</value>
+  </data>
+  <data name="Storage.PassphraseBackupBeingRestored" xml:space="preserve">
+    <value>Hasło dostępu przywracanej kopii zapasowej</value>
+  </data>
+  <data name="Storage.RegisterRecord" xml:space="preserve">
+    <value>Rejestr wzorcowy</value>
+  </data>
+  <data name="Storage.ReplaceRule" xml:space="preserve">
+    <value>Bieżący rejestr zostanie zachowany przed przywracaniem. Jest przenoszony do {0}.replaced-&lt;data-godzina&gt; w tym samym folderze i nigdy nie jest usuwany, więc nieudane przywracanie zawsze zostawia rejestr, od którego zacząłeś. ⚠ License Manager zamyka się po powodzeniu tej operacji — uruchom go ponownie, aby pracować na przywróconym rejestrze.</value>
+  </data>
+  <data name="Storage.RestoreAction" xml:space="preserve">
+    <value>Przywróć…</value>
+  </data>
+  <data name="Storage.RestoreElsewhereRule" xml:space="preserve">
+    <value>Aktywny rejestr nie zostanie zmieniony. Kopia zapasowa jest przywracana do NOWEGO, pustego folderu wybranego przez ciebie; nic nie jest zapisywane w {0} i nie jest dodawany żaden wpis historii. Do odzyskiwania albo przeglądania kopii zapasowej w trakcie pracy.</value>
+  </data>
+  <data name="Storage.RestoreTab" xml:space="preserve">
+    <value>Przywracanie</value>
+  </data>
+  <data name="Storage.SigningKeystoreSeparateFileNotIncluded" xml:space="preserve">
+    <value>Magazyn kluczy podpisujących — osobny plik, NIE jest objęty kopią zapasową</value>
+  </data>
+  <data name="Storage.Storage" xml:space="preserve">
+    <value>Dane</value>
+  </data>
+  <data name="Storage.TheWholeRegisterCustomersLicencesEvery" xml:space="preserve">
+    <value>Cały rejestr — klienci, licencje, każdy kiedykolwiek wystawiony artefakt, wskaźniki bieżącego artefaktu i pełny log audytu — zaszyfrowany algorytmem AES-256-GCM własnym hasłem dostępu i sprawdzony wiersz po wierszu względem działającego rejestru przed zapisaniem.</value>
+  </data>
+  <data name="Storage.WhatBackupWillCarry" xml:space="preserve">
+    <value>Co obejmie kopia zapasowa</value>
+  </data>
+  <data name="Storage.WhatRestoreWillDo" xml:space="preserve">
+    <value>Co zrobi to przywracanie</value>
+  </data>
+  <data name="Unlock.CreateSigningKey" xml:space="preserve">
+    <value>Utwórz klucz podpisujący</value>
+  </data>
+  <data name="Unlock.HeadlineCreate" xml:space="preserve">
+    <value>Utwórz klucz podpisujący</value>
+  </data>
+  <data name="Unlock.HeadlineUnlock" xml:space="preserve">
+    <value>Odblokuj magazyn kluczy</value>
+  </data>
+  <data name="Unlock.KeyId" xml:space="preserve">
+    <value>Identyfikator klucza</value>
+  </data>
+  <data name="Unlock.NoSigningKeyFoundCreateOne" xml:space="preserve">
+    <value>Nie znaleziono klucza podpisującego. Utwórz go, aby zacząć wystawiać licencje.</value>
+  </data>
+  <data name="Unlock.Passphrase" xml:space="preserve">
+    <value>Hasło dostępu</value>
+  </data>
+  <data name="Unlock.PassphraseAgain" xml:space="preserve">
+    <value>Hasło dostępu ponownie</value>
+  </data>
+  <data name="Unlock.ThePassphraseCannotResetIfLost" xml:space="preserve">
+    <value>Hasła dostępu nie da się zresetować. Jeśli zostanie utracone, żadnej licencji nie będzie już można odnowić — wykonaj kopię magazynu kluczy na dwa nośniki offline i sprawdź przywracanie z każdego z nich.</value>
+  </data>
+  <data name="Unlock.Unlock" xml:space="preserve">
+    <value>Odblokuj</value>
+  </data>
+  <data name="Unlock.UnlockKeystoreIssueLicences" xml:space="preserve">
+    <value>Odblokuj magazyn kluczy, aby wystawiać licencje.</value>
+  </data>
+</root>

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using EmberTern.LicenseManager.Localization;
 
@@ -87,7 +87,26 @@ public sealed record StatusMessage
     /// field (an ISO date, a file name, a server's own message) must be handed in already rendered as a
     /// string by its producer, so no format specifier in a resource value can reach it.
     /// </remarks>
-    public string Text => Loc.Format(Key.Value, _arguments);
+    public string Text => Count is { } count
+        ? Loc.FormatCount(Key.Value, count, _arguments)
+        : Loc.Format(Key.Value, _arguments);
+
+    /// <summary>
+    /// The number this sentence agrees with, when its key names a plural FAMILY.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>It exists because Polish needs three forms where English has two</b> (L8.5 / C‑1).
+    /// L8.2 wrote the batch results as hand-split <c>…One</c> / <c>…Many</c> keys, which was correct while
+    /// the stage was forbidden from changing a single English character — a family would have. A pair
+    /// cannot serve <c>one</c> / <c>few</c> / <c>many</c>, so the pair became a family and the strip has to
+    /// be able to resolve one.</para>
+    /// <para>⚠ The count is ALWAYS argument <c>{0}</c> — <see cref="Loc.FormatCount"/> puts it there, in one
+    /// place, so <see cref="Arguments"/> must NOT repeat it. ⛔ Two readers deciding where the number lives
+    /// is how a dual form drifts.</para>
+    /// <para>⭐ <see langword="null"/> for every ordinary message, which is all but three of them: the
+    /// resolution path above is unchanged for those.</para>
+    /// </remarks>
+    public long? Count { get; private init; }
 
     /// <summary>Nothing to say.</summary>
     public static StatusMessage? None => null;
@@ -95,6 +114,12 @@ public sealed record StatusMessage
     /// <summary>Neutral information.</summary>
     public static StatusMessage Info(MessageKey key, params object?[] arguments) =>
         new(key, MessageSeverity.Info, arguments);
+
+    /// <summary>A sentence that agrees with a number — <paramref name="key"/> names a plural family.</summary>
+    /// <remarks>⚠ ⛔ Do not pass the count again in <paramref name="arguments"/>; it is always <c>{0}</c>.</remarks>
+    public static StatusMessage Counted(
+        MessageKey key, MessageSeverity severity, long count, params object?[] arguments) =>
+        new(key, severity, arguments) { Count = count };
 
     /// <summary>Something worked.</summary>
     public static StatusMessage Success(MessageKey key, params object?[] arguments) =>

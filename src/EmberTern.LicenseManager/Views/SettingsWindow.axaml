@@ -105,26 +105,25 @@
           <TextBlock Classes="section" Text="{lm:Loc Settings.Language}" />
 
           <TextBlock Classes="field-label" Text="{lm:Loc Settings.ApplicationLanguage}" />
-          <!-- ⭐⭐ DISABLED ON PURPOSE (decision D‑8). The row is here so the structure is the structure it
-               will keep and the later localization stage has a place to land — but it stores NOTHING.
-               A preference the operator can set and that then changes nothing is the exact defect that
-               removed `ClientLibraryPath` from EmberTern's connection dialog. ⚠ The view model gives this
-               picker no setter at all, so there is not even an accidental path to persisting it. -->
+          <!-- ⭐⭐ REAL since L8.5. It was disabled under decision D‑8 for as long as there was no Polish
+               to show — a preference the operator can set and that then changes nothing is the exact
+               defect that removed `ClientLibraryPath` from EmberTern's connection dialog. Now the choice
+               is stored in `ui.json` and applied immediately, so the row is honest either way.
+               ⛔ The setter hands the code to ApplicationLanguageService and does NOT call Loc.Apply
+               itself: one path applies a language, and two is how a stored preference and a rendered
+               window start disagreeing. ⚠ IsEnabled follows CanChooseApplicationLanguage rather than
+               being hard-coded true — a view model with nowhere to store a choice must not offer one. -->
           <ComboBox Name="ApplicationLanguagePicker" HorizontalAlignment="Stretch"
-                    IsEnabled="False"
+                    IsEnabled="{Binding CanChooseApplicationLanguage}"
                     Margin="{DynamicResource Margin.FieldGap}"
                     ItemsSource="{Binding ApplicationLanguageOptions}"
-                    SelectedItem="{Binding ApplicationLanguage, Mode=OneWay}"
-                    ToolTip.Tip="{Binding ApplicationLanguageUnavailable}">
+                    SelectedItem="{Binding ApplicationLanguage}">
             <ComboBox.ItemTemplate>
               <DataTemplate x:DataType="vm:LanguageOption">
                 <TextBlock Text="{Binding Caption.Value}" />
               </DataTemplate>
             </ComboBox.ItemTemplate>
           </ComboBox>
-
-          <TextBlock Name="ApplicationLanguageNote" Classes="hint" TextWrapping="Wrap"
-                     Text="{Binding ApplicationLanguageUnavailable}" />
 
         </StackPanel>
 

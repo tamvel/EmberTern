@@ -380,29 +380,33 @@ public sealed class StatusMessageContractTests
     /// nothing.</para>
     /// </remarks>
     [Theory]
+    // ⭐ L8.5 / C‑1: the six hand-split keys became three counted FAMILIES, because Polish needs three
+    //   forms where English has two. ⛔ Not a re-wording — the count moved to {0}, which is where
+    //   Loc.FormatCount puts it, and the remaining holes were renumbered. The RENDERED sentence is
+    //   unchanged, which TheRenderedEnglishOfACountedFamilyIsUnchanged measures directly.
     [InlineData(
-        "Status.BlockedOne",
-        "1 selected licence cannot be extended to this date, so the whole operation is held. Nothing is "
+        "Status.Blocked.one",
+        "{0} selected licence cannot be extended to this date, so the whole operation is held. Nothing is "
         + "issued in part \u2014 remove them from the selection, or choose a different target date.")]
     [InlineData(
-        "Status.BlockedMany",
+        "Status.Blocked.other",
         "{0} selected licences cannot be extended to this date, so the whole operation is held. Nothing is "
         + "issued in part \u2014 remove them from the selection, or choose a different target date.")]
     [InlineData(
-        "Status.BatchCompletedOne",
-        "1 licence extended to {0}. {1} artifact(s) recorded as batch {2}. Nothing was written to disk "
+        "Status.BatchCompleted.one",
+        "{0} licence extended to {1}. {2} artifact(s) recorded as batch {3}. Nothing was written to disk "
         + "\u2014 export the files from the register when you are ready to send them.")]
     [InlineData(
-        "Status.BatchCompletedMany",
+        "Status.BatchCompleted.other",
         "{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. Nothing was written to disk "
         + "\u2014 export the files from the register when you are ready to send them.")]
     [InlineData(
-        "Status.BatchCompletedOneWithFirstIssues",
-        "1 licence extended to {0}. {1} artifact(s) recorded as batch {2}. {3} of them received a first "
+        "Status.BatchCompletedWithFirstIssues.one",
+        "{0} licence extended to {1}. {2} artifact(s) recorded as batch {3}. {4} of them received a first "
         + "artifact. Nothing was written to disk \u2014 export the files from the register when you are "
         + "ready to send them.")]
     [InlineData(
-        "Status.BatchCompletedManyWithFirstIssues",
+        "Status.BatchCompletedWithFirstIssues.other",
         "{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. {4} of them received a first "
         + "artifact. Nothing was written to disk \u2014 export the files from the register when you are "
         + "ready to send them.")]

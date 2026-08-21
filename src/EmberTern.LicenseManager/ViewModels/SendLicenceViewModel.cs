@@ -95,6 +95,7 @@ public sealed partial class SendLicenceViewModel : MessageHostViewModel
     /// </summary>
     public string Attachment => SendCatalog.Attachment(
         Composed.AttachmentFileName,
+        Composed.AttachmentBytes.Length,
         Composed.AttachmentBytes.Length.ToString(CultureInfo.InvariantCulture),
         Composed.AttachmentMediaType);
 

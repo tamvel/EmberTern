@@ -191,7 +191,10 @@ public sealed class LocalizationMechanismTests
                 //    by hand, which is the fact that goes stale (#284).
                 Assert.Equal(prefix + member.Name, key.Value);
 
-                if (Loc.Find(key.Value) is null)
+                // ⭐ A COUNTED key has no flat entry of its own: its variants live under `.one` /
+                //   `.other` / `.few` / `.many`. Either shape counts as present here;
+                //   EveryPluralFamily_IsCompleteInEveryShippedCulture is what checks a family is whole.
+                if (Loc.Find(key.Value) is null && !HasPluralFamily(key.Value))
                 {
                     missing.Add($"{catalog.Name}.{member.Name} → '{key.Value}'");
                 }
@@ -391,7 +394,10 @@ public sealed class LocalizationMechanismTests
             .Select(f => Path.GetFileName(f) ?? string.Empty)
             .ToArray();
 
-        Assert.Equal(["App.axaml.cs"], appliers);
+        // ⭐ L8.5: the seam moved out of the composition root into the service that owns it, because the
+        //   settings picker became a SECOND caller and two callers is how a stored preference and a
+        //   rendered window start disagreeing. Still exactly one file — now one whose job this is.
+        Assert.Equal(["ApplicationLanguageService.cs"], appliers);
     }
 
     /// <summary>
@@ -483,31 +489,41 @@ public sealed class LocalizationMechanismTests
     [Fact]
     public void EveryPluralFamily_IsCompleteInEveryShippedCulture()
     {
-        var entries = DeclaredEntries();
-        var ruleSet = entries.FirstOrDefault(e => e.Key == PluralRules.RuleSetKey).Value
-            ?? PluralRules.Fallback;
+        var catalogs = ShippedCatalogs();
 
-        var required = PluralRules.CategoriesOf(ruleSet)
-            .Select(PluralRules.SuffixFor)
-            .ToArray();
+        // ⚠⚠ Asserted, because the sweep's whole value is its REACH. Until L8.5 this test read the English
+        //   file only — despite its name — so a Polish satellite declaring one/few/many was checked by
+        //   nothing. A guard that has quietly stopped looking reports nothing.
+        Assert.True(catalogs.Count > 1, "Only one catalog was found — the sweep would be vacuous.");
 
-        var families = entries
-            .Select(e => e.Key)
-            .Where(k => required.Any(s => k.EndsWith("." + s, StringComparison.Ordinal)))
-            .Select(k => k[..k.LastIndexOf('.')])
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        var declared = entries.Select(e => e.Key).ToHashSet(StringComparer.Ordinal);
         var missing = new List<string>();
 
-        foreach (var family in families)
+        foreach (var (culture, entries) in catalogs)
         {
-            foreach (var suffix in required)
+            var ruleSet = entries.FirstOrDefault(e => e.Key == PluralRules.RuleSetKey).Value
+                ?? PluralRules.Fallback;
+
+            var required = PluralRules.CategoriesOf(ruleSet)
+                .Select(PluralRules.SuffixFor)
+                .ToArray();
+
+            var declared = entries.Select(e => e.Key).ToHashSet(StringComparer.Ordinal);
+
+            // ⭐ A family is recognised by ANY plural suffix, not only by the ones this culture needs —
+            //   otherwise a file that declared the wrong arms would look like it had no families at all.
+            var families = declared
+                .Where(k => AnyPluralSuffix.Any(x => k.EndsWith("." + x, StringComparison.Ordinal)))
+                .Select(k => k[..k.LastIndexOf('.')])
+                .Distinct(StringComparer.Ordinal);
+
+            foreach (var family in families)
             {
-                if (!declared.Contains(family + "." + suffix))
+                foreach (var suffix in required)
                 {
-                    missing.Add(family + "." + suffix);
+                    if (!declared.Contains(family + "." + suffix))
+                    {
+                        missing.Add($"{culture}: {family}.{suffix}");
+                    }
                 }
             }
         }
@@ -518,7 +534,94 @@ public sealed class LocalizationMechanismTests
             + string.Join("\n  ", missing));
     }
 
+    /// <summary>
+    /// ⭐⭐ Every shipped translation is COMPLETE, and none of them invents a key.
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠ Two directions, and they fail differently. A key the satellite is MISSING falls back
+    /// neutral-ward, so the window renders one English line among Polish ones — correct, harmless and easy
+    /// to miss. A key the satellite has and the base does not is worse: nothing reads it, so a translated
+    /// sentence sits in the file looking like coverage. ⭐ Neither is visible in a build.</para>
+    /// <para>⚠ A counted key is compared as a FAMILY, because the arms differ per culture on purpose —
+    /// English declares two, Polish three. <c>EveryPluralFamily_IsCompleteInEveryShippedCulture</c> is what
+    /// checks the arms themselves.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryShippedTranslation_CoversTheBaseAndAddsNothing()
+    {
+        var catalogs = ShippedCatalogs();
+        var neutral = catalogs.Single(c => c.Culture == "(neutral)").Entries;
+
+        Assert.True(neutral.Count > 300, "The neutral catalog looks empty — the sweep would be vacuous.");
+
+        var missing = new List<string>();
+        var extra = new List<string>();
+
+        foreach (var (culture, entries) in catalogs.Where(c => c.Culture != "(neutral)"))
+        {
+            var theirs = entries.Select(e => Family(e.Key)).ToHashSet(StringComparer.Ordinal);
+            var ours = neutral.Select(e => Family(e.Key)).ToHashSet(StringComparer.Ordinal);
+
+            missing.AddRange(ours.Except(theirs, StringComparer.Ordinal).Select(k => $"{culture}: {k}"));
+            extra.AddRange(theirs.Except(ours, StringComparer.Ordinal).Select(k => $"{culture}: {k}"));
+        }
+
+        Assert.True(
+            missing.Count == 0,
+            "These entries have no translation, so they render in English inside a translated window:\n  "
+            + string.Join("\n  ", missing));
+
+        Assert.True(
+            extra.Count == 0,
+            "A satellite may TRANSLATE entries, never introduce them — nothing reads these:\n  "
+            + string.Join("\n  ", extra));
+    }
+
+    // A counted key collapses to its family, so one/other and one/few/many compare as the same entry.
+    private static string Family(string key)
+    {
+        var cut = key.LastIndexOf('.');
+        return cut > 0 && AnyPluralSuffix.Contains(key[(cut + 1)..], StringComparer.Ordinal)
+            ? key[..cut]
+            : key;
+    }
+
+    private static readonly string[] AnyPluralSuffix =
+        [.. Enum.GetValues<PluralCategory>().Select(PluralRules.SuffixFor)];
+
+    /// <summary>Every <c>Strings*.resx</c> that ships, by culture — the neutral one included.</summary>
+    /// <remarks>
+    /// ⭐ DISCOVERED from disk rather than listed: a satellite added tomorrow is swept without editing this
+    /// test, which is the same reason the catalogs themselves are found by attribute.
+    /// </remarks>
+    private static IReadOnlyList<(string Culture, IReadOnlyList<(string Key, string Value)> Entries)>
+        ShippedCatalogs()
+    {
+        var folder = Path.Combine(RepositoryRoot, "src", "EmberTern.LicenseManager", "Localization");
+
+        return
+        [
+            .. Directory.EnumerateFiles(folder, "Strings*.resx")
+                .OrderBy(f => f, StringComparer.Ordinal)
+                .Select(f => (
+                    Culture: Path.GetFileNameWithoutExtension(f) == "Strings"
+                        ? "(neutral)"
+                        : Path.GetFileNameWithoutExtension(f)["Strings.".Length..],
+                    Entries: EntriesOf(f)))
+        ];
+    }
+
+    private static IReadOnlyList<(string Key, string Value)> EntriesOf(string path) =>
+        [.. XDocument.Load(path).Root!
+            .Elements("data")
+            .Select(d => (Key: d.Attribute("name")!.Value, Value: d.Element("value")!.Value))];
+
     // ── Discovery helpers ────────────────────────────────────────────────────────────────────────────
+
+    private static bool HasPluralFamily(string key) =>
+        Enum.GetValues<PluralCategory>()
+            .Select(PluralRules.SuffixFor)
+            .Any(suffix => Loc.Find(key + "." + suffix) is not null);
 
     private static IEnumerable<Type> Catalogs() =>
         Product.GetTypes().Where(t => t.GetCustomAttribute<StringCatalogAttribute>() is not null);

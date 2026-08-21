@@ -50,10 +50,7 @@
   <data name="Settings.ApplicationLanguage" xml:space="preserve">
     <value>Application language</value>
   </data>
-  <data name="Settings.ApplicationLanguageUnavailable" xml:space="preserve">
-    <value>The License Manager is English-only in this version. Translating its interface is planned as a later stage; until then this choice is shown but not stored, because a preference that changes nothing is worse than one that is honestly unavailable.</value>
-  </data>
-  <data name="Settings.MessageLanguage" xml:space="preserve">
+<data name="Settings.MessageLanguage" xml:space="preserve">
     <value>Message language</value>
   </data>
   <data name="Settings.MessageLanguageDescription" xml:space="preserve">
@@ -320,28 +317,10 @@
   <data name="Status.TickAtLeastOneLicence" xml:space="preserve">
     <value>Tick at least one licence to extend.</value>
   </data>
-  <data name="Status.BlockedOne" xml:space="preserve">
-    <value>1 selected licence cannot be extended to this date, so the whole operation is held. Nothing is issued in part — remove them from the selection, or choose a different target date.</value>
-  </data>
-  <data name="Status.BlockedMany" xml:space="preserve">
-    <value>{0} selected licences cannot be extended to this date, so the whole operation is held. Nothing is issued in part — remove them from the selection, or choose a different target date.</value>
-  </data>
-  <data name="Status.LicenceRefersToUnknownCustomer" xml:space="preserve">
+<data name="Status.LicenceRefersToUnknownCustomer" xml:space="preserve">
     <value>Licence {0} refers to customer {1}, which the register does not hold. Nothing was issued.</value>
   </data>
-  <data name="Status.BatchCompletedOne" xml:space="preserve">
-    <value>1 licence extended to {0}. {1} artifact(s) recorded as batch {2}. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
-  </data>
-  <data name="Status.BatchCompletedMany" xml:space="preserve">
-    <value>{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
-  </data>
-  <data name="Status.BatchCompletedOneWithFirstIssues" xml:space="preserve">
-    <value>1 licence extended to {0}. {1} artifact(s) recorded as batch {2}. {3} of them received a first artifact. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
-  </data>
-  <data name="Status.BatchCompletedManyWithFirstIssues" xml:space="preserve">
-    <value>{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. {4} of them received a first artifact. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
-  </data>
-  <data name="Status.Verbatim" xml:space="preserve">
+<data name="Status.Verbatim" xml:space="preserve">
     <value>{0}</value>
   </data>
   <data name="Status.KeystoreAlreadyExists" xml:space="preserve">
@@ -1007,10 +986,7 @@
   <data name="History.Summary.other" xml:space="preserve">
     <value>{0} issues on record, all kept. The current file is the one marked below; earlier ones were superseded, never overwritten or deleted.</value>
   </data>
-  <data name="History.TokenSizeAsDelivered" xml:space="preserve">
-    <value>{0} bytes as delivered</value>
-  </data>
-  <data name="History.UnreadablePayload" xml:space="preserve">
+<data name="History.UnreadablePayload" xml:space="preserve">
     <value>— unreadable payload —</value>
   </data>
   <data name="LicenceStatus.Active" xml:space="preserve">
@@ -1103,10 +1079,7 @@
   <data name="Row.StandingNeverIssued" xml:space="preserve">
     <value>Never issued</value>
   </data>
-  <data name="Send.Attachment" xml:space="preserve">
-    <value>{0} · {1} bytes · {2}</value>
-  </data>
-  <data name="Send.DeliveryDirect" xml:space="preserve">
+<data name="Send.DeliveryDirect" xml:space="preserve">
     <value>Sending through {0}:{1}.</value>
   </data>
   <data name="Send.DeliveryNoServer" xml:space="preserve">
@@ -1171,5 +1144,35 @@
   </data>
   <data name="Unlock.HeadlineUnlock" xml:space="preserve">
     <value>Unlock the keystore</value>
+  </data>
+  <data name="Status.Blocked.one" xml:space="preserve">
+    <value>{0} selected licence cannot be extended to this date, so the whole operation is held. Nothing is issued in part — remove them from the selection, or choose a different target date.</value>
+  </data>
+  <data name="Status.Blocked.other" xml:space="preserve">
+    <value>{0} selected licences cannot be extended to this date, so the whole operation is held. Nothing is issued in part — remove them from the selection, or choose a different target date.</value>
+  </data>
+  <data name="Status.BatchCompleted.one" xml:space="preserve">
+    <value>{0} licence extended to {1}. {2} artifact(s) recorded as batch {3}. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="Status.BatchCompleted.other" xml:space="preserve">
+    <value>{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="Status.BatchCompletedWithFirstIssues.one" xml:space="preserve">
+    <value>{0} licence extended to {1}. {2} artifact(s) recorded as batch {3}. {4} of them received a first artifact. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="Status.BatchCompletedWithFirstIssues.other" xml:space="preserve">
+    <value>{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. {4} of them received a first artifact. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="History.TokenSizeAsDelivered.one" xml:space="preserve">
+    <value>{1} byte as delivered</value>
+  </data>
+  <data name="History.TokenSizeAsDelivered.other" xml:space="preserve">
+    <value>{1} bytes as delivered</value>
+  </data>
+  <data name="Send.Attachment.one" xml:space="preserve">
+    <value>{1} · {2} byte · {3}</value>
+  </data>
+  <data name="Send.Attachment.other" xml:space="preserve">
+    <value>{1} · {2} bytes · {3}</value>
   </data>
 </root>

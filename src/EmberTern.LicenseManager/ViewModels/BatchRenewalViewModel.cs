@@ -204,8 +204,8 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
     /// readings used to be built by concatenating a clause onto a shared tail, which would have handed the
     /// translator half a sentence as an argument — forbidden, because word order is the translator's
     /// decision and Polish does not put the clause where English does.
-    /// ⏭ L8.5 collapses the two keys into one plural FAMILY (`one` / `few` / `many`); they are two whole
-    /// keys here only because L8.2 may not change a single English character, and a family would.
+    /// ⭐ L8.5 collapsed the two keys into ONE plural family, which is what Polish needs — the pair was
+    /// only ever a consequence of L8.2 being forbidden to change a single English character.
     /// </remarks>
     public string BlockerSummary
     {
@@ -216,9 +216,7 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
                 return string.Empty;
             }
 
-            return plan.Blocked.Count == 1
-                ? Loc.Text(StatusCatalog.BlockedOne.Value)
-                : Loc.Format(StatusCatalog.BlockedMany.Value, plan.Blocked.Count);
+            return Loc.FormatCount(StatusCatalog.Blocked.Value, plan.Blocked.Count);
         }
     }
 
@@ -406,33 +404,28 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
 
     /// <summary>The blocked-plan warning, as the message the strip stores.</summary>
     private StatusMessage BlockedMessage() =>
-        _previewed is { } plan && plan.Blocked.Count != 1
-            ? StatusMessage.Warning(StatusCatalog.BlockedMany, plan.Blocked.Count)
-            : StatusMessage.Warning(StatusCatalog.BlockedOne);
+        StatusMessage.Counted(
+            StatusCatalog.Blocked,
+            MessageSeverity.Warning,
+            _previewed is { } plan ? plan.Blocked.Count : 1);
 
     // ⭐ Everything below runs only after the transaction committed, so every sentence here is true.
     private void Complete(BatchRenewalPlan plan, IssueBatchResult result)
     {
         var count = result.Artifacts.Count;
 
-        // ⚠⚠ FOUR whole sentences rather than one assembled from clauses (L8.2). The old code concatenated
-        //    a singular/plural opener and an optional first-issue clause onto a shared tail; handing any of
-        //    those to the catalog as an ARGUMENT would be shipping half a sentence, and word order is the
-        //    translator's decision. ⏭ L8.5 folds the count pairs into plural families — it cannot happen
-        //    here, because a family changes the English and L8.2 may not.
-        var message = (count == 1, plan.FirstIssues == 0) switch
-        {
-            (true, true) => StatusMessage.Success(
-                StatusCatalog.BatchCompletedOne, plan.TargetDay, count, result.BatchId),
-            (true, false) => StatusMessage.Success(
-                StatusCatalog.BatchCompletedOneWithFirstIssues,
-                plan.TargetDay, count, result.BatchId, plan.FirstIssues),
-            (false, true) => StatusMessage.Success(
-                StatusCatalog.BatchCompletedMany, count, plan.TargetDay, count, result.BatchId),
-            (false, false) => StatusMessage.Success(
-                StatusCatalog.BatchCompletedManyWithFirstIssues,
-                count, plan.TargetDay, count, result.BatchId, plan.FirstIssues),
-        };
+        // ⚠⚠ WHOLE sentences, never one assembled from clauses (L8.2). ⭐ L8.5 folded the singular/plural
+        //    pairs into two counted FAMILIES, which is what Polish needs and English could not have while
+        //    L8.2 was forbidden to change a character. The first-issue variant stays a SEPARATE family
+        //    rather than an appended clause — the clause is what rule 12 forbids handing to a translator.
+        // ⚠ The count is always {0} (Loc.FormatCount puts it there), so it is not repeated below.
+        var message = plan.FirstIssues == 0
+            ? StatusMessage.Counted(
+                StatusCatalog.BatchCompleted, MessageSeverity.Success,
+                count, plan.TargetDay, count, result.BatchId)
+            : StatusMessage.Counted(
+                StatusCatalog.BatchCompletedWithFirstIssues, MessageSeverity.Success,
+                count, plan.TargetDay, count, result.BatchId, plan.FirstIssues);
 
         SetLastResult(message);
         _report(message);

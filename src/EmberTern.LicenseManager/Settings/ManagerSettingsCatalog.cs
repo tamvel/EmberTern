@@ -103,12 +103,10 @@ public static class ManagerSettingsCatalog
     /// <summary>The interface-language row's caption.</summary>
     public static string ApplicationLanguage => Word(nameof(ApplicationLanguage));
 
-    /// <summary>
-    /// ⭐ Why the interface-language row is disabled. Decision D‑8: the control is SHOWN so the structure
-    /// is real and L8 has a place to land, but it stores nothing — a preference that changes nothing is
-    /// the defect that removed <c>ClientLibraryPath</c> from EmberTern's connection dialog.
-    /// </summary>
-    public static string ApplicationLanguageUnavailable => Word(nameof(ApplicationLanguageUnavailable));
+    // ⛔ `ApplicationLanguageUnavailable` is GONE (L8.5 / C‑6). It said the License Manager was
+    //    English-only, which stopped being true the moment the picker became real — and a stale
+    //    explanation on screen is worse than none. D‑8 is discharged, not bypassed: the row stores a
+    //    choice now, so there is nothing left to apologise for.
 
     /// <summary>The message-language row's caption.</summary>
     public static string MessageLanguage => Word(nameof(MessageLanguage));

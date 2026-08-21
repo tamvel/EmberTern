@@ -1,4 +1,4 @@
-using EmberTern.LicenseManager.Localization;
+﻿using EmberTern.LicenseManager.Localization;
 
 namespace EmberTern.LicenseManager.ViewModels;
 
@@ -59,9 +59,13 @@ internal static class SendCatalog
     private static string Word(string member) => Loc.Text(KeyPrefix + member);
 
     /// <summary>The attachment as the customer will see it — name, size and type.</summary>
-    /// <remarks>⚠ The byte count arrives already formatted invariantly; only the unit is a word.</remarks>
-    public static string Attachment(string fileName, string bytes, string mediaType) =>
-        Loc.Format(KeyPrefix + nameof(Attachment), fileName, bytes, mediaType);
+    /// <remarks>
+    /// ⚠⚠ <paramref name="bytes"/> is the PLURAL PIVOT and <paramref name="formatted"/> is what the
+    /// sentence prints — see <c>HistoryCatalog.TokenSizeAsDelivered</c> for why the two are separate.
+    /// </remarks>
+    public static string Attachment(
+        string fileName, long bytes, string formatted, string mediaType) =>
+        Loc.FormatCount(KeyPrefix + nameof(Attachment), bytes, fileName, formatted, mediaType);
 
     /// <summary>Which language the message is written in, and where that is decided.</summary>
     public static string LanguageNote(string language) =>

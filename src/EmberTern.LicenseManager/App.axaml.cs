@@ -52,12 +52,12 @@ public sealed partial class App : Application
             //
             // ⛔ The value comes from the preference file and from nowhere else — never CurrentUICulture,
             //    never an environment variable, never the operating system's language.
-            // ⛔ The composition root reads this and nothing else does: no view and no view model touches
-            //    the language preference. They receive WORDS, already resolved, and the language reaches
-            //    them only through `Loc`. ⭐ The WRITER arrives in L8.5, when the picker stops being a
-            //    placeholder — ⛔ enabling it before there is Polish to show would recreate the very defect
-            //    decision D‑8 exists to prevent (a preference the operator can set that changes nothing).
-            Loc.Apply(ManagerPreferencesStore.At(paths).Load().Language);
+            // ⛔ No view and no view model touches the language preference. They receive WORDS, already
+            //    resolved, and the language reaches them only through `Loc`.
+            // ⭐⭐ Since L8.5 both the startup and the settings picker go through ApplicationLanguageService,
+            //    which owns the single `Loc.Apply` call. ⛔ Do not apply a language anywhere else — see
+            //    TheLanguage_IsAppliedInExactlyOnePlace.
+            ApplicationLanguageService.At(paths).Restore();
 
             _paths = paths;
             _register = LicenseRegister.Open(paths.Register);

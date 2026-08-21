@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,6 +12,8 @@ using EmberTern.LicenseManager.ViewModels;
 using EmberTern.LicenseManager.Views;
 using Xunit;
 
+using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.Settings;
 namespace EmberTern.LicenseManager.Tests;
 
 /// <summary>
@@ -535,49 +537,63 @@ public sealed class SettingsWindowTests : IDisposable
         }, default);
 
     /// <summary>
-    /// <b>Decision D-8, asserted on the realised control.</b> The interface-language row is SHOWN so the
-    /// structure is real and a later localization stage has a place to land, and it is DISABLED because
-    /// nothing is behind it - a preference the operator can set that then changes nothing is the defect
-    /// that removed <c>ClientLibraryPath</c> from EmberTern's connection dialog.
+    /// ⭐⭐ <b>The interface-language picker STORES the choice and SWITCHES the language</b> — the whole of
+    /// L8.5 / C-6, on the realised control.
     /// </summary>
+    /// <remarks>
+    /// <para>⚠⚠ It replaces the two decision D-8 guards, which asserted the opposite and were RIGHT to:
+    /// while there was no Polish to show, a preference the operator could set that changed nothing would
+    /// have been the <c>ClientLibraryPath</c> defect. D-8 is discharged rather than bypassed, and its
+    /// guards had to go with it — a guard asserting a state the application deliberately left is a guard
+    /// that forbids the change it was waiting for.</para>
+    ///
+    /// <para>⭐ ONE test, and it asserts BOTH halves: the code reaches <c>ui.json</c>, and a catalog read
+    /// comes back in the new language. Either half alone would pass on a broken picker — a write nobody
+    /// applies, or an application nobody stored.</para>
+    /// </remarks>
     [Fact]
-    public Task TheApplicationLanguagePickerIsVisibleButDisabled() =>
+    public Task TheApplicationLanguagePickerStoresTheChoiceAndSwitchesTheLanguage() =>
         _session.Dispatch(() =>
         {
-            var window = Show();
-            var picker = ViewProbe.Named<ComboBox>(window, "ApplicationLanguagePicker");
+            using var isolated = Loc.IsolateSubscribersForVerification();
 
-            Assert.True(picker.IsEffectivelyVisible);
-            Assert.False(picker.IsEnabled);
-            Assert.Equal(2, picker.ItemCount);
+            var preferences = Path.Combine(_folder, "ui.json");
 
-            // The reason is on screen, not only in a tooltip - a disabled control that does not say why
-            // reads as broken.
-            var note = ViewProbe.Named<TextBlock>(window, "ApplicationLanguageNote");
-            Assert.True(note.IsEffectivelyVisible);
-            Assert.Contains("later stage", note.Text, StringComparison.OrdinalIgnoreCase);
-        }, default);
+            try
+            {
+                var window = new SettingsWindow
+                {
+                    DataContext = new SettingsViewModel(
+                        new SmtpSettingsStore(Path.Combine(_folder, "language.dat")),
+                        new ApplicationLanguageService(new ManagerPreferencesStore(preferences))),
+                };
+                window.Show();
 
-    /// <summary>
-    /// Nothing the interface-language row shows may reach the settings file. The view model exposes no
-    /// setter at all, so this asserts the ABSENCE of a path rather than the behaviour of one.
-    /// </summary>
-    [Fact]
-    public Task TheApplicationLanguageIsNotWrittenAnywhere() =>
-        _session.Dispatch(() =>
-        {
-            var window = ShowEmailPage();
-            var model = (SettingsViewModel)window.DataContext!;
+                var picker = ViewProbe.Named<ComboBox>(window, "ApplicationLanguagePicker");
+                var model = (SettingsViewModel)window.DataContext!;
 
-            model.FromAddress = "licencje@example.com";
-            model.SaveCommand.Execute(null);
+                Assert.True(picker.IsEffectivelyVisible);
+                Assert.True(picker.IsEnabled);
+                Assert.Equal(2, picker.ItemCount);
+                Assert.Equal(ApplicationLanguages.Default, model.ApplicationLanguage.Code);
 
-            var stored = File.ReadAllText(model.SettingsPath);
-            Assert.DoesNotContain("applicationLanguage", stored, StringComparison.OrdinalIgnoreCase);
-            Assert.DoesNotContain("uiLanguage", stored, StringComparison.OrdinalIgnoreCase);
+                model.ApplicationLanguage = model.ApplicationLanguageOptions
+                    .First(o => o.Code == ApplicationLanguages.Polish);
 
-            Assert.Null(typeof(SettingsViewModel)
-                .GetProperty(nameof(SettingsViewModel.ApplicationLanguage))!.SetMethod);
+                // ⭐ Stored…
+                Assert.Contains("\"pl\"", File.ReadAllText(preferences), StringComparison.Ordinal);
+                Assert.Equal(ApplicationLanguages.Polish, model.ApplicationLanguage.Code);
+
+                // ⭐ …and applied: a catalog read comes back in Polish.
+                Assert.Equal(ApplicationLanguages.Polish, Loc.Culture.TwoLetterISOLanguageName);
+                Assert.Equal("Ustawienia", ManagerSettingsCatalog.WindowTitle);
+
+                window.Close();
+            }
+            finally
+            {
+                Loc.Apply(ApplicationLanguages.Default);
+            }
         }, default);
 
     /// <summary>D-9: a first run offers Polish, and the picker offers both languages.</summary>
