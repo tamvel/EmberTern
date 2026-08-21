@@ -45,7 +45,7 @@
     <!-- Header ─────────────────────────────────────────────────────────────────────────────────── -->
     <Border Grid.Row="0" Classes="dialog-header">
       <TextBlock Classes="h1" VerticalAlignment="Center" Name="PageHeading"
-                 Text="{Binding SelectedPage.Title}" />
+                 Text="{Binding SelectedPage.Caption.Value}" />
     </Border>
 
     <!-- Body ───────────────────────────────────────────────────────────────────────────────────── -->
@@ -78,7 +78,7 @@
                                  Converter={x:Static lm:IconGeometryConverter.Instance}}" />
                   </Canvas>
                 </Viewbox>
-                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding Caption.Value}" VerticalAlignment="Center" />
               </StackPanel>
             </DataTemplate>
           </ListBox.ItemTemplate>

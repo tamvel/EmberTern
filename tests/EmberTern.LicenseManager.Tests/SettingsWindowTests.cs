@@ -596,6 +596,67 @@ public sealed class SettingsWindowTests : IDisposable
             }
         }, default);
 
+    /// <summary>
+    /// ⭐⭐ <b>An ALREADY OPEN Settings window follows a language change — completely.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠⚠ <b>Both halves of this were found by the operator's visual QA (L8.6), not by a guard.</b>
+    /// The category list kept saying <i>General</i> after a switch to Polish, and the DPAPI note under the
+    /// password field stayed English; closing and reopening the window fixed both, which is the signature
+    /// of a live-refresh fault rather than a missing translation.</para>
+    ///
+    /// <para>⭐ Two DIFFERENT causes, which is why one test asserts both: the navigation row is an item in a
+    /// template over a non-notifying object (gotcha #401 — the L8.5 sweep looked for <c>{Binding Label}</c>
+    /// and this one is <c>Title</c>, so it keyed on a NAME where the defect is a SHAPE), and the note is a
+    /// computed property whose name was simply absent from a hand-maintained notification list (#284).</para>
+    ///
+    /// <para>⛔ It asserts on the REALISED controls, and it switches the language BACK — a fix that only
+    /// works in one direction is a fix that works by accident.</para>
+    /// </remarks>
+    [Fact]
+    public Task TheOpenSettingsWindow_FollowsALanguageChange() =>
+        _session.Dispatch(() =>
+        {
+            using var isolated = Loc.IsolateSubscribersForVerification();
+
+            try
+            {
+                Loc.Apply(ApplicationLanguages.English);
+
+                var window = ShowEmailPage();
+                var pages = ViewProbe.Named<ListBox>(window, "PageList");
+                var note = ViewProbe.Named<TextBlock>(window, "ProtectionNoteText");
+
+                string Category() => pages.GetVisualDescendants()
+                    .OfType<TextBlock>()
+                    .Select(t => t.Text)
+                    .First(t => !string.IsNullOrWhiteSpace(t))!;
+
+                Assert.Equal("General", Category());
+                Assert.StartsWith("The password is encrypted", note.Text, StringComparison.Ordinal);
+
+                // ── EN → PL, on the OPEN window ───────────────────────────────────────────────────
+                Loc.Apply(ApplicationLanguages.Polish);
+                window.UpdateLayout();
+
+                Assert.Equal("Ogólne", Category());
+                Assert.StartsWith("Hasło jest szyfrowane", note.Text, StringComparison.Ordinal);
+
+                // ── …and back, because a one-way fix is not a fix ─────────────────────────────────
+                Loc.Apply(ApplicationLanguages.English);
+                window.UpdateLayout();
+
+                Assert.Equal("General", Category());
+                Assert.StartsWith("The password is encrypted", note.Text, StringComparison.Ordinal);
+
+                window.Close();
+            }
+            finally
+            {
+                Loc.Apply(ApplicationLanguages.Default);
+            }
+        }, default);
+
     /// <summary>D-9: a first run offers Polish, and the picker offers both languages.</summary>
     [Fact]
     public Task TheMessageLanguageDefaultsToPolish() =>

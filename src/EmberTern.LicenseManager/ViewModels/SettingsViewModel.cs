@@ -266,6 +266,14 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
     {
         base.OnLanguageChanged();
         OnPropertyChanged(nameof(DeliverySummary));
+
+        // ⚠⚠ Found by the operator's visual QA (L8.6): the DPAPI note under the password field stayed
+        //    English after a switch, and a reopened window showed it in Polish. The property resolves
+        //    correctly at every read — nothing told the binding to read again.
+        // ⛔ This list is a hand-maintained derived fact (#284's shape), which is exactly how the note was
+        //    missed. TheOpenSettingsWindow_FollowsALanguageChange is what now measures it on the realised
+        //    window rather than trusting the list to be complete.
+        OnPropertyChanged(nameof(ProtectionNote));
     }
 
     public string DeliverySummary
@@ -639,6 +647,23 @@ public sealed class SettingsPageViewModel
 
     /// <summary>What the navigation row and the page heading both read.</summary>
     public string Title => ManagerSettingsCatalog.TitleOf(Id);
+
+    /// <summary>
+    /// The caption the window binds. ⭐ Notifying, so the row follows a language change.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ <b>Found by the operator's own visual QA (L8.6): the category list kept saying "General" after
+    /// a switch to Polish, and only a reopened window showed "Ogólne".</b> Exactly gotcha #401 — this
+    /// class raises no <c>PropertyChanged</c>, so a template bound to <see cref="Title"/> renders once and
+    /// freezes — but on a <c>ListBox</c> rather than a <c>ComboBox</c>, which is why the L8.5 sweep for
+    /// <c>{Binding Label}</c> walked straight past it. ⭐ The sweep keyed on a member NAME; the defect is a
+    /// property of the SHAPE.
+    ///
+    /// <para>⚠ The page HEADER had it too and hid better: it binds <c>SelectedPage.Title</c>, and the only
+    /// heading whose word differs between the two languages is General — with the E-mail page open,
+    /// nothing looked wrong at all.</para>
+    /// </remarks>
+    public LocalizedCaption Caption => new(() => Title);
 }
 
 /// <summary>
