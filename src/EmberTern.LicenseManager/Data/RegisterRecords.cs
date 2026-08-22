@@ -176,20 +176,38 @@ public static class AuditActions
     /// ⛔ It says the SERVER ACCEPTED the message; it never says the customer received it.
     /// </remarks>
     public const string LicenceSent = "licence.sent";
+
+    /// <summary>
+    /// One bulk send RUN, as an event in its own right — who asked, when, and what it did (§60.8).
+    /// </summary>
+    /// <remarks>
+    /// ⭐ Added by the user's ratified decision I. Its <c>target_id</c> is the run id and its
+    /// <see cref="AuditTargets.Batch"/> type mirrors <c>licence.batch-issued</c>, which the batch renewal
+    /// already writes for the same reason: the N per-licence lines say what happened to each licence, and
+    /// this one records the DECISION — including the operator's note.
+    /// ⚠ Written once, at the END, so its counts are true rather than intended.
+    /// </remarks>
+    public const string LicenceBatchSent = "licence.batch-sent";
 }
 
 /// <summary>
 /// The audit target types a READER has to name. Persisted verbatim, so append-only.
 /// </summary>
 /// <remarks>
-/// ⭐ Same rule, and same narrow scope, as <see cref="AuditActions"/>: a name arrives here only when
-/// something reads back what another component wrote. ⚠ <c>customer</c>, <c>batch</c> and <c>key</c>
-/// are deliberately absent — nothing reads them yet.
+/// ⭐ Same rule, and same narrow scope, as <see cref="AuditActions"/>: a name arrives here when
+/// something reads back — or writes from outside the register — what the vocabulary means.
+/// ⚠ <c>customer</c> and <c>key</c> are deliberately absent: nothing outside their own write site
+/// names them.
 /// </remarks>
 public static class AuditTargets
 {
     /// <summary>A licence. ⭐ The <c>target_id</c> beside it is the <c>lid</c>.</summary>
     public const string Licence = "licence";
+
+    /// <summary>One bulk operation. ⭐ The <c>target_id</c> beside it is the run's own id.</summary>
+    /// <remarks>⚠ Already persisted by <c>licence.batch-issued</c> since L5.4; named here because L10.3
+    /// is the first thing that WRITES it from outside <c>LicenseRegister</c>.</remarks>
+    public const string Batch = "batch";
 }
 
 /// <summary>The reasons an artifact gets issued. Persisted verbatim, so append-only.</summary>

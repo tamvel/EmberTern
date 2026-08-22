@@ -373,6 +373,24 @@ internal static class StatusCatalog
     /// <summary>Already sent on {0}, after the current artifact was issued.</summary>
     public static MessageKey BulkSkipAlreadySent => Key(nameof(BulkSkipAlreadySent));
 
+    /// <summary>The message was not sent.</summary>
+    /// <remarks>
+    /// ⭐ OUR half of a failed attempt; the SERVER's words travel beside it on
+    /// <c>BulkSendAttempt.ServerMessage</c> and are never translated. ⛔ Two halves, on purpose: one
+    /// sentence we own, one the server owns.
+    /// </remarks>
+    public static MessageKey BulkAttemptFailed => Key(nameof(BulkAttemptFailed));
+
+    /// <summary>Not sent — you stopped the run before this licence.</summary>
+    public static MessageKey BulkNotAttemptedOperatorStopped =>
+        Key(nameof(BulkNotAttemptedOperatorStopped));
+
+    /// <summary>Not sent — the run stopped earlier.</summary>
+    /// <remarks>⚠ Deliberately a different sentence from the one above: "you stopped it" and "it stopped
+    /// itself" are two different facts for the operator, and one sentence for both would make the report
+    /// vaguer than the run.</remarks>
+    public static MessageKey BulkNotAttemptedRunStopped => Key(nameof(BulkNotAttemptedRunStopped));
+
     /// <summary>A username cannot be used without STARTTLS — the password would travel unencrypted. Either en...</summary>
     public static MessageKey SmtpUsernameNeedsStartTls => Key(nameof(SmtpUsernameNeedsStartTls));
 

@@ -1317,4 +1317,13 @@
   <data name="Status.BulkSkipAlreadySent" xml:space="preserve">
     <value>Już wysłano {0}, po wystawieniu bieżącego artefaktu.</value>
   </data>
+  <data name="Status.BulkAttemptFailed" xml:space="preserve">
+    <value>Wiadomość nie została wysłana.</value>
+  </data>
+  <data name="Status.BulkNotAttemptedOperatorStopped" xml:space="preserve">
+    <value>Nie wysłano — przerwałeś serię przed tą licencją.</value>
+  </data>
+  <data name="Status.BulkNotAttemptedRunStopped" xml:space="preserve">
+    <value>Nie wysłano — seria zatrzymała się wcześniej.</value>
+  </data>
 </root>

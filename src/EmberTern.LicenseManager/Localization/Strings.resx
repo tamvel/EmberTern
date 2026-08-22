@@ -1283,4 +1283,13 @@
   <data name="Status.BulkSkipAlreadySent" xml:space="preserve">
     <value>Already sent on {0}, after the current artifact was issued.</value>
   </data>
+  <data name="Status.BulkAttemptFailed" xml:space="preserve">
+    <value>The message was not sent.</value>
+  </data>
+  <data name="Status.BulkNotAttemptedOperatorStopped" xml:space="preserve">
+    <value>Not sent — you stopped the run before this licence.</value>
+  </data>
+  <data name="Status.BulkNotAttemptedRunStopped" xml:space="preserve">
+    <value>Not sent — the run stopped earlier.</value>
+  </data>
 </root>
