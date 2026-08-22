@@ -1466,4 +1466,7 @@
   <data name="Status.BulkReportCopied" xml:space="preserve">
     <value>The report was copied to the clipboard.</value>
   </data>
+  <data name="Status.SmtpServerDidNotAnswerInTime" xml:space="preserve">
+    <value>{0}:{1} did not answer within {2} seconds, so the attempt was abandoned. Check the host, the port and whether STARTTLS is right for this server — a port that expects an encrypted connection from the start never replies to this one.</value>
+  </data>
 </root>

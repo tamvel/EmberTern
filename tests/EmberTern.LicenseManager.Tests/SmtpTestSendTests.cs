@@ -200,6 +200,62 @@ public sealed class SmtpTestSendTests : IDisposable
         Assert.DoesNotContain(typeof(Services.LicenceDelivery), reachable);
     }
 
+    // ── The window is never left "in progress" (2026-08-22) ─────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐⭐ <b>A refused configuration ends the operation and gives the button back.</b>
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ <b>Why this matters more than it looks:</b> <c>ShellViewModel</c> builds this view model ONCE
+    /// and the menu reuses it, so <c>IsTesting</c> left <see langword="true"/> is not something closing the
+    /// window clears — the operator reopens Settings and finds the same disabled button, with nothing on
+    /// screen saying why. That is exactly what was reported on 2026-08-22, and the cause was upstream (see
+    /// <c>SmtpTimeoutTests</c>); this pins the view model's own half of it.
+    /// </remarks>
+    [Fact]
+    public async Task ARefusedConfigurationDoesNotLeaveTheWindowInProgress()
+    {
+        var model = Configured(FakeEmailSender.Failing());
+
+        await model.SendTestEmailCommand.ExecuteAsync(null);
+
+        Assert.False(model.IsTesting);
+        Assert.True(model.CanSendTestEmail);
+        Assert.True(model.SendTestEmailCommand.CanExecute(null));
+        Assert.Equal(MessageSeverity.Error, model.Message?.Severity);
+    }
+
+    /// <summary>
+    /// ⭐ And so does a sender that throws something nobody anticipated.
+    /// </summary>
+    /// <remarks>
+    /// ⛔ The point is NOT that the exception is swallowed — it is not, and it should not be. The point is
+    /// that the flag is cleared on the way out, so an unforeseen failure costs the operator a message
+    /// rather than the use of the window until they restart the application.
+    /// </remarks>
+    [Fact]
+    public async Task AnUnexpectedFailureDoesNotLeaveTheWindowInProgress()
+    {
+        var model = Configured(FakeEmailSender.Succeeding());
+        model.TestSenderFactory = _ => new ThrowingSender();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => model.SendTestEmailCommand.ExecuteAsync(null));
+
+        Assert.False(model.IsTesting);
+        Assert.True(model.CanSendTestEmail);
+    }
+
+    /// <summary>⚠ Not a transport: it fails before a socket exists, which is the case a `finally` covers.</summary>
+    private sealed class ThrowingSender : ILicenseEmailSender
+    {
+        public string Destination => "smtp.example.test";
+
+        public Task<SendOutcome> SendAsync(
+            OutgoingEmail email, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("something nobody anticipated");
+    }
+
     public void Dispose()
     {
         try

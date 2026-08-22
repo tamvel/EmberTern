@@ -51,7 +51,12 @@ public sealed class ApplicationLanguageService
     public bool Choose(string? languageKey)
     {
         var code = ApplicationLanguages.Resolve(languageKey);
-        var saved = _store.Save(new ManagerPreferences { Language = code });
+
+        // ⚠⚠ THROUGH Update, never through Save with a fresh object. `Save` persists the WHOLE record, so
+        //    `new ManagerPreferences { Language = code }` would silently reset every other preference to
+        //    its default — which is exactly what it did for the one day between this file gaining a second
+        //    member and this line being corrected. See ManagerPreferencesStore.Update.
+        var saved = _store.Update(preferences => preferences with { Language = code });
 
         Use(code);
         return saved;

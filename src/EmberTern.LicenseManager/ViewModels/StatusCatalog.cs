@@ -433,6 +433,16 @@ internal static class StatusCatalog
     /// <summary>The report was copied to the clipboard.</summary>
     public static MessageKey BulkReportCopied => Key(nameof(BulkReportCopied));
 
+    /// <summary>{0}:{1} did not answer within {2} seconds, so the attempt was abandoned…</summary>
+    /// <remarks>
+    /// ⭐⭐ The ONE failure notice in this application that is OURS rather than a server's. A timeout is
+    /// this application deciding to stop waiting, so there are no server words to quote — and the BCL's own
+    /// text for it ("A task was canceled.") is neither informative nor translatable. ⚠ The host, the port
+    /// and the number of seconds travel as ARGUMENTS; ⛔ never written into the sentence, which would make
+    /// the deadline a second copy that goes stale (#284).
+    /// </remarks>
+    public static MessageKey SmtpServerDidNotAnswerInTime => Key(nameof(SmtpServerDidNotAnswerInTime));
+
     /// <summary>A username cannot be used without STARTTLS — the password would travel unencrypted. Either en...</summary>
     public static MessageKey SmtpUsernameNeedsStartTls => Key(nameof(SmtpUsernameNeedsStartTls));
 

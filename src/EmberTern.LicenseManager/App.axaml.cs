@@ -1,5 +1,6 @@
 ﻿using System;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using EmberTern.LicenseManager.Data;
@@ -76,14 +77,18 @@ public sealed partial class App : Application
     {
         _session = session;
 
+        var paths = _paths ?? throw new InvalidOperationException("The paths are not resolved.");
+
         var previous = desktop.MainWindow;
         var shell = new MainWindow
         {
             DataContext = new ShellViewModel(
                 _register ?? throw new InvalidOperationException("The register is not open."),
                 session,
-                _paths ?? throw new InvalidOperationException("The paths are not resolved.")),
+                paths),
         };
+
+        RememberWindowState(shell, ManagerPreferencesStore.At(paths));
 
         // ⚠ Order matters: the new window becomes MainWindow BEFORE the old one closes. Closing the
         //    lifetime's current MainWindow first shuts the application down, which is a very quick way
@@ -91,6 +96,45 @@ public sealed partial class App : Application
         desktop.MainWindow = shell;
         shell.Show();
         previous?.Close();
+    }
+
+    /// <summary>
+    /// Opens the shell the way it was last closed, and remembers how it is closed this time.
+    ///
+    /// <para>⭐ Here rather than in <c>MainWindow</c>: the window knows its own state, the composition root
+    /// knows where the preferences file is, and giving a window a path is how a view starts owning
+    /// storage. It is the same division the language already uses — <c>ApplicationLanguageService</c>
+    /// applies it, the window knows nothing about it.</para>
+    ///
+    /// <para>⭐⭐ <b>ONE bit, written at CLOSING TIME.</b> ⛔ Not a live preference: a maximise the operator
+    /// undoes a second later must not be what the next run restores, so nothing is written while the
+    /// window is merely being dragged or resized.</para>
+    ///
+    /// <para>⚠⚠ <b><see cref="WindowState.Minimized"/> writes NOTHING, deliberately.</b> A window closed
+    /// from the taskbar while minimised is not a window the operator left "normal" — minimised is a
+    /// transient state, not an answer to <i>"how was it left"</i>, and Avalonia does not expose the
+    /// restore state underneath it. Leaving the stored value alone keeps the last real answer.</para>
+    ///
+    /// <para>⚠ The write goes through <c>Update</c>, so it cannot blank the language — see
+    /// <c>ManagerPreferencesStore.Update</c>.</para>
+    /// </summary>
+    private static void RememberWindowState(Window shell, ManagerPreferencesStore preferences)
+    {
+        if (preferences.Load().WindowMaximized)
+        {
+            shell.WindowState = WindowState.Maximized;
+        }
+
+        shell.Closing += (_, _) =>
+        {
+            if (shell.WindowState == WindowState.Minimized)
+            {
+                return;
+            }
+
+            var maximized = shell.WindowState == WindowState.Maximized;
+            preferences.Update(stored => stored with { WindowMaximized = maximized });
+        };
     }
 
     /// <summary>

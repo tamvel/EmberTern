@@ -373,8 +373,14 @@ public sealed class BulkSendRun
                     Address = candidate.Address,
                     LicenseId = candidate.LicenseId,
                     Outcome = BulkSendOutcome.Failed,
-                    Reason = new LocalizedText(ViewModels.StatusCatalog.BulkAttemptFailed),
-                    ServerMessage = outcome.Error,
+
+                    // ⭐ OUR sentence when the failure is ours — today that means the send timed out, and
+                    //   there are no server words to put beside it. ⛔ `ServerMessage` stays null in that
+                    //   case rather than quoting an English diagnostic as if the server had said it: the
+                    //   column is called "server message" and it must never contain anything else.
+                    Reason = outcome.Reason
+                        ?? new LocalizedText(ViewModels.StatusCatalog.BulkAttemptFailed),
+                    ServerMessage = outcome.Reason is null ? outcome.Error : null,
                     At = at,
                 });
 

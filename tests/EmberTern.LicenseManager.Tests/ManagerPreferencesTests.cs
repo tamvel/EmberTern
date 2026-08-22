@@ -172,6 +172,112 @@ public sealed class ManagerPreferencesTests : IDisposable
         Assert.DoesNotContain("\"language\"", text, StringComparison.Ordinal);
     }
 
+    // ── The window state (2026-08-22) ───────────────────────────────────────────────────────────────
+
+    /// <summary>⭐ A window left maximised comes back maximised — the whole of the request.</summary>
+    [Fact]
+    public void TheWindowState_SurvivesARestart()
+    {
+        var store = Store();
+        Assert.True(store.Save(new ManagerPreferences { WindowMaximized = true }));
+
+        // ⚠ A SECOND store over the same path — the same thing a restart does.
+        Assert.True(new ManagerPreferencesStore(store.FilePath).Load().WindowMaximized);
+    }
+
+    /// <summary>⭐ And a window left normal comes back normal, which is also the first-run answer.</summary>
+    [Fact]
+    public void ANormalWindow_IsTheDefaultAndRoundTrips()
+    {
+        Assert.False(Store().Load().WindowMaximized);
+
+        var store = Store();
+        Assert.True(store.Save(new ManagerPreferences { WindowMaximized = true }));
+        Assert.True(store.Save(new ManagerPreferences { WindowMaximized = false }));
+
+        Assert.False(new ManagerPreferencesStore(store.FilePath).Load().WindowMaximized);
+    }
+
+    /// <summary>⚠ A file written before this preference existed reads cleanly and takes the default.</summary>
+    /// <remarks>
+    /// ⭐ The property every field here is supposed to have — nullable in the wire shape, so there is no
+    /// migration step. ⛔ Asserted on a hand-written older file rather than on a round trip, because a
+    /// round trip can only ever produce what this build writes.
+    /// </remarks>
+    [Fact]
+    public void AFileFromBeforeThisPreference_ReadsCleanly()
+    {
+        var store = Store();
+        File.WriteAllText(
+            store.FilePath, """{"version":1,"language":"pl"}""", NoBom);
+
+        var loaded = store.Load();
+
+        Assert.Equal(ApplicationLanguages.Polish, loaded.Language);
+        Assert.False(loaded.WindowMaximized);
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>Changing ONE preference leaves the other exactly as it was — in BOTH directions.</b>
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ This is the test that matters now that the record has two members. <c>Save</c> persists the WHOLE
+    /// object, so a caller building a fresh <see cref="ManagerPreferences"/> to change one field resets
+    /// every field it did not mention: the language picker would blank the window state, and closing a
+    /// window would blank the language. ⭐ Both directions are asserted, because the defect is symmetric
+    /// and fixing one caller proves nothing about the other.
+    /// </remarks>
+    [Fact]
+    public void ChangingOnePreference_LeavesTheOtherAlone()
+    {
+        var store = Store();
+
+        Assert.True(store.Save(new ManagerPreferences
+        {
+            Language = ApplicationLanguages.Polish,
+            WindowMaximized = true,
+        }));
+
+        Assert.True(store.Update(p => p with { WindowMaximized = false }));
+        Assert.Equal(ApplicationLanguages.Polish, store.Load().Language);
+
+        Assert.True(store.Update(p => p with { Language = ApplicationLanguages.English }));
+        Assert.False(store.Load().WindowMaximized);
+
+        Assert.True(store.Update(p => p with { WindowMaximized = true }));
+        Assert.Equal(ApplicationLanguages.English, store.Load().Language);
+        Assert.True(store.Load().WindowMaximized);
+    }
+
+    /// <summary>⛔ The language picker cannot blank the window state — it writes through <c>Update</c>.</summary>
+    /// <remarks>
+    /// ⭐ Driven through <see cref="ApplicationLanguageService"/>, the real caller, rather than through the
+    /// store: the store's own guarantee is tested above, and what this pins is that the picker USES it.
+    /// ⚠ The subscriber list is isolated because <c>Choose</c> applies the language, which is process-wide
+    /// static state (§57.9).
+    /// </remarks>
+    [Fact]
+    public void ChoosingALanguage_DoesNotForgetTheWindowState()
+    {
+        var store = Store();
+        Assert.True(store.Save(new ManagerPreferences { WindowMaximized = true }));
+
+        using var isolated = EmberTern.LicenseManager.Localization.Loc.IsolateSubscribersForVerification();
+
+        try
+        {
+            Assert.True(new ApplicationLanguageService(store).Choose(ApplicationLanguages.Polish));
+
+            var reopened = new ManagerPreferencesStore(store.FilePath).Load();
+            Assert.Equal(ApplicationLanguages.Polish, reopened.Language);
+            Assert.True(reopened.WindowMaximized);
+        }
+        finally
+        {
+            EmberTern.LicenseManager.Localization.Loc.Apply(ApplicationLanguages.Default);
+        }
+    }
+
     /// <summary>⭐ The four files are four distinct paths — the separation is structural, not a convention.</summary>
     [Fact]
     public void TheFourFiles_AreFourDistinctPaths()

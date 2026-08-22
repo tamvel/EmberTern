@@ -534,7 +534,7 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
             // ⚠ The server's own words, and what they mean for the operator's next step. ⛔ Never
             //   interpreted — a wrong password and a blocked app password differ only in that text.
             : StatusMessage.Error(
-                StatusCatalog.TestMessageNotSent, outcome.Error);
+                StatusCatalog.TestMessageNotSent, outcome.Explanation);
     }
 
     // ── Plumbing ────────────────────────────────────────────────────────────────────────────────────

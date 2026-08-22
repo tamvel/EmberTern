@@ -1533,4 +1533,7 @@
   <data name="Status.BulkReportCopied" xml:space="preserve">
     <value>Raport został skopiowany do schowka.</value>
   </data>
+  <data name="Status.SmtpServerDidNotAnswerInTime" xml:space="preserve">
+    <value>{0}:{1} nie odpowiedział w ciągu {2} s, więc próba została przerwana. Sprawdź serwer, port i to, czy STARTTLS jest dla niego właściwy — port, który oczekuje połączenia szyfrowanego od początku, nigdy na to nie odpowie.</value>
+  </data>
 </root>

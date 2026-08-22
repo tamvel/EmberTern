@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.Net;
 using System.Net.Mail;
 using System.Threading;
@@ -32,10 +33,25 @@ public sealed class SmtpLicenseEmailSender : ILicenseEmailSender
     /// <para>⚠ Bounded on purpose. <see cref="SmtpClient"/>'s own default is 100 seconds, which is long
     /// enough that a wrong host reads as a frozen application — and the operator is sitting in front of a
     /// modal window watching a button.</para>
+    ///
+    /// <para>⚠⚠ <b>MEASURED, 2026-08-22: setting <see cref="SmtpClient.Timeout"/> does NOT bound
+    /// <see cref="SmtpClient.SendMailAsync(MailMessage)"/>.</b> A probe against a black-holed address with
+    /// <c>Timeout = 3 000</c> took <b>21 078 ms</b> to fail — the operating system's TCP give-up, not ours.
+    /// The property governs the SYNCHRONOUS <c>Send</c> only, and this application never calls that. So
+    /// for five stages the number below was a promise the class did not keep, and against the worse
+    /// configuration — implicit TLS on port 465, where the server waits for a ClientHello while the client
+    /// waits for an SMTP banner — nothing bounded the wait at all.</para>
+    ///
+    /// <para>⭐ The same probe measured the answer: the <see cref="CancellationToken"/> overload DOES
+    /// interrupt a connect that is going nowhere (2 995 ms against a 3 000 ms token). That is why
+    /// <see cref="SendAsync"/> carries its own deadline as a token rather than trusting the property, and
+    /// why the property is still set — it costs nothing and is correct for anyone who calls
+    /// <c>Send</c>.</para>
     /// </summary>
     public const int TimeoutMilliseconds = 30_000;
 
     private readonly SmtpSettings _settings;
+    private readonly TimeSpan _timeout;
 
     /// <summary>Creates the sender over a configuration.</summary>
     /// <exception cref="ArgumentException">
@@ -43,8 +59,25 @@ public sealed class SmtpLicenseEmailSender : ILicenseEmailSender
     /// a sender, and building one would push the failure to a place where it reads as a network problem.
     /// </exception>
     public SmtpLicenseEmailSender(SmtpSettings settings)
+        : this(settings, TimeSpan.FromMilliseconds(TimeoutMilliseconds))
+    {
+    }
+
+    /// <summary>
+    /// The same sender with a different deadline. ⚠ A test seam, and it exists for a reason no other seam
+    /// covers: the property being guarded is <b>how long a dead server may stall this application</b>, and
+    /// a suite that waited thirty seconds to prove it would not be run.
+    /// </summary>
+    internal SmtpLicenseEmailSender(SmtpSettings settings, TimeSpan timeout)
     {
         ArgumentNullException.ThrowIfNull(settings);
+
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+        }
+
+        _timeout = timeout;
 
         if (!settings.CanSendDirectly)
         {
@@ -90,16 +123,41 @@ public sealed class SmtpLicenseEmailSender : ILicenseEmailSender
 
         using var mail = MailComposition.Build(email);
 
+        // ⭐⭐ OUR deadline, carried as a token because that is the only form the BCL honours here — see
+        //    TimeoutMilliseconds for the measurement. ⚠ LINKED, so the caller's own token still works and
+        //    the two remain distinguishable afterwards: they must be, because one is a delivery outcome
+        //    and the other is not.
+        using var deadline = new CancellationTokenSource(_timeout);
+        using var linked =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+
         try
         {
-            await client.SendMailAsync(mail, cancellationToken).ConfigureAwait(false);
+            await client.SendMailAsync(mail, linked.Token).ConfigureAwait(false);
             return SendOutcome.Ok(_settings.Host);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // ⭐ Cancellation is the CALLER's decision, not a delivery failure — it must not become an
             //    audit line claiming the server refused something.
             throw;
+        }
+        catch (OperationCanceledException)
+        {
+            // ⭐⭐ OUR deadline fired, which IS a delivery outcome and the operator's whole answer: the
+            //    server never replied. ⛔ Not rethrown — the case above is the caller changing their mind,
+            //    this one is a configuration that does not work, and reporting it is the point.
+            // ⚠ Two texts, on purpose: the English one goes in the audit note, which stays invariant like
+            //   every note in that register; the KEY is what the operator reads. The BCL's own words here
+            //   are "A task was canceled", which explains nothing to either reader.
+            return SendOutcome.Failed(
+                $"No answer from {_settings.Host}:{_settings.Port} within " +
+                $"{_timeout.TotalSeconds:0} s; the attempt was abandoned.",
+                new LocalizedText(
+                    StatusCatalog.SmtpServerDidNotAnswerInTime,
+                    _settings.Host,
+                    _settings.Port.ToString(CultureInfo.InvariantCulture),
+                    ((int)_timeout.TotalSeconds).ToString(CultureInfo.InvariantCulture)));
         }
         catch (Exception e)
         {

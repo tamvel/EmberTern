@@ -10,10 +10,11 @@ namespace EmberTern.LicenseManager.Settings;
 /// What the operator has chosen about the application itself.
 /// </summary>
 /// <remarks>
-/// <para>⭐ <b>One member today, and that is the whole of L8 decision D‑4.</b> The theme is deliberately
-/// NOT here: it is not persisted anywhere at all right now, so adding it would be a new feature smuggled
-/// into a localization stage. ⛔ Do not add a preference here because it would be convenient — the test is
-/// whether the step that needs it is scheduled.</para>
+/// <para>⭐ <b>Two members, and both were asked for.</b> The theme is deliberately still NOT here: it is
+/// not persisted anywhere at all, so adding it would be a feature nobody requested. ⛔ Do not add a
+/// preference here because it would be convenient — the test is whether the step that needs it is
+/// scheduled. <see cref="WindowMaximized"/> passes that test (asked for on 2026-08-22);
+/// <see cref="Language"/> is L8 decision D‑4.</para>
 ///
 /// <para>⚠ <see cref="Language"/> is a code from <see cref="ApplicationLanguages"/>, and ⛔ never a
 /// <see cref="System.Globalization.CultureInfo"/>: what is persisted must be a value this build can
@@ -23,6 +24,21 @@ public sealed record ManagerPreferences
 {
     /// <summary>The interface language. ⭐ Always one of <see cref="ApplicationLanguages.All"/>.</summary>
     public string Language { get; init; } = ApplicationLanguages.Default;
+
+    /// <summary>
+    /// Whether the main window was MAXIMISED when the application last closed.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐ A single <see cref="bool"/>, and deliberately not a rectangle. What was asked for is that a
+    /// window left maximised comes back maximised; storing the geometry as well would mean deciding what to
+    /// do when the monitor it was on is gone — a different feature with a different failure mode. ⛔ The
+    /// declared <c>Width</c> / <c>Height</c> / <c>WindowStartupLocation</c> in <c>MainWindow.axaml</c> are
+    /// untouched, so the ordinary case is exactly what it was.</para>
+    /// <para>⚠ Written at CLOSING TIME and at no other moment: a maximise the operator undoes a second
+    /// later must not be what the next run restores. ⛔ Not a live preference — there is nothing worth
+    /// writing while a window is merely being dragged about.</para>
+    /// </remarks>
+    public bool WindowMaximized { get; init; }
 
     /// <summary>What a first run, an unreadable file or an unknown value all resolve to.</summary>
     public static ManagerPreferences Defaults { get; } = new();
@@ -117,7 +133,11 @@ public sealed class ManagerPreferencesStore
 
             // ⭐ Through Resolve, so a code this build does not know lands on the default rather than on
             //   a culture the resource system cannot serve.
-            : new ManagerPreferences { Language = ApplicationLanguages.Resolve(stored.Language) };
+            : new ManagerPreferences
+            {
+                Language = ApplicationLanguages.Resolve(stored.Language),
+                WindowMaximized = stored.WindowMaximized ?? false,
+            };
     }
 
     /// <summary>
@@ -137,6 +157,7 @@ public sealed class ManagerPreferencesStore
         {
             Version = CurrentVersion,
             Language = ApplicationLanguages.Resolve(preferences.Language),
+            WindowMaximized = preferences.WindowMaximized,
         };
 
         try
@@ -149,6 +170,27 @@ public sealed class ManagerPreferencesStore
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Changes ONE preference and writes the file back, leaving every other one exactly as it was.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>It exists the moment this record gained a second member, and it is not a convenience.</b>
+    /// <see cref="Save"/> persists the WHOLE object, so a caller that builds a fresh
+    /// <see cref="ManagerPreferences"/> to change one field silently resets every field it did not
+    /// mention — the language picker would blank the window state, and the window state would blank the
+    /// language. That is the defect EmberTern records about its own <c>PreferencesService</c> ("two
+    /// snapshot holders overwrite each other"), and read-modify-write in ONE place is what makes it
+    /// unreachable rather than something each caller has to remember.</para>
+    /// <para>⚠ Not atomic against another process writing the same file, and it does not need to be: one
+    /// operator, one instance, one file.</para>
+    /// </remarks>
+    /// <returns><see langword="false"/> when the write did not reach the disk — see <see cref="Save"/>.</returns>
+    public bool Update(Func<ManagerPreferences, ManagerPreferences> change)
+    {
+        ArgumentNullException.ThrowIfNull(change);
+        return Save(change(Load()));
     }
 
     /// <summary>The bytes without a leading UTF-8 byte-order mark.</summary>
@@ -166,5 +208,10 @@ public sealed class ManagerPreferencesStore
 
         [JsonPropertyName("language")]
         public string? Language { get; init; }
+
+        // ⚠ Nullable like every field here, so a file written before this existed reads cleanly and takes
+        //   the default — no migration step, no rewrite on read, nothing an operator has to do.
+        [JsonPropertyName("windowMaximized")]
+        public bool? WindowMaximized { get; init; }
     }
 }

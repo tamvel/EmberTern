@@ -215,7 +215,7 @@ public sealed partial class SendLicenceViewModel : MessageHostViewModel
         }
 
         // ⚠ The server's own words, and the way out beside them — §14.1's rule for a failed send.
-        Message = StatusMessage.Error(StatusCatalog.MessageNotSent, outcome.Error);
+        Message = StatusMessage.Error(StatusCatalog.MessageNotSent, outcome.Explanation);
     }
 
     /// <summary>

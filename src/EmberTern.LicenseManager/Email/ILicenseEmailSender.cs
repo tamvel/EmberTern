@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using EmberTern.LicenseManager.Localization;
 
 namespace EmberTern.LicenseManager.Email;
 
@@ -32,11 +33,44 @@ public sealed record SendOutcome
     /// </summary>
     public string? Error { get; init; }
 
+    /// <summary>
+    /// OUR sentence about the failure, when the failure is OURS rather than the server's.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>It exists for exactly one case, and the case is what justifies the field: the send
+    /// timed out.</b> A timeout is not something a server said — it is this application deciding to stop
+    /// waiting — so there are no server words to quote, and the BCL's own text for it
+    /// (<i>"A task was canceled."</i>) tells the operator nothing and is not translatable. ⛔ Every genuine
+    /// server refusal leaves this <see langword="null"/> and keeps travelling in <see cref="Error"/>,
+    /// verbatim.</para>
+    /// <para>⚠ A key and its arguments, never rendered text: a failure notice is raised at one moment and
+    /// read at another, possibly in another language (L8.2's rule for every sentence of ours).</para>
+    /// </remarks>
+    public LocalizedText? Reason { get; init; }
+
+    /// <summary>
+    /// What to SHOW a human — ⭐ our sentence when the failure is ours, the server's words when it is theirs.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ Typed <see cref="object"/> because the two halves resolve differently and must: a
+    /// <see cref="LocalizedText"/> renders through <see cref="Localization.Loc"/> at FORMAT time, so it
+    /// follows a language change, while the server's string is already final. Both are handed to a
+    /// <c>StatusMessage</c> as an argument, and <c>string.Format</c> calls <c>ToString</c> on each at the
+    /// moment of the read — which is what makes the first one live.
+    /// </remarks>
+    public object? Explanation => Reason ?? (object?)Error;
+
     /// <summary>It left.</summary>
     public static SendOutcome Ok(string delivered) => new() { Sent = true, Delivered = delivered };
 
     /// <summary>It did not.</summary>
-    public static SendOutcome Failed(string error) => new() { Sent = false, Error = error };
+    /// <param name="error">
+    /// The server's own words, or — when <paramref name="reason"/> is given — the English diagnostic that
+    /// belongs in the audit note, which stays invariant like every note in that register.
+    /// </param>
+    /// <param name="reason">⭐ OUR sentence, for a failure that is ours. See <see cref="Reason"/>.</param>
+    public static SendOutcome Failed(string error, LocalizedText? reason = null) =>
+        new() { Sent = false, Error = error, Reason = reason };
 }
 
 /// <summary>
