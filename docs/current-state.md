@@ -21,10 +21,13 @@
 > defer, because it could not be true until a real key existed. Register: **§35.4**. The procedure, written
 > to be reused for a rotation: [`design/licensing-key-ceremony-runbook.md`](design/licensing-key-ceremony-runbook.md).
 >
-> ## ⏭ START HERE: **nothing is in progress.** The next topic is a user decision.
+> ## ⏭ START HERE: **L9 — the License Manager's identity** (wordmark + About) is the ACTIVE stage.
 >
-> ⭐ The strongest candidate is **bulk sending of licences** — ratified as its own stage at L6's closure and
-> already designed (§14.1). The rest sit under "Ratified but not started" below.
+> ⭐⭐ **L10 — bulk sending of licences — is RATIFIED IN FULL and needs NO further approval: `design/licensing-system.md` §60.**
+> 🔒 The user accepted the specification on 2026-08-22 and ordered L9 first. ⛔ Do not re-open the design,
+> do not re-derive it from §14.1 (which §60 supersedes), and ⛔ do not add anything §60.0 forbids —
+> no retry, no jitter, no SMTP error classification, no CC/BCC, no merging licences into one message,
+> no run-history view, no way around the run limit. Its 6 sub-stages are §60.12.
 >
 > ⚠ **Two things L7 left open ON PURPOSE, both ratified:** the clock-rollback **warning** has no surface
 > (the *enforcement* does — `EffectiveNow` is live; decision C2, backlog), and the ceremony's two backups
@@ -112,7 +115,7 @@
 | Sync | ⭐ **HEAD == `origin/feat/licensing-system` == `private/feat/licensing-system`** — pushed to BOTH on 2026-08-21; see the Remotes row |
 | Working tree | ✅ **CLEAN** |
 | Build | **0 warnings / 0 errors** — License Manager **Debug** and **Release**. ⛔ EmberTern not rebuilt: L8 has touched no product file |
-| Tests | ⭐ **License Manager: 767 / 767** (0 failed, 0 skipped — 766 after L8.5, 737 after L8.4, 709 after L8.3, 705 after L8.2, 685 after L8.1, 632 after L8.0/prep), and **two consecutive stable runs**. ⚠ The suite now runs **serially** (`DisableTestParallelization`) because `Loc` is global static state — §57.9; ~65 s → ~120 s. ⛔ **The EmberTern suite was NOT run**: L8 has touched no file of the product. ⭐ One product test WAS run punctually because it scans License Manager source: `DatePresentationTests` **9 / 10** — its one red carries **two** offenders, both byte-identical at `b012a0e` and absent from L8.4's diff (§57.8 corrects §49.9, which named only one) |
+| Tests | ⭐ **License Manager: 777 / 777** (measured 2026-08-22 at HEAD `0c4a1ae`; 767 was the L8-closure figure and had gone stale — 766 after L8.5, 737 after L8.4, 709 after L8.3, 705 after L8.2, 685 after L8.1, 632 after L8.0/prep), and **two consecutive stable runs**. ⚠ The suite now runs **serially** (`DisableTestParallelization`) because `Loc` is global static state — §57.9; ~65 s → ~120 s. ⛔ **The EmberTern suite was NOT run**: L8 has touched no file of the product. ⭐ One product test WAS run punctually because it scans License Manager source: `DatePresentationTests` **9 / 10** — its one red carries **two** offenders, both byte-identical at `b012a0e` and absent from L8.4's diff (§57.8 corrects §49.9, which named only one) |
 | Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ Separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | ⭐ **TWO, and both are kept on the same SHA** (user's decision, 2026-08-21): `origin` → the company Gitea, `private` → the personal GitHub. ⚠ This REVERSES the one-remote note L8.0–L8.1 carried — that described the *other* machine. See §0 |
@@ -226,7 +229,7 @@ whether `NONE` should stay in `CharsetCatalog.Supported` (lossy and machine-depe
 
 | Item | Scope / why it waits | Reference |
 |---|---|---|
-| **Bulk sending of licences** | ⭐ Ratified as its OWN stage by the user at L6's closure — deliberately left out of L6. §14.1 already holds the design and it is the part that must not be softened: the FULL recipient list on screen, ONE explicit confirmation, then a per-message report. ⛔ No silent bulk send. ⚠ The pieces exist — `LicenceDelivery` records one line per attempt, and the composer is pure — so this is a surface plus a policy, not new plumbing. | `design/licensing-system.md` §14.1 |
+| ⭐⭐ **L10 — bulk sending of licences** | 🔒 **SPECIFIED AND RATIFIED IN FULL (2026-08-22) — needs no further approval, only implementation.** Three separate models (PLAN / PROGRESS / RESULT) with `Planned == Sent + Failed + Skipped + NotAttempted` as a tested invariant; a real progress bar (⛔ never `IsIndeterminate`); a report that STAYS in the card, structured, with a per-recipient verdict; stop on the first failure (no SMTP error classification); 15 s / 50 defaults; "skip already sent" judged against the current artifact's `IssuedAt`. ⛔ §60.0 lists what may not be added. Runs after L9. | `design/licensing-system.md` **§60** |
 | **Spacing stage** | 969 local `Spacing`/`Padding`/`Margin` values app-wide; `Padding` reads a role **zero** times. Ratified as its own stage; a guard already prevents growth. | `design/product-polish-m5-next-session.md` |
 | **App-wide UX sprint** | Global control density (base controls sit on Fluent's 32 px) **+** monospace font consolidation — re-measured at **7 strings / 95 occurrences / 33 files**, so it decides `Cascadia Code` vs `Cascadia Mono` for every code surface at once. | `design/settings-center.md` §2.7, §7.1 |
 | **`KindLabel` / `SymbolKind`** | ~8 Quick Info fact *values* that are our own words. A **contract** decision on `QuickInfoFact` (Core should hand up `SymbolKind` as data), not cleanup. ⛔ Do not declare kind keys in Core — App already owns that vocabulary. Cost today: a Polish reader sees *"Rodzaj: Table"* while the tree says *"Tabela"*. | `history/28` (C2) |

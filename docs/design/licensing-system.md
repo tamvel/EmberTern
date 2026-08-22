@@ -5116,3 +5116,424 @@ it learns that the language changed**.
 ⏭ **Next: L7** — hardening and closing (§32): clock high-water, `%PROGRAMDATA%` fallback, the `maint` gate,
 the **real key ceremony** and the shipped public key. ⛔ `TrustedKeys.Production` is still empty and no real
 licence verifies as usable in any build until that ceremony runs.
+
+---
+
+## 60. ⭐⭐ L10 — grupowa wysyłka licencji: SPECYFIKACJA RATYFIKOWANA (2026-08-22)
+
+> 🔒 **Zaakceptowana przez użytkownika 2026-08-22, przed implementacją.** ⛔ **Nie wymaga kolejnej
+> ratyfikacji** — wraca się do TEGO tekstu. ⏭ Implementacja startuje **po zamknięciu L9** (wordmark +
+> okno „O programie"), taka była decyzja o kolejności.
+>
+> ⚠ Ta sekcja zastępuje §14.1 jako źródło prawdy o grupowej wysyłce. §14.1 zostaje jako pierwotny
+> szkic i jego dwie reguły są tu dosłownie zachowane: **pełna lista odbiorców na ekranie** i **jedno
+> wyraźne potwierdzenie**. ⛔ „No silent bulk send" obowiązuje.
+
+### 60.0 ⛔⛔ Czego w L10 NIE MA — zakaz wprost, decyzja użytkownika
+
+⛔ **Żadnej z tych rzeczy nie wolno dodać bez zatrzymania się i przedstawienia decyzji:**
+retry · jitter · klasyfikacja błędów SMTP · CC/BCC · automatyczne łączenie wielu licencji w jedną
+wiadomość · dodatkowy widok historii serii · obchodzenie limitu serii.
+
+### 60.1 Ustalenia rekonesansu, które ukształtowały tę specyfikację
+
+1. ⚠⚠ **„Wysłano" znaczy „serwer SMTP przyjął wiadomość", nigdy „klient ją odebrał".** Przy jednym
+   odbiorcy na wiadomość provider zwykle PRZYJMUJE wiadomość na zły adres i odbija ją asynchronicznie,
+   czego ta aplikacja nie widzi wcale. ⛔ Słowo **„dostarczono" jest zakazane** w każdym języku
+   katalogu. Jedno zdanie o tym stoi na stałe w karcie.
+2. ⛔ **Grupowe przedłużanie NIE MA filtra aktywnych licencji** — zmierzone. `BatchRenewalPlanner`
+   blokuje wyłącznie po datach i po `IssueReasonPolicy`; licencja `blocked` daje się dziś przedłużyć.
+   Nie było więc czego współdzielić i reguła §60.3 jest pisana od zera.
+3. ⚠ **`audit_log` nie ma indeksu** na `(target_type, target_id, action)` — jest tylko PK. Zapytanie
+   per licencja to pełny skan. Do tego `GetAudit` ma **domyślny `Limit = 200`**, więc użyty do
+   agregacji dałby PO CICHU błędną odpowiedź. Stąd §60.7.
+4. ⭐ **Cztery potrzebne ikony już są** w linkowanym `IconGeometries.axaml`: `Icon.Check` · `Icon.X` ·
+   `Icon.Minus` · `Icon.Stop`. ⛔ Żadnej zmiany w produkcie. ⚠ Ikony są kreskowe — malują się przez
+   **`Stroke`**, nie `Fill`.
+5. ⚠ **`FluentBridge.axaml` repinuje ZERO kluczy `ProgressBar*`**, ale `Colors.axaml` nadpisuje
+   `SystemAccentColor` na `#2D6BBF` wraz z rampą — więc wskaźnik powinien wyjść w naszym niebieskim.
+   ⚠ To wniosek z odczytu palety, **nie z rendera**: pozycja QA wzrokowego. Gdyby wyszedł inaczej,
+   repin idzie do `FluentBridge` (plik produktu), ⛔ nigdy lokalnym kolorem.
+6. ⚠ `ProgressBar.status` w EmberTernie to **osobna rola** (cienki wskaźnik chromy, 4 px) i ⛔ nie jest
+   wzorcem dla paska w karcie.
+
+### 60.2 Architektura — trzy modele, i niezmiennik, który je spina
+
+```
+        PLAN                      PROGRESS                     RESULT
+„co zamierzamy wysłać"      „co się teraz dzieje"      „co się faktycznie stało"
+niemutowalny rekord,        jedna migawka,             niemutowalny rekord,
+przebudowywany na tick      nadpisywana w serii        powstaje RAZ, zostaje w karcie
+        │                           │                            │
+   Matches(approved)          IProgress<T>                  Attempts[]
+```
+
+⭐⭐ **`Planned == Sent + Failed + Skipped + NotAttempted` — niezmiennik, obowiązkowo pilnowany
+testem automatycznym** (potwierdzenie użytkownika nr 6). To jest cała odpowiedź na *„nie udawajmy, że
+wysłano 40, kiedy 37 się udało"*. ⛔ RESULT nie jest PLANem z dopisanymi wynikami — to osobny typ,
+więc planu nie da się pokazać jako wyniku.
+
+**Pięć poziomów liczności, każdy nazwany, żeby żaden licznik nie kłamał:**
+
+| Nazwa | Znaczenie | Gdzie |
+|---|---|---|
+| Zaznaczone | ticki operatora | istniejące „Zaznaczono N. M ukryte przez filtry." |
+| **Wstrzymane** (Held) | ⛔ **nigdy nie stają się wiadomością** — nie kwalifikują się (§60.3) | sekcja „Wstrzymane (N)", nazwa + powód per pozycja |
+| **Zaplanowane** (Planned) | zaznaczone − wstrzymane | mianownik RAPORTU |
+| **Do wysłania** (Sendable) | zaplanowane − pominięte | ⭐ mianownik PASKA i „12 z 40" |
+| **Pominięte** (Skipped) | w planie, świadomie nietykane; dziś jedyny powód: „już wysłano" | licznik + wiersz z konkretnym powodem |
+
+⭐ „Już wysłane" **nie jest odfiltrowywane z planu** — zostaje jako `Skipped` z powodem. Inaczej
+wymóg *„liczba pominiętych"* i *„dla pominiętych pokaż konkretny powód"* nie miałby czego pokazać.
+
+### 60.3 Reguła kwalifikowalności 🔒 (decyzja J)
+
+Cztery warunki. Nieprzejście = pozycja **Wstrzymana** z nazwanym powodem; ⛔ nigdy ciche pominięcie.
+
+| # | Warunek | Powód wstrzymania | Skąd |
+|---|---|---|---|
+| 1 | `licence.Status == LicenseStatuses.Active` | „Licencja jest zablokowana." | ⭐ istniejąca semantyka `StatusFilter` |
+| 2 | `GetCurrentArtifact(lid) != null` | „Licencja nie została nigdy wystawiona…" | ⭐ istnieje; załatwia `superseded` strukturalnie (wskaźnik z definicji nie wskazuje zastąpionego) |
+| 3 | payload załączanego artefaktu ma `exp` w przyszłości | „Artefakt wygasł {0}." | 🆕 arytmetyka na dacie z payloadu |
+| 4 | `LicenseMessageComposer.Problems(...)` puste | ⭐ zdania kompozytora, dosłownie | ⭐ istnieje — JEDNO orzeczenie, nie druga opinia |
+
+- ⭐ Warunek 3 sądzi **artefakt, który poleci w kopercie**, nie wiersz licencji — §14.2: *„słowa i
+  załącznik pochodzą z tych samych bajtów"*. Wiersz może mieć przesunięty `ExpiresAt`, którego nikt
+  nie wystawił.
+- ⛔ **`NotYetValid` JEST wysyłane** (potwierdzenie 13): odnowienie wchodzące w życie 1 stycznia to
+  normalna operacja. Wykluczane jest wyłącznie `exp` już minione.
+- ⛔ **`LicenseVerifier` nie jest używany do kwalifikowania** (potwierdzenie 14) — to jedna
+  weryfikacja ECDSA na wiersz.
+
+### 60.4 Cykl życia serii
+
+```
+1. PODGLĄD       plan przebudowywany na każdy tick / zmianę ustawień
+                  → PEŁNA lista odbiorców na ekranie (§14.1), wstrzymane nazwane
+2. KLIKNIĘCIE    „Wyślij e-mailem"
+3. PRZELICZENIE  plan liczony PONOWNIE; !Matches(approved) → ⛔ ODMOWA („podgląd nieaktualny")
+4. KOMPOZYCJA    WSZYSTKIE wiadomości składane PRZED pierwszą wysyłką;
+                  dowolna porażka → ⛔ nic nie wyszło, licencja nazwana po imieniu
+5. POTWIERDZENIE jedno, wyraźne: liczby · host · szacowany czas · „nie da się odwołać"
+6. SERIA         wyślij → audyt → raportuj → odczekaj → sprawdź przerwanie
+```
+
+⭐ Krok 4 to kształt, który `IssuingWorkflow.IssueBatch` ustanowił („sign everything before recording
+anything"), przeniesiony na wysyłkę: **złóż wszystko, zanim cokolwiek wyjdzie na zewnątrz**.
+⭐ Kompozycja jest w kroku 4, a **nie w podglądzie**, bo podgląd przebudowuje się na każdy znak w polu
+szukania. ⚠ Kompozycja jest **przed** potwierdzeniem (reguła L6: okno, które się otwiera i dopiero
+potem mówi „właściwie nie", to okno, które trzeba zamknąć, żeby nic się nie dowiedzieć).
+
+### 60.5 🔒 K1 — STOP NA PIERWSZEJ PORAŻCE (decyzja końcowa użytkownika)
+
+⛔ **Bez klasyfikacji `SmtpFailedRecipientException` i bez żadnego „mądrego" rozpoznawania błędów
+SMTP.** Po pierwszym błędzie:
+
+1. aktualna próba **zostaje zakończona**,
+2. jej wynik trafia **do audytu i do raportu**,
+3. ⛔ kolejna wiadomość **nie startuje**,
+4. wszystkie pozostałe pozycje dostają `NotAttempted`,
+5. wynik serii to **`StoppedAfterError`**, a raport mówi *„Seria zatrzymana po błędzie."*
+
+⚠ **Konsekwencja przyjęta świadomie:** przykład „2 błędy" jest przy K1 niedosiężny — w serii jest
+najwyżej jeden błąd. Użytkownik: *„Nie próbujemy osiągać przykładowego »2 błędy« przez kontynuowanie
+wysyłki. Bezpieczeństwo i przewidywalność są ważniejsze."*
+⭐ Model wyniku jest identyczny w obu politykach (`Attempts` to LISTA), więc ewentualna zmiana
+polityki w przyszłości nie rusza modelu.
+
+### 60.6 Semantyka „Przerwij wysyłkę"
+
+⭐⭐ **Token anulowania NIE wchodzi do `SendAsync`.** `SmtpLicenseEmailSender` już dziś świadomie
+przepuszcza `OperationCanceledException` dalej, zamiast zapisywać ją jako porażkę — *„Cancellation is
+the CALLER's decision… it must not become an audit line claiming the server refused something"*.
+Przerwana rozmowa SMTP mogła już dostarczyć wiadomość, więc linia audytu byłaby kłamstwem.
+
+| Zdarzenie | Zachowanie |
+|---|---|
+| Klik w trakcie **odczekania** | odczekanie przerwane, ⛔ następna wiadomość nie startuje |
+| Klik w trakcie **próby SMTP** | ⭐ próba **dokańcza się**, wynik zapisany, dopiero potem seria staje |
+| Pozycje niedotknięte | `NotAttempted` |
+| Wynik serii | **`StoppedByOperator`** — raport mówi wprost, że przerwał operator |
+| Już wysłane | pozostają `Sent`; ich linie `licence.sent` są w rejestrze |
+| Zamknięcie aplikacji w trakcie | ⭐ nie wymaga obsługi: audyt jest pisany zaraz po KAŻDEJ próbie, więc rejestr nigdy nie mówi więcej, niż się stało. Ginie karta, nie rejestr. |
+
+### 60.7 Pliki i typy
+
+**`Services/BulkSend.cs` — PLAN, czysty (zero typów Avalonia, zero IO):**
+
+```csharp
+enum BulkSendPlanned { Send, Skip }
+
+sealed record BulkSendCandidate
+{
+    LicenseSummary Summary;  IssuedArtifactRecord? CurrentArtifact;  CustomerRecord? Customer;
+    LocalizedText? Hold;              // ⭐ null == kwalifikuje się
+    BulkSendPlanned Action;
+    LocalizedText? SkipReason;        // niepuste dokładnie gdy Action == Skip
+    DateTimeOffset? LastSentAt;
+    string CustomerName, Address, LicenseId, ShortId;
+    bool Qualifies => Hold is null;
+}
+
+sealed record BulkSendPlan
+{
+    IReadOnlyList<BulkSendCandidate> Candidates;   // wszystkie zaznaczone, w kolejności rejestru
+    string Host;  int DelaySeconds;  int MaxPerRun;
+    IReadOnlyList<BulkSendCandidate> Held, Skipped, Sendable;
+    int RecipientCount;                // unikalne adresy
+    int DuplicateRecipientCount;       // ⚠ adresy dostające > 1 wiadomość — POKAZYWANE
+    TimeSpan MinimumDuration;          // (Sendable-1) × delay — „co najmniej"
+    bool ExceedsRunLimit;              // Sendable > MaxPerRun
+    bool CanExecute => Sendable.Count > 0 && !ExceedsRunLimit;
+    bool Matches(BulkSendPlan other);  // kolejność · LicenseId · Qualifies · Action · Address · limity
+}
+
+static class BulkSendPlanner
+{
+    static BulkSendPlan Plan(
+        IReadOnlyList<LicenseSummary> selected,
+        Func<string, IssuedArtifactRecord?> currentArtifact,
+        Func<string, CustomerRecord?> customer,
+        IReadOnlyDictionary<string, DateTimeOffset> lastSentAt,   // ⭐ JEDNO zapytanie
+        SmtpSettings settings, DateTimeOffset now, bool skipAlreadySent);
+}
+```
+
+**`Services/BulkSendRun.cs` — PROGRESS + RESULT:**
+
+```csharp
+enum BulkSendPhase { Composing, Sending, Waiting, Stopping, Finished }
+
+sealed record BulkSendProgress                    // ⭐ migawka, nie zdanie
+{
+    BulkSendPhase Phase;
+    int Total, Completed;      // ⭐ Total = Sendable; Completed = zakończone PRÓBY
+    int Sent, Failed;
+    string? CurrentCustomer, CurrentAddress, CurrentShortId;
+    int? SecondsToNext;        // podczas Waiting
+}
+
+enum BulkSendOutcome { Sent, Failed, Skipped, NotAttempted }
+
+sealed record BulkSendAttempt
+{
+    string CustomerName, Address, LicenseId, ShortId;
+    BulkSendOutcome Outcome;
+    LocalizedText? Reason;     // ⭐ NASZE zdanie (powód pominięcia / niewykonania)
+    string? ServerMessage;     // ⛔ słowa serwera DOSŁOWNIE — nigdy tłumaczone, nigdy interpretowane
+    DateTimeOffset? At;
+}
+
+enum BulkSendConclusion
+{ Completed, CompletedWithErrors, StoppedByOperator, StoppedAfterError, NothingToSend }
+
+sealed record BulkSendResult
+{
+    BulkSendConclusion Conclusion;  string RunId;
+    int Planned, Sent, Failed, Skipped, NotAttempted;   // ⭐ suma czterech == Planned
+    DateTimeOffset StartedAt, FinishedAt;  TimeSpan Elapsed;
+    IReadOnlyList<BulkSendAttempt> Attempts;            // każda pozycja planu, dokładnie raz
+    IReadOnlyList<string> SentIds;                      // ⭐ dla decyzji L
+}
+
+sealed class BulkSendRun            // ⛔ zero typów Avalonia
+{
+    Task<BulkSendResult> ExecuteAsync(
+        BulkSendPlan plan,
+        IReadOnlyDictionary<string, LicenseMessage> composed,
+        ILicenseEmailSender sender,
+        LicenceDelivery delivery,                        // ⭐ audyt per licencja — ISTNIEJĄCY
+        IProgress<BulkSendProgress> progress,
+        Func<TimeSpan, CancellationToken, Task> delay,   // ⭐ WSTRZYKIWANE → testy z 0 ms
+        Func<DateTimeOffset> clock,                      // ⛔ nie Stopwatch — nietestowalny
+        CancellationToken stopRequested);
+}
+```
+
+⭐ **Trzy szwy, każdy z jednego powodu:** `delay` wstrzykiwane, żeby suita nie czekała minut (⛔ zero
+`Thread.Sleep`); `clock` wstrzykiwany, żeby „czas operacji" był testowalny bez timera (konwencja
+całego projektu); `IProgress<T>`, bo `Progress<T>` z BCL łapie `SynchronizationContext` w momencie
+konstrukcji (w VM, na wątku UI) — postęp wraca na wątek UI **bez ani jednego typu Avalonia**.
+⚠ **Do potwierdzenia odczytem realnego kontraktu** w teście headless, nie do założenia (#199/#225).
+
+**`Data/LicenseRegister` — jedna nowa metoda (🔒 decyzja H):**
+
+```csharp
+IReadOnlyDictionary<string, DateTimeOffset> GetLastSentAt();
+```
+```sql
+SELECT target_id, MAX(at) FROM audit_log
+WHERE target_type = 'licence' AND action = 'licence.sent'
+GROUP BY target_id;
+```
+
+⛔ **Nie `GetAudit` per licencja** (brak indeksu → pełny skan × N × każdy znak w polu szukania).
+⛔ **Nie `GetAudit` w ogóle** — jego `Limit = 200` obciąłby odpowiedź PO CICHU.
+⭐⭐ **Porównanie jest do `IssuedAt` AKTUALNEGO artefaktu** (potwierdzenie 12):
+
+```
+alreadySent  ⟺  lastSentAt[lid] >= currentArtifact.IssuedAt
+```
+
+⛔ Bez tego **każde odnowienie byłoby pominięte** jako „już wysłane", bo licencja dostała maila rok
+temu. To jedyny sposób, w jaki ta opcja może być domyślnie włączona i nie szkodzić.
+⛔ **Bez indeksu w L10** — migracja schematu pod zapytanie wykonywane raz na przebudowę podglądu jest
+nieproporcjonalna. **Obowiązek pomiaru:** test na ~500 licencjach × ~10 linii audytu sprawdzający, że
+budowa planu wykonuje **dokładnie jedno** zapytanie do `audit_log`. Gdyby pomiar mówił inaczej —
+indeks jest osobną decyzją, nie doklejką.
+
+**`SmtpSettings` — kontener v3.** Dwa nowe pola, oba nullable w kształcie wire → **v2 czyta się
+czysto, zero migracji** (ta sama reguła, którą v2 dostało od v1):
+
+| Pole | Domyślnie 🔒 | Zakres | Uwaga |
+|---|---|---|---|
+| `BulkDelaySeconds` | **15** | 1–600 | ⭐ ogranicznik tempa i okno na reakcję, ⛔ nie gwarancja dostarczalności |
+| `BulkMaxPerRun` | **50** | 1–500 | ⛔ przekroczenie **wyłącza akcję**, nie ostrzega |
+
+⚠ Pola numeryczne commitują się na **blur albo Enter**, nigdy per znak, i poza zakresem **przycinają,
+nie resetują** (reguła Settings Center, którą LM stosuje już do portu).
+
+**Pozostałe pliki:**
+
+| Plik | Zmiana |
+|---|---|
+| `ViewModels/BulkSendViewModel.cs` + `BulkSendCatalog.cs` | nowe |
+| `ViewModels/LicenseBrowserViewModel.cs` | ➕ `Untick(IEnumerable<string>)` — addytywne, ⛔ zero zmian istniejącego zachowania |
+| `ViewModels/ShellViewModel.cs` | ➕ `BulkSend` + `PrepareBulkSend()` — ⭐ TA SAMA ścieżka odmów co `PrepareSendLicence`, ustawienia czytane ŚWIEŻO z pliku |
+| `ViewModels/BatchRenewalViewModel.cs` | ➕ `CanExtend` uwzględnia „trwa wysyłka" (🔒 decyzja M) |
+| `Views/MainWindow.axaml` | ➕ karta w widoku Licencje |
+| `Views/SettingsWindow.axaml` + `SettingsViewModel` | ➕ sekcja „Wysyłka grupowa" (2 pola) |
+| `Themes/LicenseManagerStyles.axaml` | ➕ `ProgressBar.run` (metryki) + 4 reguły `Stroke` z ISTNIEJĄCYCH tokenów. ⛔ Ani jednego koloru zdefiniowanego. |
+| `Localization/Strings.resx` + `.pl.resx` | ~45 kluczy |
+
+⭐ **ZERO zmian w:** `SmtpLicenseEmailSender` · `EmlFileEmailSender` · `ILicenseEmailSender` ·
+`LicenceDelivery` · `LicenseMessageComposer` · `SendLicenceViewModel` · kryptografii · `TrustedKeys`
+(potwierdzenia 15 i 16).
+
+### 60.8 UI — jedna karta, trzy stany
+
+**A · Podgląd.** `Classes="card"` pod kartą przedłużania, gramatyka `Grid Classes="command-row"`,
+przyciski tekstowe (⛔ w katalogu nie ma koperty — nie dotykamy ikon produktu). Zawiera: „Zaznacz
+wszystkie widoczne" · „Wyczyść zaznaczenie" · Notatka · ☑ „Pomiń licencje już wysłane" (🔒 domyślnie
+**włączone**) · **[Wyślij e-mailem]** primary. Pod tym: odstęp/limit/host · istniejące „Zaznaczono N,
+M ukryte" · „Zostanie wysłanych N wiadomości do M adresów. Czas: co najmniej …" · ⚠ ostrzeżenie o
+duplikatach adresu · liczba pominiętych · ⭐ **zdanie o tym, że „wysłano" ≠ „odebrano"** · sekcja
+**Wstrzymane (N)** z powodami · ⭐ **pełna lista „Zostanie wysłane (N)"** (potwierdzenie 8; §14.1
+mówi „the FULL recipient list", nie „licznik"). Listy mają `MaxHeight` jak `BatchPreview` (180).
+
+⛔ Przy `Sendable > MaxPerRun`: przycisk **niedostępny** + zdanie nazywające liczbę i limit oraz
+kierujące do Ustawień. Podniesienie limitu = świadome wejście w Ustawienia (potwierdzenie: ⛔ żadnego
+obchodzenia limitu serii).
+
+**B · W trakcie** (obowiązkowe, potwierdzenia 1–3):
+
+```
+Wysyłanie 12 z 38 — Delta Sp. z o.o. <biuro@delta.pl>
+████████████░░░░░░░░░░░░░░░░░░░░░░  31 %
+✓ 11 wysłanych   ✗ 0 błędów              [ Przerwij wysyłkę ]
+```
+
+- ⭐ `Minimum="0"` · `Maximum="{Binding Progress.Total}"` · `Value="{Binding Progress.Completed}"`;
+- ⛔⛔ **`IsIndeterminate` NIE jest używane nigdy** — pasek jest związany z liczbą **zakończonych
+  prób**; żadnej animacji udającej postęp;
+- podczas odczekania `Value` **stoi** (uczciwie), a linia stanu mówi „Odczekanie 15 s…" — brak ruchu
+  jest **wyjaśniony**, a nie wygląda na zawieszenie;
+- po kliknięciu „Przerwij": „Zatrzymywanie — kończę bieżącą próbę…", przycisk nieaktywny, ⛔ bez
+  drugiego „na pewno";
+- ⛔ podgląd **nie znika** — operator widzi, co jeszcze przed nim.
+
+**C · Raport — zostaje w karcie** (potwierdzenia 4–5):
+
+```
+Wysłano 36 z 38 wiadomości.
+✗ 1 błąd · ⊘ 2 pominięte · ⏹ 1 nie wykonano
+Seria zatrzymana po błędzie.                      Czas: 9 min 32 s
+                    [ Pokaż szczegóły (41) ]  [ Kopiuj raport ]
+──────────────────────────────────────────────────────────────────
+✓ ACME Sp. z o.o.   biuro@acme.pl     lic-8f3a…   14:02:11
+✗ Beta S.A.         kontakt@beta.pl   lic-2c11…   14:02:26
+     Wiadomość nie została wysłana.
+     ⤷ 5.7.0 Authentication required        ← słowa serwera, DOSŁOWNIE
+⊘ Gamma Sp.j.       office@gamma.pl   lic-77de…
+     Już wysłano 2026-08-20, po ostatnim wystawieniu.
+⏹ Delta Sp. z o.o.  biuro@delta.pl    lic-91bc…
+     Nie wykonano — seria zatrzymała się wcześniej.
+```
+
+| Wymóg | Realizacja |
+|---|---|
+| zostaje w karcie, nie gaśnie jak `StatusMessage` | ⭐ `HasResult` na `BulkSendResult`; pasek komunikatu gaśnie osobno — wzorzec `BatchRenewal.LastResult` |
+| 5 liczników (zaplanowane / wysłane / błędy / pominięte / nie wykonano) | liczone **z listy `Attempts`**, ⛔ nie akumulowane osobno |
+| „poprawnie / częściowo / przerwane" | `BulkSendConclusion` — 5 wartości, **osobne całe zdanie** dla każdej |
+| całkowity czas | `Elapsed` z wstrzykniętego zegara, „9 min 32 s" |
+| 4 stany per pozycja | ikona (`Check`/`X`/`Minus`/`Stop`) + token (`ConnectedBrush`/`ErrorBrush`/`SubtleForegroundBrush`) — ⚠ przez `Stroke` |
+| błąd: klient · e-mail · lid · krótki powód · **komunikat serwera w szczegółach** | wiersz + `Reason` (nasze) + `ServerMessage` (⛔ nietłumaczone) |
+| pominięte: konkretny powód | `Reason` z datą ostatniej wysyłki |
+| dostępny przy **każdym** zakończeniu | raport powstaje **zawsze**, także przy `NothingToSend` |
+| „akcja pokazująca szczegóły" | `Button Classes="flat"` przełączający `bool`. ⛔ Nie `Expander` — nowy typ kontrolki to nowa powierzchnia motywu, po nic |
+| 🔒 **Kopiuj raport** (decyzja N) | **TSV**: najpierw podsumowanie serii, potem per pozycja — `status · klient · e-mail · LicenseId · czas próby · powód · komunikat serwera`. Ścieżka schowka istnieje (`StorageViewModel.CopyAsync`) |
+| reakcja na zmianę języka **po** operacji | ⭐ `Result` trzyma klucze + argumenty; wiersze i podsumowanie **PRZEBUDOWYWANE** na `Loc.LanguageChanged`. ⚠⚠ `BulkSendAttempt` to rekord i nie podnosi `PropertyChanged` — szablon spięty z jego właściwością renderuje się raz i **zamarza** (gotcha #401). ⛔ Słowa serwera zostają w języku serwera. |
+
+⭐ **Trwałość poza kartę.** Karta jest widokiem natychmiastowym; odpowiedź na *„komu dokładnie
+wysłaliśmy i co z pozostałymi"* **po restarcie** jest w rejestrze: `licence.sent` /
+`licence.send-failed` per licencja (istnieją, ze słowami serwera w notatce) plus jedna linia serii
+**`licence.batch-sent`** (🔒 decyzja I) na `TargetType = "batch"` z `runId`, notatką operatora i
+licznikami — dokładnie wzorzec `licence.batch-issued`.
+⛔ **Osobnego widoku historii serii NIE budujemy** (🔒 decyzja O).
+
+### 60.9 Throttling — i granice tego, co obiecuje
+
+| Element | Wartość |
+|---|---|
+| Odstęp | 🔒 **15 s** domyślnie (38 wiadomości ≈ 9 min) |
+| Limit serii | 🔒 **50**, twardy |
+| Jitter | ⛔ **brak** |
+| Ponowienia | ⛔ **brak** — retry na serwerze, który nas dławi, to zła reakcja |
+| Połączenie | nowy `SmtpClient` per wiadomość — ⭐ **bez zmian**; odstęp tłumi też tempo prób AUTH |
+| Jeden odbiorca | ⭐ `mail.To.Add(...)`; w `OutgoingEmail` **nie ma CC ani BCC** — strukturalna ochrona przed wyciekiem listy klientów, ⛔ nie wolno jej zgubić |
+| Szacowany czas | `(Sendable − 1) × delay`, podawany jako **„co najmniej"** |
+
+⚠⚠ **Czego to NIE obiecuje:** o dostarczalności decydują SPF/DKIM/DMARC domeny nadawcy, reputacja IP
+i to, czy odbiorcy nie klikają „spam" — **nic z tego nie jest w tej aplikacji**. ⛔ Nigdzie nie wolno
+zapisać, że throttling gwarantuje niezablokowanie konta.
+⚠ Limity providerów (Gmail dokumentuje ~500 odbiorców/dobę konsumencko, 2 000 w Workspace, ~100 na
+sesję SMTP) są **kontekstem z dokumentacji providera**, ⛔ nie faktem zmierzonym o naszej skrzynce —
+skrzynka firmowa jest wciąż niezmierzona (§48.1).
+
+### 60.10 Po serii 🔒 (decyzja L)
+
+⭐ Ticki zdejmowane **wyłącznie z pozycji zakończonych sukcesem** (`Untick(result.SentIds)`). Błędy,
+`Skipped` i `NotAttempted` **zostają zaznaczone**, więc „wznowienie" = popraw problem → klik →
+poleci tylko to, co zostało, i ⛔ nikt nie dostanie dubla. Notatka czyszczona; raport **zostaje** do
+rozpoczęcia następnej serii.
+⚠ **Różnica wobec przedłużania jest zamierzona:** `BatchRenewal.Complete` czyści wszystkie ticki, bo
+tam operacja jest atomowa. Tu nie jest — i to jest cała różnica, którą ta reguła realizuje. ⭐ To jest
+też powód, dla którego K1 jest znośne.
+
+### 60.11 Ryzyka z reakcją
+
+| # | Ryzyko | Reakcja |
+|---|---|---|
+| 1 | ⚠⚠ **Operator klika „Przedłuż i wystaw" w trakcie serii.** Pętla `await`uje, więc UI żyje — a wiadomości są już złożone (krok 4), czyli poleciałby artefakt, który przestał być aktualny. | 🔒 **Decyzja M:** `IsSending` **blokuje** `ExtendCommand` i komendy ticków na czas serii |
+| 2 | Skrzynka firmowa niezmierzona | ⛔ nie jest to zadanie L10; odmowa basic auth → **nowa klasa** za `ILicenseEmailSender` |
+| 3 | Testy serii trwałyby minuty | ⭐ `delay` i `clock` wstrzykiwane; ⛔ zero `Thread.Sleep` |
+| 4 | `IProgress<T>` a wątek UI | ⚠ sprawdzić odczytem realnego kontraktu w teście headless |
+| 5 | `ProgressBar` bez kluczy w `FluentBridge` | ⚠ pozycja QA wzrokowego w obu motywach; ewentualny repin do `FluentBridge`, ⛔ nigdy lokalny kolor |
+| 6 | ~45 kluczy × 2 języki | terminologia z ratyfikowanego `terminology.md` §4; ⛔ żadnej korekty ratyfikowanego terminu po cichu |
+| 7 | Podgląd przebudowywany na każdy znak | ⭐ przy zerze ticków rejestr **nie jest czytany wcale** (wzorzec `BatchRenewalViewModel.BuildPlan`) |
+| 8 | Karta rośnie — widok ma już 2 karty + siatkę | ⚠ sprawdzić 1366×768 i 150 % DPI |
+
+### 60.12 Plan wykonania — 6 kroków, każdy commitowalny
+
+| Krok | Zakres | Testy |
+|---|---|---|
+| **L10.1** | `SmtpSettings` v3 · `GetLastSentAt` · sekcja w Ustawieniach | v2 czyta się czysto · przycinanie zakresów · **jedno** zapytanie audytu (pomiar ~500 licencji) · `Limit=200` nie obcina |
+| **L10.2** | `BulkSend.cs` — PLAN | 4 warunki osobno · `blocked` wstrzymany · wygasły artefakt wstrzymany · **`NotYetValid` przechodzi** · „już wysłane" liczone wobec `IssuedAt` (⭐ odnowienie **nie** jest pominięte) · duplikaty adresów · limit serii · `Matches` czuły na kolejność/adres/verdykt |
+| **L10.3** | `BulkSendRun.cs` — PROGRESS + RESULT | ⭐ **niezmiennik `Planned == Sent+Failed+Skipped+NotAttempted`** · `Completed` rośnie co próbę, ⛔ nigdy przy odczekaniu · **K1**: po błędzie reszta to `NotAttempted`, wynik `StoppedAfterError` · przerwanie **dokańcza** bieżącą próbę · `StoppedByOperator` ≠ `StoppedAfterError` · `licence.sent`/`licence.send-failed` po KAŻDEJ próbie · `licence.batch-sent` raz · `Elapsed` z wstrzykniętego zegara |
+| **L10.4** | `BulkSendViewModel` + katalog + EN/PL | brak `Confirm` → **odmowa** (reguła „Forget settings") · plan zmieniony → **odmowa** · porażka kompozycji → nic nie wyszło, licencja nazwana · raport **przeżywa zmianę języka** (⭐ sprawdzone na ZREALIZOWANYM wyjściu, nie na XAML-u — #370) · ticki: zdjęte tylko wysłane · TSV zawiera podsumowanie **i** szczegóły |
+| **L10.5** | Karta + styl paska i wierszy | pasek **nigdy** `IsIndeterminate` · `Maximum == Sendable` · 4 ikony i 4 tokeny · ⚠⚠ **każdy test headless ZWRACA swój `Task`** (#374/#391) · Extend zablokowany w trakcie serii |
+| **L10.6** | QA + zamknięcie | Dark **i** Light · 1366×768 i 150 % DPI · build **Debug i Release** · pełna suita LM · narracja → `history/`, status → jedna linia w `current-state.md` z **przemierzoną** liczbą testów |
+
+⛔ Po drodze: żadnej zmiany w kryptografii, `TrustedKeys`, kluczu R1 ani w semantyce pojedynczej
+wysyłki. Jedyny plik produktu, którego L10 może dotknąć, to `FluentBridge.axaml` — i **tylko** jeśli
+QA paska postępu tego wymaga (ryzyko 5).
