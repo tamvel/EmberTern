@@ -14,8 +14,8 @@ namespace EmberTern.Tests;
 ///
 /// <para>⭐ Every licence here is really signed (see <see cref="LicenseFixtures"/>) and verified through the
 /// real <c>LicenseVerifier</c> — the same code the shipped application runs. ⚠ The trusted-key table is the
-/// fixture's, because <c>TrustedKeys.Production</c> stays empty until the L7 ceremony; that is exactly why
-/// <c>LicenseService</c> takes one as a parameter.</para>
+/// fixture's OWN, never the shipped one — that is exactly why <c>LicenseService</c> takes one as a
+/// parameter, and it is what keeps these tests independent of the production key.</para>
 ///
 /// <para>⛔ Nothing in this file, or beneath it, touches a network. V1 is offline by decision D1, and
 /// <c>LicensingMakesNoNetworkCallsTests</c> asserts the machine-checkable form of that.</para>
@@ -144,8 +144,9 @@ public sealed class LicenseServiceTests : IDisposable
     [Fact]
     public void ALicenceSignedByAKeyThisBuildDoesNotKnowIsRefused()
     {
-        // ⚠ This is also the state a REAL licence is in today, in every configuration: TrustedKeys.Production
-        //   is empty until the L7 ceremony. Recorded here so the next reader does not diagnose it as a bug.
+        // ⚠ Until the 2026-08-22 ceremony this was ALSO the state of every real licence, in every
+        //   configuration, because TrustedKeys.Production was empty. It no longer is — so this test is now
+        //   only about the rule it names: an unknown key is refused, never guessed at.
         Write(UserDirectory, _fixtures.Valid(Now));
 
         var verdict = Service(keys: LicenseFixtures.Foreign).Refresh();

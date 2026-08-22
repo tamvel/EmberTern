@@ -136,14 +136,62 @@ public sealed class LicenseVerifierTests : IDisposable
         Assert.False(_factory.Verdict(now: new DateTimeOffset(2020, 1, 1, 0, 0, 0, TimeSpan.Zero)).IsUsable);
     }
 
+    /// <summary>
+    /// ⭐⭐ The shipped table carries exactly the key the ceremony produced — and it is the SAME key the
+    /// ceremony record names.
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠⚠ <b>This replaces <c>TheShippedTrustedKeyTableIsStillEmptyAtThisStage</c>, in the same
+    /// change that added the key.</b> That test was right for five stages and load-bearing: an empty
+    /// production table shipping by accident refuses every licence in the field with "unknown key". But it
+    /// pinned a deliberately TEMPORARY state, and on the day that state ended it would have gone red
+    /// reading *"you broke the key table"* rather than *"this promise expired"* — gotcha #407. A guard over
+    /// an interim state is retired WITH the decision that ends it, never after.</para>
+    ///
+    /// <para>⭐ It asserts BOTH halves, because either alone passes on a broken key: the table's SHAPE (one
+    /// entry, the right id, not revoked, a usable P-256 key) and its IDENTITY (the fingerprint recorded by
+    /// the ceremony). ⛔ Not <c>Assert.NotEmpty</c> — that passes for ANY key, including a development one
+    /// pasted by mistake, which is the single most expensive mistake available here.</para>
+    ///
+    /// <para>⚠ The fingerprint is recomputed rather than read from <c>KeyCeremony.Fingerprint</c>: that type
+    /// lives in <c>EmberTern.Licensing.Issuing</c>, which this solution cannot reference and must never be
+    /// able to — see <c>PrivateKeyNeverShipsTests</c>. ⭐ So this is a second, independent implementation of
+    /// the same definition (SHA-256 over the DER SubjectPublicKeyInfo), which is a property rather than a
+    /// duplication: a mistake in one is not mirrored in the other.</para>
+    /// </remarks>
     [Fact]
-    public void TheShippedTrustedKeyTableIsStillEmptyAtThisStage()
+    public void TheShippedTrustedKeyTableCarriesTheCeremonyKey()
     {
-        // ⚠ Correct for L1 — the key ceremony is L2 (§24.1) and the public key is recorded in L7. This
-        //    test is a REMINDER, not a rule: when L2 adds the first key, update it to assert the key is
-        //    present, non-revoked and P-256. ⛔ Do not delete it — an empty production table shipping by
-        //    accident would refuse every licence in the field with "unknown key".
-        Assert.Empty(TrustedKeys.Production.Keys);
+        // ⭐ The ceremony record: docs/design/licensing-system.md §35.4, R1, 2026-08-22.
+        //   ⚠ A LITERAL on purpose. It is the one place the pasted key is checked against the value written
+        //     down independently, so a transcription error fails the build instead of a customer's licence.
+        const string RecordedFingerprint =
+            "B55DCB8FAB7AD12EB77F798B89A59B5722AA11CAD71F27BE9DD49C7CFC0905AD";
+
+        var key = Assert.Single(TrustedKeys.Production.Keys);
+
+        Assert.Equal("R1", key.KeyId);
+        Assert.False(key.Revoked);
+        Assert.Equal(SignatureAlgorithm.EcdsaP256Sha256, key.Algorithm);
+
+        // The table validates its entries at construction, so reaching this line already proves the key
+        // imports. Asserting the curve as well says WHICH key would have to change for that to stop.
+        using (var ecdsa = System.Security.Cryptography.ECDsa.Create())
+        {
+            ecdsa.ImportSubjectPublicKeyInfo(key.SubjectPublicKeyInfo, out var read);
+
+            Assert.Equal(key.SubjectPublicKeyInfo.Length, read);
+            Assert.Equal(256, ecdsa.KeySize);
+        }
+
+        Assert.Equal(
+            RecordedFingerprint,
+            Convert.ToHexString(
+                System.Security.Cryptography.SHA256.HashData(key.SubjectPublicKeyInfo)));
+
+        // ⛔ And the lookup answers for that id and for nothing else — there is no "try every key" path.
+        Assert.True(TrustedKeys.Production.TryGet("R1", out _));
+        Assert.False(TrustedKeys.Production.TryGet("R2", out _));
     }
 
     [Fact]

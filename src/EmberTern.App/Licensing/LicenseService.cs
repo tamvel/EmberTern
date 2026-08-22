@@ -47,9 +47,10 @@ internal sealed record LicenseInstallResult(LicenseInstallOutcome Outcome, Licen
 /// <para>⭐ <b>The trusted-key table is a constructor parameter defaulting to
 /// <see cref="TrustedKeys.Production"/>.</b> The application always uses the production table; tests
 /// supply their own so the whole chain — issue, store, resolve, verify — can be proven end to end.
-/// ⚠ <c>TrustedKeys.Production</c> is EMPTY until the real key ceremony in L7, so in every configuration a
-/// real licence file verifies as <c>Invalid / UnknownKey</c> today. That is correct, deliberate, and the
-/// reason <c>Valid</c> and <c>Grace</c> are proven by tests at this stage rather than by hand.</para>
+/// ⭐ Since the real key ceremony (2026-08-22, L7.3/L7.4) <c>TrustedKeys.Production</c> carries <c>R1</c>, so
+/// a licence issued by the License Manager verifies here for real. ⚠ Before that it was empty by design and
+/// every real licence resolved to <c>Invalid / UnknownKey</c>, which is why <c>Valid</c> and <c>Grace</c>
+/// were proven by tests rather than by hand for five stages.</para>
 /// </summary>
 internal sealed class LicenseService
 {

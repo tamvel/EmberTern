@@ -13,8 +13,9 @@ namespace EmberTern.Tests;
 /// way: a verifier proved against its own signer proves only that the two agree. Proving it against the
 /// platform's ECDSA proves it agrees with the algorithm.</para>
 ///
-/// <para>⛔ Nothing here ever touches <see cref="TrustedKeys.Production"/>. The shipped table is empty in
-/// L1 and its emptiness is itself asserted, so the tests must bring their own keys.</para>
+/// <para>⛔ Nothing here ever touches <see cref="TrustedKeys.Production"/>, and that rule OUTLIVED the
+/// reason it was written: the shipped table used to be empty, and is not since the 2026-08-22 ceremony.
+/// A test signing with the production key would be a test that cannot run without it.</para>
 /// </summary>
 internal sealed class LicenseTestFactory : IDisposable
 {

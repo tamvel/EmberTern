@@ -14,8 +14,9 @@ namespace EmberTern.Tests;
 /// throwaway key over the public envelope API costs a dozen lines and keeps the boundary intact.</para>
 ///
 /// <para>⭐ The key is generated per fixture and never leaves memory, so nothing here is a key that could
-/// sign anything a customer would see. ⚠ <c>TrustedKeys.Production</c> is empty until L7, which is why the
-/// tests supply their own table: the service takes one as a constructor parameter for precisely this.</para>
+/// sign anything a customer would see. ⛔ These keys are deliberately NOT the shipped one: since the
+/// 2026-08-22 ceremony <c>TrustedKeys.Production</c> carries <c>R1</c>, and a test must never depend on
+/// the production key — the service takes a table as a constructor parameter for precisely this.</para>
 /// </summary>
 internal sealed class LicenseFixtures : IDisposable
 {

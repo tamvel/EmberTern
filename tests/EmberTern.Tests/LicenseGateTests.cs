@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Threading.Tasks;
 using EmberTern.App.Licensing;
@@ -21,7 +21,7 @@ namespace EmberTern.Tests;
 /// would prove the feature absent.</para>
 ///
 /// <para>⭐ Every licence here is really signed and verified through the real <c>LicenseVerifier</c>, with
-/// the fixture's trusted-key table — <c>TrustedKeys.Production</c> stays empty until the L7 ceremony.</para>
+/// the fixture's OWN trusted-key table, never the shipped <c>TrustedKeys.Production</c>.</para>
 /// </summary>
 public sealed class LicenseGateTests : IDisposable
 {
