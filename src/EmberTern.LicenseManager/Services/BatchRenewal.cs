@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -32,8 +32,8 @@ public sealed record BatchRenewalCandidate
     public string LicenseId => Summary.License.LicenseId;
 
     /// <summary>The licence id, shortened for a list.</summary>
-    public string ShortId =>
-        LicenseId.Length > 12 ? LicenseId[..12] + "…" : LicenseId;
+    /// <remarks>⭐ Through the one owner of that rule since L10.2 — see <see cref="LicenceIdText"/>.</remarks>
+    public string ShortId => LicenceIdText.Short(LicenseId);
 
     /// <summary>What the licence runs to today, before the operation.</summary>
     public string CurrentExpiry =>

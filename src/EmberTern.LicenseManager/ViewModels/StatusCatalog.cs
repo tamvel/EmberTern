@@ -357,6 +357,22 @@ internal static class StatusCatalog
     /// <summary>A bulk run may send between {0} and {1} messages, not {2}.</summary>
     public static MessageKey SmtpBulkLimitOutOfRange => Key(nameof(SmtpBulkLimitOutOfRange));
 
+    // ── Bulk sending: why a ticked licence is not in the run (L10.2) ─────────────────
+    // ⭐ Each of these is the ONE sentence a held or skipped row shows. ⛔ Never blank on such a row:
+    //   it is the only thing telling the operator what to do about a licence they ticked and did not get.
+
+    /// <summary>The licence is blocked, so it is not sent.</summary>
+    public static MessageKey BulkHoldLicenceBlocked => Key(nameof(BulkHoldLicenceBlocked));
+
+    /// <summary>The licence has never been issued, so there is nothing to send.</summary>
+    public static MessageKey BulkHoldNeverIssued => Key(nameof(BulkHoldNeverIssued));
+
+    /// <summary>The artifact expired on {0}.</summary>
+    public static MessageKey BulkHoldArtifactExpired => Key(nameof(BulkHoldArtifactExpired));
+
+    /// <summary>Already sent on {0}, after the current artifact was issued.</summary>
+    public static MessageKey BulkSkipAlreadySent => Key(nameof(BulkSkipAlreadySent));
+
     /// <summary>A username cannot be used without STARTTLS — the password would travel unencrypted. Either en...</summary>
     public static MessageKey SmtpUsernameNeedsStartTls => Key(nameof(SmtpUsernameNeedsStartTls));
 

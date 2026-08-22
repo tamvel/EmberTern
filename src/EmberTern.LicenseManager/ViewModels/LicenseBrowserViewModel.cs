@@ -215,7 +215,8 @@ public sealed partial class LicenseListItem : ObservableObject
         {
             Summary = summary,
             CustomerName = summary.CustomerName,
-            ShortId = id.Length > 12 ? id[..12] + "…" : id,
+            // ⭐ Through the one owner of that rule since L10.2 — see `LicenceIdText`.
+            ShortId = Services.LicenceIdText.Short(id),
             Seats = RowCatalog.Seats(summary.License.Seats),
             Contact = DescribeContact(summary),
             // ⭐⭐ §53.6 obligation 2, discharged. This used to be `Capitalise(summary.License.Status)` — a

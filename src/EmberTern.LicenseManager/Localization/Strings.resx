@@ -1271,4 +1271,16 @@
   <data name="Settings.BulkMaxPerRun" xml:space="preserve">
     <value>Most messages one run may send</value>
   </data>
+  <data name="Status.BulkHoldLicenceBlocked" xml:space="preserve">
+    <value>The licence is blocked, so it is not sent.</value>
+  </data>
+  <data name="Status.BulkHoldNeverIssued" xml:space="preserve">
+    <value>The licence has never been issued, so there is nothing to send.</value>
+  </data>
+  <data name="Status.BulkHoldArtifactExpired" xml:space="preserve">
+    <value>The artifact expired on {0}.</value>
+  </data>
+  <data name="Status.BulkSkipAlreadySent" xml:space="preserve">
+    <value>Already sent on {0}, after the current artifact was issued.</value>
+  </data>
 </root>
