@@ -1,4 +1,4 @@
-# EmberTern — Język kolorów
+﻿# EmberTern — Język kolorów
 
 > **Status: 🔒 WDROŻONY W CAŁOŚCI I ODEBRANY WIZUALNIE (2026-08-03). Zero otwartych pytań.**
 > Projekt zaakceptowany 2026-08-02, wdrożony krokami K1–K7 + przeglądem domykającym; zapis wykonania:
@@ -150,6 +150,38 @@ kolory. Zapis w §3.1.
 3. **S2 wygrywa z S1**: gdyby element miał nieść i rodzaj, i skutek — wygrywa skutek. Ostrzeżenie
    o nieodwracalności jest ważniejsze niż informacja o typie.
 4. **S3 obowiązuje w pasku globalnym tylko dla STANU** — chip, nie przycisk.
+
+### §1.3 ⛔⛔ S0 · TOŻSAMOŚĆ PRODUKTU — kolor, który NIE odpowiada na żadne z czterech pytań
+
+> 🔒 Dodane 2026-08-22 przy zamknięciu licencjonowania **L9** (wordmark w pasku tytułu License
+> Managera). ⚠ To **rozszerzenie**, nie korekta: żaden z czterech systemów nie został zmieniony.
+
+`BrandEmberBrush` niesie **znak firmowy** i nic więcej. Nie mówi *„czego to dotyczy"* (S1), *„co to
+zrobi"* (S2), *„który moduł jest aktywny"* (S3) ani *„czy to akcja główna"* (S4) — mówi **„to jest ten
+produkt"**. Dlatego stoi poza katalogiem i dlatego dostał własną rolę zamiast aliasu.
+
+⛔⛔ **NIE WOLNO nim pomalować stanu kontrolki, severity ani żadnego sygnału.** To jest cały powód, dla
+którego istnieje: paleta ma już dwa ciepłe kolory i **oba znaczą coś** — `TransactionActiveBrush` to
+„otwarta transakcja / uwaga-pauza" (S3/stan), `WarningBrush` to ostrzeżenie (S2). Sięgnięcie po „ten
+pomarańczowy" do ozdobienia kontrolki tworzy **trzeci sygnał, którego nikt nie zdefiniował** — i to jest
+dokładnie ta droga, którą sygnał powstaje przez przypadek.
+
+⭐ **Strażnik jest na LICZBIE KONSUMENTÓW**, w markupie obu aplikacji, nie na samym wordmarku
+(`WordmarkTests.NothingButTheWordmarkPaintsWithTheBrandColour`). Konsument numer dwa zapala test.
+
+⚠⚠ **Dwie wartości per motyw są ZMIERZONE, nie stylistyczne, i ⛔ nie wolno ich „ujednolicić".** Wspólna
+wartość została sprawdzona pierwsza: `#F0A458` na `ChromeStrongColor` `#E8EAED` daje **1,72:1**, czyli
+nazwę produktu, której praktycznie nie ma. To, co obowiązuje — Dark `#F2A65A` na `#2D2D2D` = **6,81:1**,
+Light `#A8480A` na `#E8EAED` = **4,84:1** — przy progu **4,5:1**, bo wyjątek dla dużego tekstu zaczyna
+się od 18 pt (lub 14 pt bold), a znak jest `Text.Title`, czyli 14 px SemiBold. ⛔ I dlatego test pilnuje,
+że wartości **SIĘ RÓŻNIĄ**: przypięcie ich jako równych byłoby testem zabraniającym tego, po co ten
+rozdział istnieje (`feedback-shared-value-is-not-a-dependency`).
+
+⚠ Bramka §0.5 przeszła: znak w kolorze marki w pasku tytułu to **tożsamość**, nie sygnał, i stoi w
+jedynym miejscu, w którym żaden kolor semantyczny nie mieszka. ⛔ Gdyby kiedyś miał stanąć obok czegoś,
+co niesie severity, decyzja wraca do §0.5, a nie do tej sekcji.
+
+Narracja: [`../history/34-licensing-l9-manager-identity.md`](../history/34-licensing-l9-manager-identity.md) §3.
 
 ---
 

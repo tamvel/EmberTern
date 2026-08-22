@@ -5117,6 +5117,35 @@ it learns that the language changed**.
 the **real key ceremony** and the shipped public key. ⛔ `TrustedKeys.Production` is still empty and no real
 licence verifies as usable in any build until that ceremony runs.
 
+
+---
+
+## 59a. ⭐ L9 — tozsamosc License Managera (2026-08-22, CLOSED)
+
+> 🔒 Zaakceptowane wzrokowo przez uzytkownika 2026-08-22, w obu motywach. ⚠ Etap wykonany
+> **przed** L10 decyzja uzytkownika o kolejnosci; numer `59a` zamiast `60`, bo §60 bylo juz zajete
+> przez ratyfikowana specyfikacje L10, zapisana wczesniej tego samego dnia.
+
+Dwie powierzchnie, obie male: **wordmark** w pasku tytulu (`Ember`|`Tern` w dwoch tonach) i okno
+**„O programie”**, ktore od L6.1a stalo w menu jako swiadomy, wylaczony placeholder.
+
+⭐ **Narracja, pomiary i cztery ustalenia, ktore zmienily plan, sa w**
+[`../history/34-licensing-l9-manager-identity.md`](../history/34-licensing-l9-manager-identity.md).
+⛔ Ten dokument ich nie duplikuje.
+
+Co z L9 **wiaze przyszla prace** — i tylko to:
+
+| Rzecz | Regula |
+|---|---|
+| `BrandEmberBrush` | ⛔⛔ **Tozsamosc, nigdy sygnal.** Nie wolno nim pomalowac stanu kontrolki, severity ani zadnego sygnalu; straznik jest na LICZBIE konsumentow w markupie obu aplikacji. Dwie wartosci per motyw sa zmierzone i ⛔ nie wolno ich ujednolicic. Autorytet: `design/color-language.md` **§1.3** |
+| `ManagerInfo` | ⛔ **Nigdy literalu wersji** w `EmberTern.LicenseManager` — dwa strazniki tego pilnuja, lustrzanie do `AppInfoTests`, ktorego wlasny sweep obejmuje tylko `src/EmberTern.App`. Duplikuje MECHANIZM `AppInfo`, nigdy wartosc: oba czytaja atrybuty z jednego `Directory.Build.props` |
+| `<Product>` w csproju LM | ⭐ Jedyna nadpisana wartosc tozsamosci. Wersja, `ReleaseDate`, `Company` i `Copyright` **zostaja dziedziczone** — to jest wlasnie to, co czyni `ManagerInfo` i `AppInfo` strukturalnie niezdolnymi do niezgody o wydanie |
+| Data w „O programie” | ⭐ **ISO, invariantnie** — ratyfikowana forma daty License Managera (§36.2, `terminology.md` §4.4), swiadomie inaczej niz produkt. Zapisane w `DatePresentationTests.DeliberateIsoDisplayPaths` **z powodem** |
+| ⛔ Third-party notices w LM | **Nie ma i to decyzja.** `THIRD-PARTY-NOTICES.txt` jest plikiem PRODUKTU: wymienia AvaloniaEdit i sterownik Firebirda, ktorych LM nie ma, i nie wymienia `Microsoft.Data.Sqlite` / `SQLitePCLRaw`, ktory ma. ⏭ Wyzwalaczem dla wlasnego pliku notyfikacji jest **dystrybucja LM poza firme**, nie przeprojektowanie okna |
+| ⛔ Bez glow, cienia i bitmapy | Decyzje **B** i **C** uzytkownika. Mark z paska tytulu produktu usunieto 2026-08-01 z zapisanym powodem; wordmark typograficzny trzyma tamta decyzje nietknieta, a logo mieszka w „O programie” |
+
+Gotchy: **#412** (straznik czytajacy komentarz, ktory cytuje zastapiona wartosc), **#413** (dwa
+`TextBlock`i rownaja sie pudelkiem, nie linia bazowa; `LetterSpacing` nie istnieje na `Run`).
 ---
 
 ## 60. ⭐⭐ L10 — grupowa wysyłka licencji: SPECYFIKACJA RATYFIKOWANA (2026-08-22)

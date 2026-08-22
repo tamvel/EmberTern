@@ -35,7 +35,7 @@ that used to live here still exists verbatim in `docs/history/`.
 | **`CLAUDE.md`** (this file) | Every session, automatically. Rules · architecture · live gotchas · pointers. |
 | **`docs/current-state.md`** | To learn what is done / open / in progress. **The only status source.** |
 | **`docs/gotchas.md`** | When a bug feels familiar. The complete catalog, organized thematically. |
-| **`docs/history/README.md`** | Index into the narrative archive (31 files). |
+| **`docs/history/README.md`** | Index into the narrative archive (36 files, measured 2026-08-22). |
 
 ### Editor & SQL/PSQL language front-end
 
@@ -95,7 +95,7 @@ that used to live here still exists verbatim in `docs/history/`.
 
 | Document | When |
 |---|---|
-| `docs/history/*.md` (31 files) | On demand, for the "why" behind a feature or bug. Index: `history/README.md`. |
+| `docs/history/*.md` (36 files, measured 2026-08-22) | On demand, for the "why" behind a feature or bug. Index: `history/README.md`. |
 | `history/30-claude-md-current-state-archive.md` | The pre-2026-08-11 status diary, verbatim (78 entries, 2026-07-12 → 2026-08-10). |
 | `history/handovers/` | 🔒 Closed stage-handover and "next session" prompts (Product Polish M2a–M5, Localization App/Core). ⛔ Do not plan from them — several of their premises were refuted by measurement. |
 | `memory/*.md` (outside the repo) | Claude's cross-session recall. `MEMORY.md` is the always-loaded index; individual files load on demand. |
@@ -517,7 +517,7 @@ The app has **one** central theming system. Every new window, dialog, UserContro
 **Token cheat-sheet** (semantic name → use): `BackgroundBrush` (window/editor), `PanelBrush` (sidebar/header panels), `ChromeStrongBrush` (titlebar/column headers — chrome one step further from the document), `SurfaceRaisedBrush` (⭐ anything that FLOATS above its container: popups, menus, tooltips, dropdown lists, the selected tab — **not** the same job as chrome, and in Light the two are opposites), `BorderBrush` (structural separators, gridlines, the rest rail), ⭐ `ControlOutlineBrush` (**the visible
 outline of an interactive control at rest** — a different role from `BorderBrush`, and that distinction is
 what makes an unchecked `CheckBox` findable: sharing one token measured 1.35:1 in Light. Consumers: CheckBox,
-RadioButton), `ForegroundBrush` (default text), `SubtleForegroundBrush` (hints/captions), `AccentBrush`/`AccentMutedBrush` (primary action, focus accent), `OnAccentBrush`/`OnAccentSubtleBrush` (text on accent/colored chips), `SelectionBrush`, `HoverOverlayBrush`, `FocusBorderBrush`, `ErrorBrush`/`WarningBrush`/`ConnectedBrush`, `TransactionActiveBrush`, `CommitButtonBrush`/`RollbackButtonBrush`, `RowAlternateBrush` (zebra), `DropTargetBrush`, `CloseButtonHoverBrush`, `DataLaneChipBrush`/`MetadataLaneChipBrush`, `IconColor_*` (per metadata kind, via `IconBrushConverter`). If none fit, add a new token (both dictionaries) — don't reach for a literal.
+RadioButton), `ForegroundBrush` (default text), `SubtleForegroundBrush` (hints/captions), `AccentBrush`/`AccentMutedBrush` (primary action, focus accent), `OnAccentBrush`/`OnAccentSubtleBrush` (text on accent/colored chips), `SelectionBrush`, `HoverOverlayBrush`, `FocusBorderBrush`, `ErrorBrush`/`WarningBrush`/`ConnectedBrush`, `TransactionActiveBrush`, `CommitButtonBrush`/`RollbackButtonBrush`, `RowAlternateBrush` (zebra), `DropTargetBrush`, `CloseButtonHoverBrush`, `DataLaneChipBrush`/`MetadataLaneChipBrush`, `IconColor_*` (per metadata kind, via `IconBrushConverter`), ⭐ `BrandEmberBrush` (**the product WORDMARK, and nothing else** — identity, never a signal: ⛔ it may not paint a control state, a severity or any signal, and a guard fails the build on a second consumer; `design/color-language.md` §1.3). If none fit, add a new token (both dictionaries) — don't reach for a literal.
 
 ### Reuse before create
 
@@ -558,8 +558,8 @@ by keyword the moment a bug "feels familiar". Each line is a one-sentence summar
 reference for the full explanation and the failure it prevents.
 
 ⛔ **The entry count is deliberately NOT written down here.** Three separate counters used to carry it
-and all three disagreed while every one of them was wrong. **Measure it** (last check 2026-08-21:
-**397 entry lines, max #408**):
+and all three disagreed while every one of them was wrong. **Measure it** (last check 2026-08-22:
+**402 entry lines over 400 distinct numbers, max #413**):
 
 ```bash
 grep -cE "^[0-9]+\. \*\*" docs/gotchas.md

@@ -9,7 +9,7 @@
 > to paste a multi-paragraph "shipped" report here, you are recreating the defect that produced a
 > 6 849-line `CLAUDE.md` twice — see `docs/history/30-claude-md-current-state-archive.md`.
 
-**Last verified: 2026-08-22** (L7 CLOSED — the licensing system is complete).
+**Last verified: 2026-08-22** (L9 CLOSED — L10 is the active stage, specified in §60).
 
 ---
 
@@ -21,10 +21,11 @@
 > defer, because it could not be true until a real key existed. Register: **§35.4**. The procedure, written
 > to be reused for a rotation: [`design/licensing-key-ceremony-runbook.md`](design/licensing-key-ceremony-runbook.md).
 >
-> ## ⏭ START HERE: **L9 — the License Manager's identity** (wordmark + About) is the ACTIVE stage.
+> ## ⏭ START HERE: **L10 — bulk sending of licences.** Implement §60; nothing else is open.
 >
-> ⭐⭐ **L10 — bulk sending of licences — is RATIFIED IN FULL and needs NO further approval: `design/licensing-system.md` §60.**
-> 🔒 The user accepted the specification on 2026-08-22 and ordered L9 first. ⛔ Do not re-open the design,
+> ⭐⭐ **RATIFIED IN FULL, needs NO further approval: `design/licensing-system.md` §60.**
+> 🔒 The user accepted the specification on 2026-08-22 and ordered L9 first; **L9 is now CLOSED**, so
+> implementation starts at §60.12 step **L10.1**. ⛔ Do not re-open the design,
 > do not re-derive it from §14.1 (which §60 supersedes), and ⛔ do not add anything §60.0 forbids —
 > no retry, no jitter, no SMTP error classification, no CC/BCC, no merging licences into one message,
 > no run-history view, no way around the run limit. Its 6 sub-stages are §60.12.
@@ -106,16 +107,16 @@
 
 ## 1. Entry state
 
-**Verified 2026-08-20, by running the commands rather than by recall.**
+**Verified 2026-08-22 at L9's closure, by running the commands rather than by recall.**
 
 | | |
 |---|---|
-| Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`), pushed to `origin` **through L6** |
-| HEAD | *fix(licensing): L8.6 live-refresh w otwartym oknie Ustawien* — L8.6 in one code commit + one documentation commit. Beneath it: *docs(licensing): checkpoint po L8.5*, *feat(licensing): L8.5 polska wersja jezykowa*, *docs(licensing): checkpoint po L8.4* — L8.3 in ONE commit (views + resx + guard). ⛔ A commit cannot name its own hash, so this row names it by SUBJECT; `git log -1` gives the SHA. Beneath it: **`5ac1add`** *checkpoint po L8.2*, **`2d30fcf`** *L8.2*, **`f72b7b0`** *L8.1*, **`94ff665`** *L6 closed* |
-| Sync | ⭐ **HEAD == `origin/feat/licensing-system` == `private/feat/licensing-system`** — pushed to BOTH on 2026-08-21; see the Remotes row |
+| Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`) |
+| HEAD | *docs(licensing): L9 CLOSED…* — beneath it **`681ac95`** *L9.2 wordmark*, **`b0ab75c`** *L9.1 okno "O programie"*, **`d553157`** *L10 — ratyfikowana specyfikacja §60*, **`0c4a1ae`** *L7 CLOSED*. ⛔ A commit cannot name its own hash, so this row names the newest by SUBJECT; `git log -1` gives the SHA |
+| Sync | ⭐ **HEAD == `origin/feat/licensing-system` == `private/feat/licensing-system`** — pushed to BOTH at L9's closure, 2026-08-22 |
 | Working tree | ✅ **CLEAN** |
-| Build | **0 warnings / 0 errors** — License Manager **Debug** and **Release**. ⛔ EmberTern not rebuilt: L8 has touched no product file |
-| Tests | ⭐ **License Manager: 777 / 777** (measured 2026-08-22 at HEAD `0c4a1ae`; 767 was the L8-closure figure and had gone stale — 766 after L8.5, 737 after L8.4, 709 after L8.3, 705 after L8.2, 685 after L8.1, 632 after L8.0/prep), and **two consecutive stable runs**. ⚠ The suite now runs **serially** (`DisableTestParallelization`) because `Loc` is global static state — §57.9; ~65 s → ~120 s. ⛔ **The EmberTern suite was NOT run**: L8 has touched no file of the product. ⭐ One product test WAS run punctually because it scans License Manager source: `DatePresentationTests` **9 / 10** — its one red carries **two** offenders, both byte-identical at `b012a0e` and absent from L8.4's diff (§57.8 corrects §49.9, which named only one) |
+| Build | **0 warnings / 0 errors** — License Manager **Debug and Release** AND EmberTern **Debug and Release**. ⚠ The product is in scope since L9.2: it edits `Colors.axaml`, which the License Manager LINKS rather than copies |
+| Tests | ⭐ **License Manager: 798 / 798**, measured 2026-08-22 at L9's closure (777 at L9's entry → 790 after L9.1 → 798 after L9.2). ⭐ **EmberTern: 9 090 / 9 092** — ⚠ both reds are **PRE-EXISTING** (§49.9 / §57.8) and neither is L9's: `CharsetGuardSeamTests` matches a COMMENT in the License Manager csproj (gotcha #396 / #412 — byte-identical to before L9, only its line number moved) and `DatePresentationTests` names `RestoreWorkflow.cs` + `StorageViewModel.cs`. ⚠ The LM suite runs **serially** (`DisableTestParallelization`) because `Loc` is global static state — §57.9. ⚠ **Measure, do not quote** — this row has gone stale at every stage so far |
 | Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ Separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
 | Remotes | ⭐ **TWO, and both are kept on the same SHA** (user's decision, 2026-08-21): `origin` → the company Gitea, `private` → the personal GitHub. ⚠ This REVERSES the one-remote note L8.0–L8.1 carried — that described the *other* machine. See §0 |
@@ -170,6 +171,7 @@ reasoning lives.
 | **Audit follow-up — Phase 5: charset guard** ✅ user-verified | 2026-08-15 | gotchas #372/#373, `tools/probes/CharsetProbe`, rule 12 in `CLAUDE.md` |
 | **Audit follow-up — Phase 6: NuGet to latest stable** | 2026-08-15 | §3 below — 8 packages raised, 2 held for a stated reason |
 | **Audit follow-up — Phase 7: `ARCHITECTURE.md` as-built** | 2026-08-15 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) |
+| ⭐ **Licensing L9 — CLOSED.** The License Manager's identity: a typographic wordmark in the title strip (`Ember`|`Tern` in two tones on the new `BrandEmberBrush`, ⛔ identity never a signal) and the About window, with `ManagerInfo` reading the build so no version literal exists in either project ✅ user-verified in Dark and Light | 2026-08-22 | `history/34`; `design/color-language.md` §1.3; gotchas #412/#413 |
 | **Licensing L5.4** — bulk selection + batch renewal, licences list as EmberTern's grid ✅ user-verified | 2026-08-18 | `design/licensing-system.md` §46; gotchas #381–#383 |
 | **Licensing L5 — CLOSED.** L5.5: encrypted verified backup, two restore modes, JSONL escape hatch, Storage window ✅ user-verified | 2026-08-18 | `design/licensing-system.md` §47; gotchas #384–#387 |
 | **Licensing L8.0 / prep** — option identity taken back from labels (7 records), independent interface/message language catalogs, ratified EN → PL terminology. ⛔ Not one user-visible word changed | 2026-08-20 | `design/licensing-system.md` §53; `design/terminology.md` §4; gotcha #394 |
