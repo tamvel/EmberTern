@@ -60,9 +60,28 @@
             Padding="0"
             PointerPressed="OnTitleBarPointerPressed" DoubleTapped="OnTitleBarDoubleTapped">
       <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
-        <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center"
-                   Margin="{DynamicResource Pad.Panel}"
-                   Text="EmberTern License Manager" />
+        <!-- ⭐⭐ THE WORDMARK (L9). It replaced a plain `Classes="section"` label carrying the whole name
+             as one string. The full recipe, and why it is one `TextBlock` with three `Run`s rather than
+             two blocks, is on `TextBlock.wordmark` in LicenseManagerStyles.axaml.
+
+             ⚠ The three literals stay literals: branding is a technical contract, not a word
+             (`terminology.md` §4.4) — the application is called `EmberTern License Manager` in every
+             language, and a translated product name would be a different product. ⛔ They are therefore
+             recorded in `XamlLocalizationTests.BrandingLiterals`, whose own guard checks that every
+             exemption is actually present, so a stale one cannot read as coverage.
+
+             ⚠ The two per-`Run` values are CONSUMPTION of tokens, never definitions: rule 2 forbids
+             declaring a brush in a view, and rule 4 requires `{DynamicResource}` so the mark recolours
+             live on a theme toggle. They sit inline rather than in the style file because a `Run` cannot
+             carry a class the way a control can, and this mark has exactly one instance. -->
+        <TextBlock Grid.Column="0" Classes="wordmark" Name="Wordmark" VerticalAlignment="Center"
+                   Margin="{DynamicResource Pad.Panel}"><Run Text="Ember" /><Run
+                     Name="WordmarkAccent" Text="Tern"
+                     Foreground="{DynamicResource BrandEmberBrush}" /><Run
+                     Name="WordmarkDescriptor" Text=" License Manager"
+                     FontSize="{DynamicResource Text.Compact.Size}"
+                     FontWeight="Normal"
+                     Foreground="{DynamicResource SubtleForegroundBrush}" /></TextBlock>
         <!-- ⭐ The signing key is PROVENANCE, not an action: it tells the operator which key is about to
              sign, and it is the one thing here that must never be mistaken for a control. `hint` is the
              smallest grade in the catalogue, which is exactly its standing. -->

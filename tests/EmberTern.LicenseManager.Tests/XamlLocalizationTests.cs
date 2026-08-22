@@ -53,6 +53,15 @@ public sealed class XamlLocalizationTests
     [
         "EmberTern License Manager",
         "EmberTern",
+
+        // ⭐ The three halves of the L9 wordmark. The name is split across `Run`s so `Tern` can carry
+        //   the brand colour, so the sweep sees three literals where it used to see one — and all three
+        //   are the same technical contract as the whole name above.
+        // ⚠ The leading space in the descriptor is deliberate and is part of the literal: it is the gap
+        //   between the mark and its descriptor, and an inline `Run` has no margin to carry it.
+        "Ember",
+        "Tern",
+        " License Manager",
     ];
 
     // ── The two sweeps ───────────────────────────────────────────────────────────────────────────────

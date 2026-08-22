@@ -88,6 +88,41 @@
     <Setter Property="Margin" Value="{DynamicResource Margin.LabelGap}" />
   </Style>
 
+  <!-- ══ THE WORDMARK (L9) ═══════════════════════════════════════════════════════════════════════
+       ⭐⭐ The application's name in the title strip, and the ONE place this application shows its
+       identity as a mark rather than as a label. It is deliberately typographic and ⛔ NOT a bitmap:
+       the product removed its own titlebar mark on 2026-08-01 with the reason recorded in BRANDING.md
+       ("a working surface's chrome belongs to the document, and the identity belongs in About"), and a
+       wordmark keeps that decision intact while still reading as a product rather than as a caption.
+       The logo lives in About, which is where L9.1 put it.
+
+       ⭐ THREE carriers of "brandedness", and not one of them is "a bigger font":
+         1. COLOUR — `Ember`|`Tern` split in two tones, the warm half on `BrandEmberBrush`;
+         2. WEIGHT — SemiBold name against a Normal descriptor;
+         3. GRADE + TRACKING — `Text.Title` (14) against `Text.Compact` (11), plus a little tracking.
+
+       ⚠⚠ ONE `TextBlock` WITH THREE `Run`s, not two blocks side by side — and the reason is baselines.
+       Two blocks at 14 and 11 with different line heights align by BOX, not by baseline, so the
+       descriptor sits visibly off the name's foot; inline runs share one baseline for free. ⛔ The cost
+       is accepted knowingly: `LetterSpacing` is a `TextBlock` property, not a `Run` one, so the tracking
+       below applies to the whole mark rather than to the descriptor alone.
+
+       ⚠ `TextWrapping="NoWrap"` is LOAD-BEARING, not tidiness: the implicit `TextBlock` style at the top
+       of this file sets `Wrap`, and a wordmark that wraps inside a `Size.TitleBar` strip is clipped
+       rather than wrapped.
+
+       ⚠ `LetterSpacing` has no token role and gets a local value with its reason: the catalog names
+       spacing BETWEEN elements, and tracking WITHIN a word is not that. Writing `Space.Hair` here would
+       be a wrong role, which is worse than the local value (product-polish R12).
+       ══════════════════════════════════════════════════════════════════════════════════════════════ -->
+  <Style Selector="TextBlock.wordmark">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Title.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.Title.Weight}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Title.LineHeight}" />
+    <Setter Property="LetterSpacing" Value="0.4" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+  </Style>
+
   <!-- A secondary hint. ⭐ THIS is what `Text.Caption` is for — the smallest grade, carrying something
        the operator may read rather than must. -->
   <Style Selector="TextBlock.hint">

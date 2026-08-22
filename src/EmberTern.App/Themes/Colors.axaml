@@ -34,6 +34,33 @@
       <Color x:Key="SubtleForegroundColor">#9AA0A6</Color>
       <Color x:Key="AccentColor">#2D6BBF</Color>
       <Color x:Key="AccentMutedColor">#1A4F8F</Color>
+
+      <!-- ══ THE BRAND MARK'S COLOUR — IDENTITY, NEVER A SIGNAL (L9) ═════════════════════════════
+           ⭐⭐ Its own role, and NOT an alias of anything. The wordmark in the License Manager's title
+           strip renders `Ember`|`Tern` in two tones, and the warm half is this token.
+
+           ⛔⛔ IT MAY NEVER PAINT A CONTROL STATE, A SEVERITY OR A SIGNAL. That is the whole point of it
+           existing: the palette already carries two warm colours and BOTH mean something —
+           `TransactionActiveColor` is "an open transaction / caution-pause" and `WarningColor` is a
+           warning. Painting a product name with either would put a meaning on a name.
+
+           ⚠⚠ THE TWO VALUES ARE DIFFERENT ON PURPOSE AND THE DIFFERENCE IS MEASURED, not stylistic.
+           Reusing the dark value in Light was tried on paper first: `#F0A458` on `ChromeStrongColor`
+           `#E8EAED` is **1.72:1** — a product name that is, in practice, not there. Measured ratios of
+           what shipped, against `ChromeStrongColor` in the same theme:
+               Dark   #F2A65A on #2D2D2D = 6.81:1
+               Light  #A8480A on #E8EAED = 4.84:1
+           Both clear the 4.5:1 threshold that applies at this size (14 px SemiBold is below every
+           large-text exemption). ⛔ Do not "unify" them into one value; that re-couples what the split
+           exists to uncouple, and the Light half is where it breaks.
+
+           ⚠ It is deliberately NOT the accent. `AccentColor` is the blue this palette chose in order to
+           override Windows' orange `SystemAccentColor` everywhere; a brand mark is not an action, and
+           the identity it carries is the ember in EmberTern's own artwork (the forged-steel cylinder
+           with the ember wing — Assets/Branding/BRANDING.md).
+           ══════════════════════════════════════════════════════════════════════════════════════ -->
+      <Color x:Key="BrandEmberColor">#F2A65A</Color>
+
       <Color x:Key="TransactionActiveColor">#F0A458</Color>
       <Color x:Key="ConnectedColor">#4EC994</Color>
       <!-- DEV MODE badge text: DARK on the bright mint green. White on #4EC994 is only
@@ -245,6 +272,8 @@
       <SolidColorBrush x:Key="SubtleForegroundBrush" Color="{StaticResource SubtleForegroundColor}" />
       <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
       <SolidColorBrush x:Key="AccentMutedBrush" Color="{StaticResource AccentMutedColor}" />
+      <!-- ⭐ Identity, never a signal — see the colour's own comment above. -->
+      <SolidColorBrush x:Key="BrandEmberBrush" Color="{StaticResource BrandEmberColor}" />
       <SolidColorBrush x:Key="TransactionActiveBrush" Color="{StaticResource TransactionActiveColor}" />
       <SolidColorBrush x:Key="ConnectedBrush" Color="{StaticResource ConnectedColor}" />
       <SolidColorBrush x:Key="HoverOverlayBrush" Color="{StaticResource HoverOverlayColor}" />
@@ -421,6 +450,33 @@
            purple values clashed against the rest of the chrome on light. -->
       <Color x:Key="AccentColor">#2D6BBF</Color>
       <Color x:Key="AccentMutedColor">#1A4F8F</Color>
+
+      <!-- ══ THE BRAND MARK'S COLOUR — IDENTITY, NEVER A SIGNAL (L9) ═════════════════════════════
+           ⭐⭐ Its own role, and NOT an alias of anything. The wordmark in the License Manager's title
+           strip renders `Ember`|`Tern` in two tones, and the warm half is this token.
+
+           ⛔⛔ IT MAY NEVER PAINT A CONTROL STATE, A SEVERITY OR A SIGNAL. That is the whole point of it
+           existing: the palette already carries two warm colours and BOTH mean something —
+           `TransactionActiveColor` is "an open transaction / caution-pause" and `WarningColor` is a
+           warning. Painting a product name with either would put a meaning on a name.
+
+           ⚠⚠ THE TWO VALUES ARE DIFFERENT ON PURPOSE AND THE DIFFERENCE IS MEASURED, not stylistic.
+           Reusing the dark value in Light was tried on paper first: `#F0A458` on `ChromeStrongColor`
+           `#E8EAED` is **1.72:1** — a product name that is, in practice, not there. Measured ratios of
+           what shipped, against `ChromeStrongColor` in the same theme:
+               Dark   #F2A65A on #2D2D2D = 6.81:1
+               Light  #A8480A on #E8EAED = 4.84:1
+           Both clear the 4.5:1 threshold that applies at this size (14 px SemiBold is below every
+           large-text exemption). ⛔ Do not "unify" them into one value; that re-couples what the split
+           exists to uncouple, and the Light half is where it breaks.
+
+           ⚠ It is deliberately NOT the accent. `AccentColor` is the blue this palette chose in order to
+           override Windows' orange `SystemAccentColor` everywhere; a brand mark is not an action, and
+           the identity it carries is the ember in EmberTern's own artwork (the forged-steel cylinder
+           with the ember wing — Assets/Branding/BRANDING.md).
+           ══════════════════════════════════════════════════════════════════════════════════════ -->
+      <Color x:Key="BrandEmberColor">#A8480A</Color>
+
       <Color x:Key="TransactionActiveColor">#B85C00</Color>
       <Color x:Key="ConnectedColor">#1A7F4B</Color>
       <!-- DEV MODE badge text: WHITE on the dark forest green (~4.6:1, good). -->
@@ -579,6 +635,8 @@
       <SolidColorBrush x:Key="SubtleForegroundBrush" Color="{StaticResource SubtleForegroundColor}" />
       <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentColor}" />
       <SolidColorBrush x:Key="AccentMutedBrush" Color="{StaticResource AccentMutedColor}" />
+      <!-- ⭐ Identity, never a signal — see the colour's own comment above. -->
+      <SolidColorBrush x:Key="BrandEmberBrush" Color="{StaticResource BrandEmberColor}" />
       <SolidColorBrush x:Key="TransactionActiveBrush" Color="{StaticResource TransactionActiveColor}" />
       <SolidColorBrush x:Key="ConnectedBrush" Color="{StaticResource ConnectedColor}" />
       <SolidColorBrush x:Key="HoverOverlayBrush" Color="{StaticResource HoverOverlayColor}" />
