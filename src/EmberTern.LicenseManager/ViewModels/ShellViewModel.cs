@@ -55,11 +55,22 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     /// <c>%APPDATA%</c> folder, which is the one place a test must never reach.
     /// </param>
     /// <param name="clock">The clock.</param>
+    /// <param name="bulkSenderFactory">
+    /// ⭐ How the bulk send reaches a server. ⚠ A seam for the same reason <c>clock</c> is one: the CARD is
+    /// what a view test drives, and a card wired to the real SMTP sender would try to reach a host. ⛔ It
+    /// defaults to the production sender, so nothing has to be remembered at the composition root.
+    /// </param>
+    /// <param name="bulkDelay">
+    /// ⭐ How the bulk send paces itself. ⚠ Same seam, second reason: a test that actually waited fifteen
+    /// seconds a message would not be run.
+    /// </param>
     public ShellViewModel(
         LicenseRegister register,
         SigningSession session,
         ManagerPaths paths,
-        Func<DateTimeOffset>? clock = null)
+        Func<DateTimeOffset>? clock = null,
+        Func<SmtpSettings, ILicenseEmailSender>? bulkSenderFactory = null,
+        Func<TimeSpan, System.Threading.CancellationToken, Task>? bulkDelay = null)
     {
         _register = register ?? throw new ArgumentNullException(nameof(register));
         _session = session ?? throw new ArgumentNullException(nameof(session));
@@ -87,7 +98,9 @@ public sealed partial class ShellViewModel : MessageHostViewModel
 
         // ⚠ Built after the store, because it reads the settings through PrepareBulkSend. ⭐ The method
         //   group is what keeps "read fresh from the file" true at every rebuild rather than at construction.
-        BulkSend = new BulkSendViewModel(register, Browser, PrepareBulkSend, message => Message = message);
+        BulkSend = new BulkSendViewModel(
+            register, Browser, PrepareBulkSend, message => Message = message,
+            senderFactory: bulkSenderFactory, delay: bulkDelay, clock: _clock);
 
         // ⭐ 🔒 Decision M — the two bulk operations on this view are mutually exclusive while one runs.
         //    Wired HERE rather than by either view model knowing about the other: neither owns the rule,

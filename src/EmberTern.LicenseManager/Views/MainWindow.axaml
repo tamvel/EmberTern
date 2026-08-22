@@ -749,7 +749,20 @@
            no reading of the screen from which "20 selected, 19 done" follows.
            ⛔ No file is written here (D‑4). A batch ends at a committed register; delivery stays the
            existing export action, from the stored token. -->
-      <Border DockPanel.Dock="Top" Classes="card" Name="BatchRenewalCard"
+      <!-- ⚠⚠ THE TWO BULK OPERATIONS SHARE ONE BOUNDED REGION, and that is a 1366×768 decision rather
+           than a taste one (§60.11 risk 8). This view stacks its cards ABOVE the results grid — the thing
+           licences are ticked IN — and a `DockPanel` gives the fill child whatever is left, which can be
+           nothing. The batch card already grows by 180 px the moment anything is ticked; a second card that
+           also grows took the grid to two rows on a 720 px window, which `BatchRenewalViewTests` measured
+           the moment L10.5 landed.
+           ⭐ So the pair scrolls inside a ceiling and the grid keeps its height. ⛔ NOT solved by shortening
+           the recipient list: §14.1 requires the FULL list, and a bulk send behind a truncated list of who
+           receives it is the one thing this design may not do. -->
+      <ScrollViewer DockPanel.Dock="Top" Name="LicenceOperations" MaxHeight="340"
+                    HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+
+      <Border Classes="card" Name="BatchRenewalCard"
               Margin="{DynamicResource Margin.SectionGap}">
         <StackPanel Spacing="{DynamicResource Space.Sm}">
           <TextBlock Classes="section" Text="{lm:Loc Main.ExtendSelectedLicences}" />
@@ -836,6 +849,250 @@
                      Text="{Binding BatchRenewal.LastResult}" />
         </StackPanel>
       </Border>
+
+      <!-- Send many licences by e-mail — L10 ──────────────────────────────────────────────────── -->
+      <!-- ⭐⭐ ONE CARD, THREE STATES (§60.8): the preview is always there, the progress appears over it
+           while a run is going out, and the report stays underneath afterwards. ⛔ The preview does NOT
+           disappear during a run — the operator has to be able to see what is still ahead of them.
+
+           ⭐⭐ The preview is the CONTRACT, exactly as it is one card up: the action re-plans and refuses
+           if anything moved, so no reading of this screen supports "38 shown, 36 attempted".
+
+           ⛔ §60.0, in force here and not negotiable in markup either: no retry, no jitter, no reading of
+           what an SMTP error "means", no CC, no BCC, no merging two licences into one message, no history
+           view, and no way around the run limit. -->
+      <!-- ⚠⚠ THE CARD IS BOUNDED, and that is a 1366×768 decision rather than a taste one (§60.11 risk 8).
+           This view already stacks a filter card and a batch card above the results grid, and the batch
+           card grows by 180 px the moment anything is ticked. A third card that also grows would take the
+           grid — the thing licences are TICKED in — to zero height on a 768 px screen. So the action
+           ladder is pinned at the top of the card and everything below it scrolls inside a ceiling.
+           ⛔ Not solved by shortening the recipient list: §14.1 requires the FULL list, and a bulk send
+           behind a truncated list of who receives it is the one thing this design may not do. -->
+      <Border Classes="card" Name="BulkSendCard" Margin="{DynamicResource Margin.SectionGap}">
+        <StackPanel Spacing="{DynamicResource Space.Sm}">
+          <TextBlock Classes="section" Text="{lm:Loc Main.SendSelectedLicences}" />
+
+          <!-- ⭐ The same ACTION LADDER the batch row stands on — see `Grid.command-row` in
+               LicenseManagerStyles.axaml. -->
+          <Grid Classes="command-row" ColumnDefinitions="Auto,Auto,*,Auto,Auto"
+                ColumnSpacing="{DynamicResource Space.Md}">
+            <StackPanel Grid.Column="0" VerticalAlignment="Bottom">
+              <Button Classes="flat" Name="BulkSelectAllShown" Content="{lm:Loc Main.SelectAllShown}"
+                      IsEnabled="{Binding !BulkSend.IsSending}"
+                      Command="{Binding Browser.CheckAllShownCommand}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
+              <Button Classes="flat" Name="BulkClearSelection" Content="{lm:Loc Main.ClearSelection}"
+                      IsEnabled="{Binding !BulkSend.IsSending}"
+                      Command="{Binding Browser.ClearChecksCommand}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.NoteOptional}" />
+              <TextBox Text="{Binding BulkSend.Note}" IsEnabled="{Binding !BulkSend.IsSending}"
+                       PlaceholderText="{lm:Loc Main.TicketWhoAskedWhyNowStored}" />
+            </StackPanel>
+
+            <!-- ⭐ 🔒 Default ON, and it is only safe as a default because "already sent" is measured
+                 against the CURRENT artifact's `iat` — so a RENEWAL is never skipped for a message the
+                 customer got a year ago (§60.7). -->
+            <CheckBox Grid.Column="3" Name="BulkSkipAlreadySent" VerticalAlignment="Bottom"
+                      IsEnabled="{Binding !BulkSend.IsSending}"
+                      IsChecked="{Binding BulkSend.SkipAlreadySent}"
+                      Content="{lm:Loc Main.SkipAlreadySent}" />
+
+            <!-- ⛔ Gated by the command's own CanExecute: nothing to attempt, or over the run limit, and
+                 the button is unavailable with the reason written underneath. -->
+            <Button Grid.Column="4" Classes="primary" Name="BulkSendAction" VerticalAlignment="Bottom"
+                    Content="{lm:Loc Main.SendByEmail}"
+                    Command="{Binding BulkSend.SendCommand}" />
+          </Grid>
+
+          <TextBlock Classes="hint" Name="BulkPacingNote" TextWrapping="Wrap"
+                     Text="{Binding BulkSend.PacingNote}" />
+
+          <TextBlock Classes="hint" Name="BulkSelectionSummary" Text="{Binding Browser.CheckSummary}" />
+
+          <TextBlock Name="BulkPreviewSummary" TextWrapping="Wrap"
+                     Text="{Binding BulkSend.PreviewSummary}" />
+
+          <!-- ⚠ Shown, never repaired: merging two licences into one message is forbidden (§60.0) and
+               could not work anyway — the attachment has a fixed file name, so two would collide. -->
+          <TextBlock Classes="hint" Name="BulkDuplicateWarning" TextWrapping="Wrap"
+                     IsVisible="{Binding BulkSend.DuplicateWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                     Text="{Binding BulkSend.DuplicateWarning}" />
+
+          <TextBlock Classes="hint" Name="BulkSkippedSummary" TextWrapping="Wrap"
+                     IsVisible="{Binding BulkSend.SkippedSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                     Text="{Binding BulkSend.SkippedSummary}" />
+
+          <!-- ⛔ Over the run limit the action is UNAVAILABLE and this says by how much and where to
+               change it. Raising the limit means going into Settings deliberately. -->
+          <TextBlock Name="BulkLimitWarning" TextWrapping="Wrap"
+                     IsVisible="{Binding BulkSend.ExceedsRunLimit}"
+                     Text="{Binding BulkSend.LimitWarning}" />
+
+          <!-- ⭐⭐ PERMANENT, in every state of the card: "sent" is the server ACCEPTING the message and
+               nothing more. With one recipient per message a provider commonly accepts mail for an address
+               that does not exist and bounces it later, which this application never sees (§60.1). -->
+          <TextBlock Classes="hint" Name="BulkAcceptanceNote" TextWrapping="Wrap"
+                     Text="{Binding BulkSend.AcceptanceNote}" />
+
+          <!-- ── B · while it runs ──────────────────────────────────────────────────────────────── -->
+          <Border Classes="card" Name="BulkProgressBox" IsVisible="{Binding BulkSend.IsSending}">
+            <StackPanel Spacing="{DynamicResource Space.Sm}">
+              <TextBlock Name="BulkProgressLine" TextWrapping="Wrap"
+                         Text="{Binding BulkSend.ProgressLine}" />
+
+              <!-- ⛔⛔ NO `IsIndeterminate`, here or anywhere. `Maximum` is the number of messages that
+                   will be attempted and `Value` is the number of attempts that have FINISHED, so the bar
+                   stands still while the run is pacing — and the line above explains that rather than
+                   letting an animation pretend otherwise. -->
+              <ProgressBar Classes="run" Name="BulkProgressBar"
+                           Minimum="0"
+                           Maximum="{Binding BulkSend.ProgressTotal}"
+                           Value="{Binding BulkSend.ProgressValue}" />
+
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                <TextBlock Grid.Column="0" Classes="hint" Name="BulkProgressCounts"
+                           VerticalAlignment="Center" Text="{Binding BulkSend.ProgressCounts}" />
+
+                <!-- ⭐ "Send no more", NOT "abort this one": the attempt in flight finishes and is
+                     recorded (§60.6). ⛔ No second "are you sure" — stopping is the safe direction. -->
+                <Button Grid.Column="1" Classes="flat" Name="BulkStop"
+                        Content="{lm:Loc Main.StopSending}"
+                        Command="{Binding BulkSend.StopCommand}" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <!-- ── Held: named, never silently dropped ────────────────────────────────────────────── -->
+          <Border Classes="card" Name="BulkHeldBox" IsVisible="{Binding BulkSend.HasHeld}">
+            <StackPanel Spacing="{DynamicResource Space.Xs}">
+              <TextBlock Classes="section" Name="BulkHeldHeading" Text="{Binding BulkSend.HeldHeading}" />
+
+              <ListBox MaxHeight="180" Name="BulkHeld" ItemsSource="{Binding BulkSend.Held}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:BulkSendRow">
+                    <StackPanel Spacing="{DynamicResource Space.Xs}">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                        <TextBlock Grid.Column="0" Text="{Binding CustomerName}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Classes="mono" Width="130" Text="{Binding ShortId}" />
+                      </Grid>
+                      <!-- ⛔ Never blank on a held row: it is the only thing telling the operator what to
+                           do about a licence they ticked and did not get. -->
+                      <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding Reason}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+          </Border>
+
+          <!-- ── The FULL recipient list (§14.1 — "the full recipient list", never a counter) ────── -->
+          <TextBlock Classes="section" Name="BulkSendableHeading"
+                     IsVisible="{Binding BulkSend.HasSendable}"
+                     Text="{Binding BulkSend.SendableHeading}" />
+
+          <ListBox MaxHeight="180" Name="BulkSendable"
+                   IsVisible="{Binding BulkSend.HasSendable}"
+                   ItemsSource="{Binding BulkSend.Sendable}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:BulkSendRow">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                  <TextBlock Grid.Column="0" Text="{Binding CustomerName}"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="1" Width="200" Text="{Binding Address}"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="2" Classes="mono" Width="130" Text="{Binding ShortId}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <!-- ── C · the report, which STAYS on the card ─────────────────────────────────────────── -->
+          <!-- ⭐ It outlives the message strip on purpose (the strip fades, this does not) and is replaced
+               only when the next run starts. Every counter in it is read off the run's attempt list, so
+               `Planned == Sent + Failed + Skipped + NotAttempted` holds on screen as well as in the model. -->
+          <Border Classes="card" Name="BulkReportBox" IsVisible="{Binding BulkSend.HasResult}">
+            <StackPanel Spacing="{DynamicResource Space.Sm}">
+              <TextBlock Name="BulkResultHeadline" TextWrapping="Wrap"
+                         Text="{Binding BulkSend.ResultHeadline}" />
+
+              <TextBlock Classes="hint" Name="BulkResultCounts" TextWrapping="Wrap"
+                         IsVisible="{Binding BulkSend.ResultCounts, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                         Text="{Binding BulkSend.ResultCounts}" />
+
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                <!-- ⭐ A whole sentence for each of the four conclusions — ⛔ never one vague line covering
+                     "finished", "stopped after an error" and "you stopped it". -->
+                <TextBlock Grid.Column="0" Name="BulkResultConclusion" VerticalAlignment="Center"
+                           TextWrapping="Wrap" Text="{Binding BulkSend.ResultConclusion}" />
+
+                <TextBlock Grid.Column="1" Classes="hint" Name="BulkResultElapsed"
+                           VerticalAlignment="Center" Text="{Binding BulkSend.ResultElapsed}" />
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                            Spacing="{DynamicResource Space.Md}">
+                  <!-- ⚠ A button toggling a bool, ⛔ not an `Expander`: a new control type is a new theming
+                       surface, and this needs none of what an Expander brings. -->
+                  <Button Classes="flat" Name="BulkToggleDetails"
+                          Content="{Binding BulkSend.DetailsLabel}"
+                          Command="{Binding BulkSend.ToggleDetailsCommand}" />
+
+                  <Button Classes="flat" Name="BulkCopyReport" Content="{lm:Loc Main.CopyReport}"
+                          Command="{Binding BulkSend.CopyReportCommand}" />
+                </StackPanel>
+              </Grid>
+
+              <ListBox MaxHeight="240" Classes="report" Name="BulkReport"
+                       IsVisible="{Binding BulkSend.ShowDetails}"
+                       ItemsSource="{Binding BulkSend.ReportRows}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:BulkSendReportRow">
+                    <!-- ⭐ The row says WHICH outcome it is; `LicenseManagerStyles.axaml` says what that
+                         looks like. ⛔ No colour decision travels through a view model. -->
+                    <StackPanel Spacing="{DynamicResource Space.Xs}"
+                                Classes.sent="{Binding IsSent}"
+                                Classes.failed="{Binding IsFailed}"
+                                Classes.skipped="{Binding IsSkipped}"
+                                Classes.stopped="{Binding IsNotAttempted}">
+                      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                            ColumnSpacing="{DynamicResource Space.Md}">
+                        <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center">
+                          <Canvas Width="24" Height="24">
+                            <Path Data="{Binding IconKey,
+                                         Converter={x:Static lm:IconGeometryConverter.Instance}}" />
+                          </Canvas>
+                        </Viewbox>
+                        <TextBlock Grid.Column="1" Text="{Binding CustomerName}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="2" Width="200" Text="{Binding Address}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="3" Classes="mono" Width="130" Text="{Binding ShortId}" />
+                        <TextBlock Grid.Column="4" Classes="mono" Width="70" Text="{Binding Time}" />
+                      </Grid>
+
+                      <TextBlock Classes="hint" TextWrapping="Wrap"
+                                 IsVisible="{Binding HasReason}" Text="{Binding Reason}" />
+
+                      <!-- ⛔ THE SERVER'S OWN WORDS, and the one line on this card that never follows the
+                           interface language. A wrong password and a blocked app password differ only in
+                           this text. -->
+                      <TextBlock Classes="hint mono" TextWrapping="Wrap"
+                                 IsVisible="{Binding HasServerMessage}" Text="{Binding ServerMessage}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Border>
+      </StackPanel>
+      </ScrollViewer>
 
       <!-- The selection, and the way back to it ──────────────────────────────────────────────── -->
       <Border DockPanel.Dock="Bottom" Classes="card" IsVisible="{Binding Browser.HasSelection}"

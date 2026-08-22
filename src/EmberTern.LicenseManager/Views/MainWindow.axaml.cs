@@ -35,9 +35,37 @@ public sealed partial class MainWindow : Window
 
     private void WireSaveFilePicker()
     {
-        if (DataContext is ShellViewModel shell)
+        if (DataContext is not ShellViewModel shell)
         {
-            shell.SaveFilePicker = SuggestedName => PickSavePathAsync(SuggestedName);
+            return;
+        }
+
+        shell.SaveFilePicker = SuggestedName => PickSavePathAsync(SuggestedName);
+
+        // ⭐⭐ The bulk send's two platform seams, and BOTH are refusals if they are missing rather than
+        //    silent no-ops: with no confirmer the command refuses to send anything (the rule L6.1a's
+        //    "Forget settings" established — an outward-facing act must not lose its guard because a view
+        //    forgot to attach one), and with no copier the report simply cannot be copied.
+        // ⚠ Wired on every DataContextChanged, like the picker above: the context is assigned after
+        //   construction.
+        shell.BulkSend.Confirm = request =>
+            new ConfirmDialog { DataContext = new ConfirmViewModel(request) }.ShowDialog<bool>(this);
+
+        shell.BulkSend.TextCopier = CopyToClipboardAsync;
+    }
+
+    /// <summary>
+    /// Puts text on the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// ⭐ Code-behind for the reason the theme toggle is: the clipboard is pure platform. ⛔ The view model
+    /// decides WHAT is copied and WHICH sentence confirms it, and never touches Avalonia to do either.
+    /// </remarks>
+    private async Task CopyToClipboardAsync(string value)
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(value).ConfigureAwait(true);
         }
     }
 

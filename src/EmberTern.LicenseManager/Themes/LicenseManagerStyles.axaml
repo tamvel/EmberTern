@@ -845,4 +845,64 @@
     <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
   </Style>
 
+  <!-- ── The bulk send: the bar, and the four outcomes ───────────────────────────────────────── -->
+  <!-- ⭐⭐ THE BAR IS TIED TO A REAL NUMBER AND TO NOTHING ELSE (§60.8 B, and the user said it twice).
+       `Maximum` is the count of messages that will be ATTEMPTED and `Value` is the count of attempts that
+       have FINISHED, so the bar stands still during the pacing between two messages — honestly, with the
+       line beneath it saying why. ⛔⛔ `IsIndeterminate` is never set, anywhere: an animation that moves
+       while nothing is happening is a progress bar that lies, and the whole reason this card exists is
+       that a bulk send must not overstate itself.
+
+       ⚠ A SEPARATE ROLE from EmberTern's `ProgressBar.status` (§60.1 note 6), which is a 4 px indicator in
+       the window's chrome. This one sits inside a card, in the document, and is the thing the operator is
+       actually watching. ⭐ Nothing here defines a colour: `AccentBrush` and `ChromeStrongBrush` are the
+       existing tokens, and `Colors.axaml` already repins `SystemAccentColor`, so Fluent's own parts land
+       in our blue rather than in a Windows accent. -->
+  <Style Selector="ProgressBar.run">
+    <!-- ⚠⚠ MinWidth/MinHeight = 0 are LOAD-BEARING, not tidiness: Avalonia clamps by them and Fluent gives
+         `ProgressBar` its own minimum, so without these the height below is silently ignored. The same
+         trap that grew EmberTern's metadata-tree arrow from 20 px to 100. -->
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+
+    <!-- ⚠ `8` LOCALLY AND DELIBERATELY, exactly as EmberTern's `ProgressBar.status` keeps its own `4`:
+         the catalog has no role for the THICKNESS of an indicator, and the only token at this number is
+         `Space.Md`, a gap. Borrowing a spacing role for a thickness is the wrong role, which R12 records
+         as worse than the local value it would replace — a local value is visible as debt, a wrong role
+         pretends the debt is gone. ⭐ Thicker than the chrome indicator's 4 on purpose: this one is the
+         subject of the screen rather than a corner of it. -->
+    <Setter Property="Height" Value="8" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
+  </Style>
+
+  <!-- ⭐ FOUR outcomes, four rules, and each names its own token rather than aliasing a neighbour's.
+       ⚠ Two of them resolve to the same brush TODAY, and that is a shared value rather than a
+       dependency: "deliberately not attempted" and "the run never reached it" are different facts about a
+       licence, and the day one of them earns its own colour the other must not follow it.
+       ⚠⚠ STROKE, never Fill — the geometries are Lucide, stroke-based (see `Viewbox.icon` above), and
+       these rules come AFTER the neutral one in this file, which is what makes them win: Avalonia settles
+       equally-specific selectors by document order. -->
+  <Style Selector="StackPanel.sent Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource ConnectedBrush}" />
+  </Style>
+  <Style Selector="StackPanel.failed Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource ErrorBrush}" />
+  </Style>
+  <Style Selector="StackPanel.skipped Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+  <Style Selector="StackPanel.stopped Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <!-- ⚠ The row's icon is a STATUS GLYPH in a list, not a toolbar action, so it takes the row ladder
+       (`Size.Icon`) rather than the action one. ⭐ Scoped to a report row: `Viewbox.icon` elsewhere in this
+       application is an action or a severity glyph and keeps its own size. -->
+  <Style Selector="ListBox.report Viewbox.icon">
+    <Setter Property="Width" Value="{DynamicResource Size.Icon}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon}" />
+  </Style>
+
 </Styles>

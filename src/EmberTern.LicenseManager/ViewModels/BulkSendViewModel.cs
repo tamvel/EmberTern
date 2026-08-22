@@ -161,13 +161,27 @@ public sealed record BulkSendReportRow
         _ => "Icon.Stop",
     };
 
-    /// <summary>⭐ Which theme token paints it, as a key — same rule as <see cref="IconKey"/>.</summary>
-    public string BrushKey => Attempt.Outcome switch
-    {
-        BulkSendOutcome.Sent => "ConnectedBrush",
-        BulkSendOutcome.Failed => "ErrorBrush",
-        _ => "SubtleForegroundBrush",
-    };
+    // ── What the row WEARS, as four conditions rather than as a colour ──────────────────────────────
+    //
+    // ⭐⭐ The row says WHICH OUTCOME it is; the theme says what that looks like. So the card binds
+    //    `Classes.sent` / `.failed` / `.skipped` / `.stopped` to these and the four `Stroke` rules live in
+    //    `LicenseManagerStyles.axaml` with every other colour decision in this application.
+    // ⛔ NOT a brush key on the row. That shape exists here for ICONS, where the alternative is a
+    //    `Geometry` in a view model — a real Architecture-rule-1 problem. A colour has no such excuse: a
+    //    token name carried in a view model is a colour decision that has quietly left the theme, and a
+    //    reader looking for "what paints a failed row" would not find it in the file that owns painting.
+
+    /// <summary>The server accepted it.</summary>
+    public bool IsSent => Attempt.Outcome == BulkSendOutcome.Sent;
+
+    /// <summary>The server refused it.</summary>
+    public bool IsFailed => Attempt.Outcome == BulkSendOutcome.Failed;
+
+    /// <summary>It was in the run and deliberately not attempted.</summary>
+    public bool IsSkipped => Attempt.Outcome == BulkSendOutcome.Skipped;
+
+    /// <summary>⭐ The run stopped before reaching it. ⚠ Not a failure and not a skip — nothing was tried.</summary>
+    public bool IsNotAttempted => Attempt.Outcome == BulkSendOutcome.NotAttempted;
 
     /// <summary>Builds a row.</summary>
     public static BulkSendReportRow From(BulkSendAttempt attempt)
@@ -594,6 +608,15 @@ public sealed partial class BulkSendViewModel : ObservableObject
                 : BulkSendCatalog.ShowDetails(result.Planned);
 
     partial void OnShowDetailsChanged(bool value) => OnPropertyChanged(nameof(DetailsLabel));
+
+    /// <summary>Opens or closes the per-licence detail.</summary>
+    /// <remarks>
+    /// ⭐ A command over a <see cref="bool"/> rather than an <c>Expander</c> (§60.8): a new control type is
+    /// a new theming surface, and this needs none of what an Expander brings. ⚠ The button's own label
+    /// carries the count and follows the toggle, so the affordance says what it will do.
+    /// </remarks>
+    [RelayCommand]
+    private void ToggleDetails() => ShowDetails = !ShowDetails;
 
     // ── The platform seams ──────────────────────────────────────────────────────────────────────────
 

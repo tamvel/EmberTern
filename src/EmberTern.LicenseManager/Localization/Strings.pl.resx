@@ -1536,4 +1536,19 @@
   <data name="Status.SmtpServerDidNotAnswerInTime" xml:space="preserve">
     <value>{0}:{1} nie odpowiedział w ciągu {2} s, więc próba została przerwana. Sprawdź serwer, port i to, czy STARTTLS jest dla niego właściwy — port, który oczekuje połączenia szyfrowanego od początku, nigdy na to nie odpowie.</value>
   </data>
+  <data name="Main.SendSelectedLicences" xml:space="preserve">
+    <value>Wyślij zaznaczone licencje e-mailem</value>
+  </data>
+  <data name="Main.SkipAlreadySent" xml:space="preserve">
+    <value>Pomiń licencje już wysłane</value>
+  </data>
+  <data name="Main.SendByEmail" xml:space="preserve">
+    <value>Wyślij e-mailem</value>
+  </data>
+  <data name="Main.StopSending" xml:space="preserve">
+    <value>Przerwij wysyłkę</value>
+  </data>
+  <data name="Main.CopyReport" xml:space="preserve">
+    <value>Kopiuj raport</value>
+  </data>
 </root>

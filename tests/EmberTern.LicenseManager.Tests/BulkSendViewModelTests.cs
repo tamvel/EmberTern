@@ -607,46 +607,6 @@ public sealed class BulkSendViewModelTests
     }
 
     /// <summary>
-    /// A sender that succeeds until a given message, then refuses with the server's own words.
-    /// </summary>
-    /// <remarks>
-    /// ⭐ It is the ONE thing faked on our side of the server's decision. Everything else — the plan, the
-    /// composed message, the audit lines, the report — is production code.
-    /// </remarks>
-    private sealed class ScriptedSender : ILicenseEmailSender
-    {
-        private int _failFrom = int.MaxValue;
-        private string _error = FakeEmailSender.RefusalText;
-        private Action? _observe;
-
-        public string Destination => "smtp.example.test";
-
-        internal List<OutgoingEmail> Sent { get; } = [];
-
-        internal void FailFrom(int message, string? error = null)
-        {
-            _failFrom = message;
-            _error = error ?? FakeEmailSender.RefusalText;
-        }
-
-        /// <summary>Runs while a message is in flight — the only moment "a run is happening" is true.</summary>
-        internal void Observe(Action watch) => _observe = watch;
-
-        public Task<SendOutcome> SendAsync(
-            OutgoingEmail email, CancellationToken cancellationToken = default)
-        {
-            ArgumentNullException.ThrowIfNull(email);
-
-            Sent.Add(email);
-            _observe?.Invoke();
-
-            return Task.FromResult(Sent.Count >= _failFrom
-                ? SendOutcome.Failed(_error)
-                : SendOutcome.Ok(Destination));
-        }
-    }
-
-    /// <summary>
     /// Delivers a snapshot on the calling thread, at the moment it is reported.
     /// </summary>
     /// <remarks>
