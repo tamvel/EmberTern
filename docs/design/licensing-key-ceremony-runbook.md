@@ -1,7 +1,18 @@
 # Runbook — ceremonia produkcyjnego klucza podpisującego
 
-> **Status: 📋 PRZYGOTOWANY (L7.2), NIEWYKONANY.** Ten dokument opisuje procedurę. ⛔ Żaden produkcyjny
-> klucz nie został jeszcze wygenerowany, `TrustedKeys.Production` jest pusty, a §35.4 nosi wpis *„pending"*.
+> **Status: ✅ WYKONANY 2026-08-22 (L7.3), klucz publiczny wysłany w L7.4.** Klucz `R1` istnieje,
+> `TrustedKeys.Production` go niesie, a §35.4 jest wypełnionym rejestrem ceremonii.
+>
+> ⭐⭐ **Dokument zostaje jako REFERENCJA, nie jako historia.** Ta sama procedura obowiązuje przy
+> **rotacji** klucza (§15.3) i przy odtworzeniu magazynu na innej maszynie — wtedy `R2` dostaje w §35.4
+> **własny wiersz**, a ten nie jest edytowany. ⚠ Czytaj kroki w czasie teraźniejszym; opisują to, co
+> należy zrobić, a nie to, co zrobiono raz.
+>
+> ⚠⚠ **Świadome ograniczenie PIERWSZEJ ceremonii, ratyfikowane przez użytkownika:** obie kopie offline
+> zostały wykonane i sprawdzone przez `VerifyRestore` **na tej samej maszynie**; ⛔ kroku 6 „odtworzenie na
+> DRUGIM komputerze" nie wykonano. Przenośność klucza pozostaje do potwierdzenia przy pierwszej
+> rzeczywistej migracji, przez backup → restore → porównanie odcisku. ⭐ To była decyzja, nie pominięcie —
+> ta maszyna jest docelowym środowiskiem wystawiania (§35.4).
 >
 > **Autorytet merytoryczny:** [`licensing-system.md`](licensing-system.md) §24 (zarządzanie kluczami),
 > §15.2–§15.3 (`kid`, rotacja), §16.1 (`PrivateKeyNeverShipsTests`), §25 (model zagrożeń), §29 (odtwarzanie),
@@ -9,9 +20,10 @@
 > na kroki.
 >
 > **Decyzje użytkownika ratyfikowane 2026-08-22, przed napisaniem tego dokumentu:**
-> **A3** — ceremonia **nie odbywa się** w obecnym środowisku deweloperskim; devowy `keystore.etkeys` i
-> `licenses.db` pozostają nietknięte i nieusuwane · **B1** — wykonawca ceremonii to minimalna sekcja w
-> istniejącym oknie Storage (dostarczone w L7.1) · **C2** — ostrzeżenie o cofnięciu zegara odłożone jako
+> **A3** — ceremonia w świadomie oddzielonym, czystym środowisku. ⚠ **Doprecyzowane tego samego dnia przez
+> użytkownika:** tą maszyną jest obecna, a devowe `keystore.etkeys` i `licenses.db` uznano za artefakty
+> testowe QA i usunięto je przed ceremonią — nie zakładano osobnego konta ani maszyny ·
+> **B1** — wykonawca ceremonii to minimalna sekcja w istniejącym oknie Storage (dostarczone w L7.1) · **C2** — ostrzeżenie o cofnięciu zegara odłożone jako
 > świadomy backlog · **D1** — §35.4 **jest** rejestrem ceremonii, ⛔ bez osobnego „Appendix A".
 
 ---
@@ -52,10 +64,14 @@ mogła być prawdziwa.
 pomyłka „dev vs produkcja" była **niemożliwa**, nie tylko nieprawdopodobna (decyzja A3).
 
 ⚠⚠ **Dlaczego to nie jest formalność.** `ManagerPaths.Default` jest zaszyty na
-`%APPDATA%\EmberTern License Manager`, a tam **już leży devowy `keystore.etkeys`** (726 B, 2026-08-21).
-`SigningSession.Create` **odmówi** utworzenia drugiego magazynu w tej lokalizacji — celowo, bo nadpisanie
-magazynu jest nieodwracalne. Aplikacja nie ma przełącznika katalogu, więc izolację daje **profil systemowy
+`%APPDATA%\EmberTern License Manager`. Jeśli leży tam jakikolwiek `keystore.etkeys`,
+`SigningSession.Create` **odmówi** utworzenia drugiego — celowo, bo nadpisanie magazynu jest
+nieodwracalne. Aplikacja nie ma przełącznika katalogu, a przekierowanie zmiennej `APPDATA` **nie działa**
+(zmierzone 2026-08-22: .NET czyta ścieżkę z Win32 known-folder API), więc izolację daje **profil systemowy
 albo maszyna**, nie opcja w UI.
+⏭ *Przy pierwszej ceremonii w tej lokalizacji leżał magazyn deweloperski z QA; użytkownik uznał go za
+artefakt testowy i usunął przed ceremonią. Przy ROTACJI będzie tam magazyn produkcyjny — ⛔ wtedy go nie
+usuwasz: rotacja dopisuje klucz, nie zastępuje go (§15.3).*
 
 **Wybierz jedną z dwóch dróg** (obie realizują A3; pierwsza jest mocniejsza):
 
@@ -71,9 +87,10 @@ albo maszyna**, nie opcja w UI.
 
 **Co jest sekretem.** Nic.
 
-**Czego nie wolno.** ⛔ Nie usuwaj, nie przenoś i nie zmieniaj nazwy devowego `keystore.etkeys` ani
-`licenses.db` — decyzja A3 mówi wprost, że zostają nietknięte. ⛔ Nie kopiuj devowego magazynu do
-środowiska ceremonii „żeby mieć rejestr".
+**Czego nie wolno.** ⛔⛔ Nie usuwaj żadnego magazynu, którego nie potrafisz nazwać — usunięcie
+produkcyjnego `keystore.etkeys` jest nieodwracalne i kończy możliwość odnawiania licencji. Magazyn
+deweloperski wolno odstawić **dopiero** po ustaleniu, że nim jest, i to jest decyzja właściciela klucza, nie
+wykonawcy kroku. ⛔ Nie kopiuj żadnego istniejącego magazynu do środowiska ceremonii „żeby mieć rejestr".
 
 **Jak weryfikujemy.** W środowisku ceremonii, **przed** uruchomieniem aplikacji:
 

@@ -1508,17 +1508,39 @@ mode is the dangerous one: a correct product wearing a red test, which invites "
 The rule: edit JSON as JSON (`JsonNode`), never as text. Record it at L7 with the rest of the
 documentation closure.
 
-### 35.4 Still open going into L3
+### 35.4 The key ceremony register
 
-⚠ **`TrustedKeys.Production` is still empty and the REAL ceremony has not been performed.** L2's exit
-criterion was a ceremony with a *test* key, which the tests perform on every run. The real one — a real
-passphrase, two offline backups, a verified restore from each, and the public key pasted into
-`TrustedKeys.Production` — is **L7**, deliberately: doing it now would mean carrying a production private
-key through five more stages of development for no benefit.
+⭐ **The production ceremony ran on 2026-08-22 (L7.3); its public half shipped in L7.4.** The row below is
+the record — decision D1 of that stage: ⛔ this table IS the ceremony register, and no separate "Appendix A"
+exists, despite §24.1 step 7 naming one.
 
-| kid | Algorithm | Public key (SPKI, base64url) | Ceremony date | Revoked |
+⚠ **`TrustedKeys.Production` was deliberately EMPTY from L2 through L6**, and that history is worth keeping
+rather than tidying away. L2's exit criterion was a ceremony with a *test* key, which the tests still
+perform on every run; doing the real one earlier would have meant carrying a production private key through
+five more stages of development for no benefit. The consequence, while it lasted, was that a real licence
+verified as `Invalid / UnknownKey` in every configuration — correct and deliberate, and the reason `Valid`
+and `Grace` were proven by tests rather than by hand until L7 (§38.6).
+
+| kid | Algorithm | Public key (SPKI, base64) | Ceremony date | Revoked |
 |---|---|---|---|---|
-| `R1` | ECDSA-P256-SHA256 | *(pending the real ceremony — L7)* | — | — |
+| `R1` | ECDSA-P256-SHA256 | `MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEsQPyDZ5zXbC2YlsDcxRjGptuMr4YdpTQemVK4LspF917S0KkKAge1tBwvZNCQZCMpSSZqQ0EhFfxGbqX1ROoYw==` | 2026-08-22 | — |
+
+**`R1` public-key fingerprint (SHA-256, uppercase hex):**
+
+```
+B55DCB8FAB7AD12EB77F798B89A59B5722AA11CAD71F27BE9DD49C7CFC0905AD
+```
+
+⚠ **Scope of the verification — a ratified narrowing, not a skipped step.** Both offline backups were taken
+and proved with `VerifyRestore` on **this** machine, and ⛔ neither has yet been restored on a *second*
+computer as §24.1 step 5 asks; the key's portability therefore remains to be confirmed at the first real
+migration, through backup → restore → fingerprint. ⭐ The owner decided this deliberately for the first
+ceremony — this machine is the intended issuing environment — so what the register attests is exactly what
+was done, and no more.
+
+⚠ **The column says `base64`, not `base64url`** — corrected at L7.4 against the code. `KeyCeremony.FormatTrustedKeyEntry` emits standard base64 and the generated entry reads it back with
+`Convert.FromBase64String`; the heading had claimed base64url since L2. The code is the contract, so the
+heading followed it rather than the other way round.
 
 ⛔ Entries are appended and flagged, never removed or edited (§15.3).
 

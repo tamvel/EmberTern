@@ -9,25 +9,26 @@
 > to paste a multi-paragraph "shipped" report here, you are recreating the defect that produced a
 > 6 849-line `CLAUDE.md` twice — see `docs/history/30-claude-md-current-state-archive.md`.
 
-**Last verified: 2026-08-21** (L8 CLOSED).
+**Last verified: 2026-08-22** (L7 CLOSED — the licensing system is complete).
 
 ---
 
 ## 0. ⏭ HANDOFF — read this first
 
-> ⭐⭐ **L8 IS CLOSED — 🔒 accepted by the user 2026-08-21 after their own visual QA.** The License Manager
-> has a Polish interface, switchable without a restart, and the switch reaches every surface. §53–§59.
-> ⛔ **L7 has NOT started** and the key ceremony is still unprepared — it is simply the next thing in the
-> plan now, rather than something being held back.
+> ⭐⭐ **L7 IS CLOSED — the licensing system is complete.** 🔒 The production key ceremony ran on
+> **2026-08-22**: `R1` (ECDSA P-256) exists, its public half ships in `TrustedKeys.Production`, and a real
+> licence was seen **`Valid` in a `Release` build** — the one line of §32's L4 criterion that §38.6 had to
+> defer, because it could not be true until a real key existed. Register: **§35.4**. The procedure, written
+> to be reused for a rotation: [`design/licensing-key-ceremony-runbook.md`](design/licensing-key-ceremony-runbook.md).
 >
-> ## ⏭ START HERE: **L7 — hardening and closing.** NOT STARTED. **Brief: §32.**
+> ## ⏭ START HERE: **nothing is in progress.** The next topic is a user decision.
 >
-> L7 carries: clock high-water · `%PROGRAMDATA%` fallback · the `maint` gate · ⭐⭐ **the real key ceremony
-> and the shipped public key** · documentation. ⚠⚠ **`TrustedKeys.Production` is EMPTY and no real licence
-> verifies as usable in any build until that ceremony runs** — deliberate since L1, and `Valid` / `Grace` are
-> proved by tests rather than by hand (§38.6). ⏭ **Bulk sending is its OWN stage** (§14.1), not part of L7.
-> ⚠ One finding is owed to `docs/gotchas.md` at L7 and is recorded waiting in §35.3: edit JSON as JSON
-> (`JsonNode`), never as text.
+> ⭐ The strongest candidate is **bulk sending of licences** — ratified as its own stage at L6's closure and
+> already designed (§14.1). The rest sit under "Ratified but not started" below.
+>
+> ⚠ **Two things L7 left open ON PURPOSE, both ratified:** the clock-rollback **warning** has no surface
+> (the *enforcement* does — `EffectiveNow` is live; decision C2, backlog), and the ceremony's two backups
+> were verified on ONE machine, so key portability is confirmed at the first real migration (§35.4).
 >
 > ✅ **L8, sub-stage by sub-stage: §53** prep (option identity, #394) · **§54** the mechanism · **§55**
 > `StatusMessage` as key + arguments · **§56** 147 XAML values · **§57** 85 C# keys and the refresh path ·
@@ -83,9 +84,9 @@
 > company distinction), §49.4 (`WithCulture="false"`) and §49.9 (the two reds).
 >
 
-> ⚠ **L7 still owns the production key ceremony** — until it runs, `TrustedKeys.Production` is empty and
-> no real licence verifies as usable in any build. Deliberate; `Valid` / `Grace` are proven by tests
-> rather than by hand (§38.6).
+> ⭐ **`TrustedKeys.Production` carries `R1` since 2026-08-22.** It was empty by design through L2–L6 so no
+> production private key travelled with five stages of development; that is history now, and §35.4 keeps
+> both the record and the reasoning.
 >
 > **Work lives on the branch `feat/licensing-system`**, cut from `master` at `2c3da45`.
 > ⭐⭐ **The remotes are back to the CLAUDE.md table, and BOTH are kept on the same SHA** (user's decision,
@@ -201,12 +202,11 @@ use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
 | **L4b** — surfaces: activation window, Settings ▸ Licence, About, banner, the connection SEAM, EN + PL | ✅ **accepted** — §38; ⚠ read §38.5 before touching a licence message |
 | **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ✅ **CLOSED 2026-08-18**, all six sub-stages accepted and pushed. **L5.0** data layer — schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch (§39). **L5.1 + two QA rounds** — Licences view, search, three filters, own AppBar and title bar, the licence re-parenting defect, spacing and uniform control heights (§40–§43). **L5.2** — issuing history and artifact preview, current marked from the register's POINTER never from the ordering (§44). **L5.3** — re-issue with an operator-chosen reason, validated against a measured diff of the SIGNED payload (§45). **L5.4** — bulk selection and batch renewal, and the licences list rebuilt as EmberTern's own grid, LINKED rather than reproduced (§46). **L5.5** — encrypted verified backup with its own passphrase, two explicit restore modes with the previous register always preserved, the five-type JSONL escape hatch, and the Storage window (§47). ⚠ Read §47.6 before quoting L5.5's verification: it is deliberately narrower than earlier stages' |
 | **L6** — e-mail | ✅ **CLOSED 2026-08-19**, all five sub-stages accepted. Delivery end to end: the SMTP settings and their own-entropy DPAPI secret with four load states (§48); the Settings Center, message language and Customer/Licences split (§49); a pure composer whose attachment is byte-identical to `SaveArtifact` (§50); `ILicenseEmailSender` with an SMTP and an `.eml` sender, the Send licence window whose preview IS the message, `licence.sent` / `licence.send-failed`, and **Send test email…** (§51); and the message the customer reads (§51.9). ⭐ **Proved against a real Gmail account** — §32's exit criterion satisfied. ⚠ The COMPANY mailbox is still unmeasured (§48.1) — a NEW CLASS behind the sender contract if it refuses basic auth, not a rebuild. ⛔ Bulk sending was deliberately NOT built; it is its own stage below. Closure: §52 |
-| ⭐⭐ **L7** — **hardening and closing the licensing system** | 📋 **NOT STARTED.** Clock high-water · `%PROGRAMDATA%` fallback · the `maint` gate · ⭐⭐ **the real key ceremony and the shipped public key** · documentation. ⚠⚠ `TrustedKeys.Production` is EMPTY until it runs, so no real licence verifies as usable in any build — deliberate since L1 (§38.6). ⚠ One gotcha is owed and waiting in §35.3 (edit JSON as JSON, never as text). ⏭ **Bulk sending is a SEPARATE stage** (§14.1). Authority: §32 |
-| **L7** — hardening and closing: ⭐ **the real key ceremony**, public key shipped, docs | ⏳ not started — ⛔ **and deliberately after L8** |
+| ⭐⭐ **L7** — **hardening and closing the licensing system** | ✅ **CLOSED 2026-08-22.** Clock high-water, `%PROGRAMDATA%` fallback and the `maint` gate turned out to be already built in L4a; what L7 actually carried was the ceremony and its executor. **L7.1** the Signing-key task in the Storage window — `kid`, fingerprint, public key, paste-ready entry and `VerifyRestore`, none of which had a caller before (gotcha #410). **L7.2** the 14-step runbook. **L7.3** the ceremony: `R1`, two offline backups, `VerifyRestore` on each, fingerprints compared. **L7.4** the public key in `TrustedKeys.Production`, the emptiness guard retired WITH the decision it served (#407), and a real licence `Valid` in `Release`. Narrative: `history/33`. Register: §35.4 |
 
-⚠ **`TrustedKeys.Production` is empty and the REAL key ceremony has not been performed** — deliberately
-**L7**, so no production private key is carried through five stages of development. A `Release` build
-therefore refuses every licence today, and a test says so on purpose.
+⭐ **A `Release` build now accepts a real licence** — proven by hand on 2026-08-22 and pinned by
+`TheShippedTrustedKeyTableCarriesTheCeremonyKey`, which asserts both the table's shape and the recorded
+fingerprint, so a mistyped key fails the build rather than a customer.
 
 ⛔ **Two licensing decisions inherited from the audit follow-up's Phase 6**, both test-only, both held
 back for THIS etap to decide: **NPOI** stays 2.7.2 (2.8.0 is `OSMFEULA.txt` and demands
