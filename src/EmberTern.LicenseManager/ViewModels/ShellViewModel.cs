@@ -85,6 +85,15 @@ public sealed partial class ShellViewModel : MessageHostViewModel
             ? null
             : new SettingsViewModel(_smtpStore, ApplicationLanguageService.At(paths));
 
+        // ⚠ Built after the store, because it reads the settings through PrepareBulkSend. ⭐ The method
+        //   group is what keeps "read fresh from the file" true at every rebuild rather than at construction.
+        BulkSend = new BulkSendViewModel(register, Browser, PrepareBulkSend, message => Message = message);
+
+        // ⭐ 🔒 Decision M — the two bulk operations on this view are mutually exclusive while one runs.
+        //    Wired HERE rather than by either view model knowing about the other: neither owns the rule,
+        //    the composition root does.
+        BulkSend.SendingChanged += (_, _) => BatchRenewal.IsBlockedByBulkSend = BulkSend.IsSending;
+
         ReloadCustomers();
         Message = StatusMessage.Info(StatusCatalog.SigningWithKey, session.KeyId);
     }
@@ -120,6 +129,16 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     /// ends at a committed register, and delivery stays the separate export action.</para>
     /// </summary>
     public BatchRenewalViewModel BatchRenewal { get; }
+
+    /// <summary>
+    /// Sending many licences by e-mail, one message at a time — the licences view's other bulk operation.
+    ///
+    /// <para>⭐ It reads the SAME ticked set <see cref="BatchRenewal"/> reads, so there is exactly one
+    /// answer to <i>"which licences is this about?"</i> ⛔ And the two never run together (🔒 decision M):
+    /// a send composes every message before the first one leaves, so a renewal underneath it would
+    /// supersede an artifact that is still queued to go out.</para>
+    /// </summary>
+    public BulkSendViewModel BulkSend { get; }
 
     /// <summary>
     /// Backup, restore, the JSONL escape hatch and the data folder.
@@ -876,6 +895,60 @@ public sealed partial class ShellViewModel : MessageHostViewModel
 
         Message = StatusMessage.None;
         return model;
+    }
+
+    /// <summary>
+    /// Reads the e-mail settings a bulk send would use, or says why there are none.
+    ///
+    /// <para>⭐⭐ <b>The SAME refusal path as <see cref="PrepareSendLicence"/></b>, minus the three refusals
+    /// that are about ONE licence (nothing selected, never issued, this customer's address). Those are
+    /// per-licence facts, and in a bulk send they are the planner's business: a licence that cannot be sent
+    /// is HELD and named, and it must not stop the other forty (§60.2).</para>
+    ///
+    /// <para>⚠ The settings are read FRESH from the file, not from the Settings window's in-memory copy:
+    /// the operator may have opened that window, typed, and not saved — and what gets sent must be what is
+    /// saved.</para>
+    ///
+    /// <para>⭐⭐ <b>It RETURNS the refusal instead of announcing it</b>, which is the one difference from
+    /// its sibling and the reason it is a separate method. The bulk preview is rebuilt on every keystroke
+    /// in the search box, so a producer that put its own warning on the strip would re-raise it dozens of
+    /// times while the operator typed. The caller decides when it is worth saying.</para>
+    /// </summary>
+    public BulkSendSettings PrepareBulkSend()
+    {
+        if (_smtpStore is null)
+        {
+            return BulkSendSettings.Refused(StatusMessage.Warning(StatusCatalog.EmailIsWindowsOnly));
+        }
+
+        SmtpSettingsLoad load;
+        try
+        {
+            load = _smtpStore.Load();
+        }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException)
+        {
+            return BulkSendSettings.Refused(
+                StatusMessage.Error(StatusCatalog.EmailSettingsNotRead, e.Message));
+        }
+
+        // ⭐ The store's four states, answered separately — the reason it reports them (§48.3).
+        // ⚠ PasswordUnavailable is NOT among the refusals, exactly as it is not one on the single send
+        //   path: the messages can still be composed, and an attempt will fail with the SERVER's own words
+        //   rather than with our guess about them.
+        return load.State switch
+        {
+            SmtpSettingsState.NotConfigured =>
+                BulkSendSettings.Refused(StatusMessage.Warning(StatusCatalog.EmailNotConfigured)),
+
+            SmtpSettingsState.Unreadable =>
+                BulkSendSettings.Refused(StatusMessage.Error(
+                    load.Problem is { } unreadable
+                        ? unreadable.Key
+                        : StatusCatalog.EmailSettingsNotReadNothingSent)),
+
+            _ => BulkSendSettings.Ready(load.Settings),
+        };
     }
 
     /// <summary>

@@ -50,6 +50,22 @@ internal static class ConfirmCatalog
     /// <summary>Send test</summary>
     public static MessageKey TestMessageAction => Key(nameof(TestMessageAction));
 
+    /// <summary>Send these licences?</summary>
+    public static MessageKey BulkSendTitle => Key(nameof(BulkSendTitle));
+
+    /// <summary>{0} messages will be sent through {1}. It will take at least {2}. This cannot be recalled.</summary>
+    /// <remarks>
+    /// ⭐⭐ A plural FAMILY, resolved through <c>ConfirmRequest.Count</c>: the number of messages is the one
+    /// fact the operator must read correctly before an act that cannot be recalled, and Polish inflects it
+    /// three ways. ⚠ The count is <c>{0}</c>; the host and the duration follow.
+    /// ⛔ The number of ADDRESSES is deliberately not in this sentence — a sentence has one plural pivot,
+    /// and the address count has its own sentence on the preview the operator has just read.
+    /// </remarks>
+    public static MessageKey BulkSendMessage => Key(nameof(BulkSendMessage));
+
+    /// <summary>Send messages</summary>
+    public static MessageKey BulkSendAction => Key(nameof(BulkSendAction));
+
     /// <summary>The way out. ⚠ Shared by every confirmation — see the type's remarks.</summary>
     public static MessageKey Cancel => Key(nameof(Cancel));
 }

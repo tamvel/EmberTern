@@ -48,6 +48,7 @@ public sealed class CSharpLocalizationTests
         "ViewModels/AboutViewModel.cs",
         "ViewModels/ArtifactHistoryViewModel.cs",
         "ViewModels/BatchRenewalViewModel.cs",
+        "ViewModels/BulkSendViewModel.cs",
         "ViewModels/LicenseBrowserViewModel.cs",
         "ViewModels/SendLicenceViewModel.cs",
         "ViewModels/SettingsViewModel.cs",

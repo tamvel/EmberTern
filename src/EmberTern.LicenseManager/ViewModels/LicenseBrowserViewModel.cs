@@ -402,6 +402,38 @@ public sealed partial class LicenseBrowserViewModel : ObservableObject
         RaiseCheckedChanged();
     }
 
+    /// <summary>
+    /// Unticks exactly the named licences, and leaves every other tick alone.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>🔒 Decision L (§60.10), and the reason it is a separate member from
+    /// <see cref="ClearChecksCommand"/>.</b> A bulk send is NOT atomic — it is N conversations with an
+    /// outside server — so after one, the ticks come off the licences that were actually sent and off
+    /// nothing else. A failure, a skip and an untouched licence all stay ticked, which makes "resume" mean:
+    /// fix the problem, click again, and only what is left goes out. ⛔ Nobody receives a duplicate.</para>
+    /// <para>⚠ A batch RENEWAL clears everything instead, because that operation IS atomic. The difference
+    /// is deliberate and is the whole content of this method.</para>
+    /// <para>⭐ Additive: it changes nothing about the two commands above.</para>
+    /// </remarks>
+    public void Untick(IEnumerable<string> licenseIds)
+    {
+        ArgumentNullException.ThrowIfNull(licenseIds);
+
+        var removed = false;
+        foreach (var id in licenseIds)
+        {
+            removed |= _checked.Remove(id);
+        }
+
+        if (!removed)
+        {
+            return;
+        }
+
+        RestoreChecks();
+        RaiseCheckedChanged();
+    }
+
     /// <summary>Unticks everything, including licences the filters are hiding.</summary>
     [RelayCommand]
     private void ClearChecks()

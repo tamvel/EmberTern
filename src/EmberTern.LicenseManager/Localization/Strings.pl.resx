@@ -1326,4 +1326,211 @@
   <data name="Status.BulkNotAttemptedRunStopped" xml:space="preserve">
     <value>Nie wysłano — seria zatrzymała się wcześniej.</value>
   </data>
+  <data name="Bulk.TickLicences" xml:space="preserve">
+    <value>Zaznacz licencje, które chcesz wysłać.</value>
+  </data>
+  <data name="Bulk.WillSend.one" xml:space="preserve">
+    <value>Zostanie wysłana {0} wiadomość.</value>
+  </data>
+  <data name="Bulk.WillSend.few" xml:space="preserve">
+    <value>Zostaną wysłane {0} wiadomości.</value>
+  </data>
+  <data name="Bulk.WillSend.many" xml:space="preserve">
+    <value>Zostanie wysłanych {0} wiadomości.</value>
+  </data>
+  <data name="Bulk.ToAddresses.one" xml:space="preserve">
+    <value>Trafi na {0} adres.</value>
+  </data>
+  <data name="Bulk.ToAddresses.few" xml:space="preserve">
+    <value>Trafią na {0} adresy.</value>
+  </data>
+  <data name="Bulk.ToAddresses.many" xml:space="preserve">
+    <value>Trafią na {0} adresów.</value>
+  </data>
+  <data name="Bulk.AtLeast" xml:space="preserve">
+    <value>Potrwa to co najmniej {0}.</value>
+  </data>
+  <data name="Bulk.DuplicateAddresses.one" xml:space="preserve">
+    <value>{0} adres otrzyma więcej niż jedną wiadomość.</value>
+  </data>
+  <data name="Bulk.DuplicateAddresses.few" xml:space="preserve">
+    <value>{0} adresy otrzymają więcej niż jedną wiadomość.</value>
+  </data>
+  <data name="Bulk.DuplicateAddresses.many" xml:space="preserve">
+    <value>{0} adresów otrzyma więcej niż jedną wiadomość.</value>
+  </data>
+  <data name="Bulk.SkippedCount.one" xml:space="preserve">
+    <value>Pominięta zostanie {0} licencja.</value>
+  </data>
+  <data name="Bulk.SkippedCount.few" xml:space="preserve">
+    <value>Pominięte zostaną {0} licencje.</value>
+  </data>
+  <data name="Bulk.SkippedCount.many" xml:space="preserve">
+    <value>Pominiętych zostanie {0} licencji.</value>
+  </data>
+  <data name="Bulk.HeldSection" xml:space="preserve">
+    <value>Wstrzymane ({0})</value>
+  </data>
+  <data name="Bulk.SendableSection" xml:space="preserve">
+    <value>Zostanie wysłane ({0})</value>
+  </data>
+  <data name="Bulk.Pacing" xml:space="preserve">
+    <value>Jedna wiadomość co {0} s, najwyżej {1} w serii, przez {2}.</value>
+  </data>
+  <data name="Bulk.AcceptedNotDelivered" xml:space="preserve">
+    <value>„Wysłano” znaczy, że serwer przyjął wiadomość. Nie znaczy, że klient ją odebrał.</value>
+  </data>
+  <data name="Bulk.SendingNow" xml:space="preserve">
+    <value>Wysyłanie {0} z {1} — {2} &lt;{3}&gt;</value>
+  </data>
+  <data name="Bulk.WaitingSeconds" xml:space="preserve">
+    <value>Odczekanie {0} s…</value>
+  </data>
+  <data name="Bulk.Stopping" xml:space="preserve">
+    <value>Zatrzymywanie — kończę bieżącą próbę…</value>
+  </data>
+  <data name="Bulk.ProgressSent.one" xml:space="preserve">
+    <value>{0} wysłana</value>
+  </data>
+  <data name="Bulk.ProgressSent.few" xml:space="preserve">
+    <value>{0} wysłane</value>
+  </data>
+  <data name="Bulk.ProgressSent.many" xml:space="preserve">
+    <value>{0} wysłanych</value>
+  </data>
+  <data name="Bulk.ConclusionNothingToSend" xml:space="preserve">
+    <value>Nic nie zostało wysłane — żadna zaznaczona licencja się nie kwalifikowała.</value>
+  </data>
+  <data name="Bulk.ConclusionCompleted" xml:space="preserve">
+    <value>Seria zakończona, wszystkie wiadomości zostały przyjęte.</value>
+  </data>
+  <data name="Bulk.ConclusionStoppedAfterError" xml:space="preserve">
+    <value>Seria zatrzymana po błędzie.</value>
+  </data>
+  <data name="Bulk.ConclusionStoppedByOperator" xml:space="preserve">
+    <value>Seria przerwana przez Ciebie.</value>
+  </data>
+  <data name="Bulk.ReportFailed.one" xml:space="preserve">
+    <value>{0} błąd</value>
+  </data>
+  <data name="Bulk.ReportFailed.few" xml:space="preserve">
+    <value>{0} błędy</value>
+  </data>
+  <data name="Bulk.ReportFailed.many" xml:space="preserve">
+    <value>{0} błędów</value>
+  </data>
+  <data name="Bulk.ReportSkipped.one" xml:space="preserve">
+    <value>{0} pominięta</value>
+  </data>
+  <data name="Bulk.ReportSkipped.few" xml:space="preserve">
+    <value>{0} pominięte</value>
+  </data>
+  <data name="Bulk.ReportSkipped.many" xml:space="preserve">
+    <value>{0} pominiętych</value>
+  </data>
+  <data name="Bulk.ReportNotAttempted.one" xml:space="preserve">
+    <value>{0} niewykonana</value>
+  </data>
+  <data name="Bulk.ReportNotAttempted.few" xml:space="preserve">
+    <value>{0} niewykonane</value>
+  </data>
+  <data name="Bulk.ReportNotAttempted.many" xml:space="preserve">
+    <value>{0} niewykonanych</value>
+  </data>
+  <data name="Bulk.ElapsedTime" xml:space="preserve">
+    <value>Czas: {0}</value>
+  </data>
+  <data name="Bulk.ShowDetails" xml:space="preserve">
+    <value>Pokaż szczegóły ({0})</value>
+  </data>
+  <data name="Bulk.HideDetails" xml:space="preserve">
+    <value>Ukryj szczegóły ({0})</value>
+  </data>
+  <data name="Bulk.OutcomeSent" xml:space="preserve">
+    <value>Wysłano</value>
+  </data>
+  <data name="Bulk.OutcomeFailed" xml:space="preserve">
+    <value>Błąd</value>
+  </data>
+  <data name="Bulk.OutcomeSkipped" xml:space="preserve">
+    <value>Pominięto</value>
+  </data>
+  <data name="Bulk.OutcomeNotAttempted" xml:space="preserve">
+    <value>Nie wykonano</value>
+  </data>
+  <data name="Bulk.ColumnStatus" xml:space="preserve">
+    <value>Stan</value>
+  </data>
+  <data name="Bulk.ColumnCustomer" xml:space="preserve">
+    <value>Klient</value>
+  </data>
+  <data name="Bulk.ColumnEmail" xml:space="preserve">
+    <value>E-mail</value>
+  </data>
+  <data name="Bulk.ColumnLicenceId" xml:space="preserve">
+    <value>Identyfikator licencji</value>
+  </data>
+  <data name="Bulk.ColumnTime" xml:space="preserve">
+    <value>Czas</value>
+  </data>
+  <data name="Bulk.ColumnReason" xml:space="preserve">
+    <value>Powód</value>
+  </data>
+  <data name="Bulk.ColumnServerMessage" xml:space="preserve">
+    <value>Komunikat serwera</value>
+  </data>
+  <data name="Bulk.DurationHoursMinutes" xml:space="preserve">
+    <value>{0} h {1} min</value>
+  </data>
+  <data name="Bulk.DurationMinutesSeconds" xml:space="preserve">
+    <value>{0} min {1} s</value>
+  </data>
+  <data name="Bulk.DurationSecondsOnly" xml:space="preserve">
+    <value>{0} s</value>
+  </data>
+  <data name="Confirm.BulkSendTitle" xml:space="preserve">
+    <value>Wysłać te licencje?</value>
+  </data>
+  <data name="Confirm.BulkSendMessage.one" xml:space="preserve">
+    <value>{0} wiadomość zostanie wysłana przez {1}. Potrwa to co najmniej {2}. Tej operacji nie da się odwołać.</value>
+  </data>
+  <data name="Confirm.BulkSendMessage.few" xml:space="preserve">
+    <value>{0} wiadomości zostaną wysłane przez {1}. Potrwa to co najmniej {2}. Tej operacji nie da się odwołać.</value>
+  </data>
+  <data name="Confirm.BulkSendMessage.many" xml:space="preserve">
+    <value>{0} wiadomości zostanie wysłanych przez {1}. Potrwa to co najmniej {2}. Tej operacji nie da się odwołać.</value>
+  </data>
+  <data name="Confirm.BulkSendAction" xml:space="preserve">
+    <value>Wyślij wiadomości</value>
+  </data>
+  <data name="Status.BulkPreviewOutOfDate" xml:space="preserve">
+    <value>Zaznaczenie albo ustawienia poczty zmieniły się od zbudowania tego podglądu, więc nic nie zostało wysłane. Podgląd poniżej jest aktualny — sprawdź go i wyślij ponownie.</value>
+  </data>
+  <data name="Status.BulkTickAtLeastOneLicence" xml:space="preserve">
+    <value>Zaznacz co najmniej jedną licencję do wysłania.</value>
+  </data>
+  <data name="Status.BulkOverRunLimit.one" xml:space="preserve">
+    <value>Zostałaby wysłana {0} wiadomość, więcej niż limit {1} na jedną serię. Podnieś limit w Ustawieniach albo zaznacz mniej licencji.</value>
+  </data>
+  <data name="Status.BulkOverRunLimit.few" xml:space="preserve">
+    <value>Zostałyby wysłane {0} wiadomości, więcej niż limit {1} na jedną serię. Podnieś limit w Ustawieniach albo zaznacz mniej licencji.</value>
+  </data>
+  <data name="Status.BulkOverRunLimit.many" xml:space="preserve">
+    <value>Zostałoby wysłanych {0} wiadomości, więcej niż limit {1} na jedną serię. Podnieś limit w Ustawieniach albo zaznacz mniej licencji.</value>
+  </data>
+  <data name="Status.BulkComposeFailed" xml:space="preserve">
+    <value>Nic nie zostało wysłane: nie udało się złożyć wiadomości dla {0} ({1}). {2}</value>
+  </data>
+  <data name="Status.BulkRunSentOfPlanned.one" xml:space="preserve">
+    <value>Wysłano {0} z {1} wiadomości.</value>
+  </data>
+  <data name="Status.BulkRunSentOfPlanned.few" xml:space="preserve">
+    <value>Wysłano {0} z {1} wiadomości.</value>
+  </data>
+  <data name="Status.BulkRunSentOfPlanned.many" xml:space="preserve">
+    <value>Wysłano {0} z {1} wiadomości.</value>
+  </data>
+  <data name="Status.BulkReportCopied" xml:space="preserve">
+    <value>Raport został skopiowany do schowka.</value>
+  </data>
 </root>

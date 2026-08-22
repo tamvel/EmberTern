@@ -17,6 +17,16 @@ namespace EmberTern.LicenseManager.Tests;
 /// </summary>
 internal sealed class FakeEmailSender : ILicenseEmailSender
 {
+    /// <summary>
+    /// The refusal a fake server gives, in the shape a real one does.
+    /// </summary>
+    /// <remarks>
+    /// ⭐ A named constant since L10.4, so a test that asserts the server's words REACHED the report cannot
+    /// drift from the sender that produced them — two copies of the same sentence is how such a test starts
+    /// proving nothing. ⚠ It is not a word of ours: it is the SERVER's, and it is never translated.
+    /// </remarks>
+    internal const string RefusalText = "5.7.8 Username and Password not accepted.";
+
     private readonly SendOutcome _outcome;
 
     private FakeEmailSender(SendOutcome outcome, string destination)
@@ -31,7 +41,7 @@ internal sealed class FakeEmailSender : ILicenseEmailSender
 
     /// <summary>A sender that always fails, with the server's words.</summary>
     internal static FakeEmailSender Failing(
-        string error = "5.7.8 Username and Password not accepted.",
+        string error = RefusalText,
         string destination = "smtp.example.test") =>
         new(SendOutcome.Failed(error), destination);
 

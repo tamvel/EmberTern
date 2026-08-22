@@ -39,6 +39,22 @@ public sealed record ConfirmRequest(
     /// every other word; a caller that ever needs a different way out sets this explicitly.
     /// </remarks>
     public MessageKey CancelLabel { get; init; } = ConfirmCatalog.Cancel;
+
+    /// <summary>
+    /// The number <see cref="Message"/> agrees with, when its key names a plural FAMILY.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ It exists because Polish needs three forms where English has two, and a confirmation that
+    /// states a count has to agree with it — <i>"1 wiadomości zostanie wysłanych"</i> is not a sentence.
+    /// The mechanism is the one <see cref="StatusMessage.Count"/> already uses, applied to the one other
+    /// place in this application where our own sentence carries a number the operator must read
+    /// correctly.</para>
+    /// <para>⚠ The count is ALWAYS argument <c>{0}</c> — <see cref="Loc.FormatCount"/> puts it there, in
+    /// one place — so <see cref="MessageArguments"/> must NOT repeat it.</para>
+    /// <para>⭐ <see langword="null"/> for every ordinary confirmation, which is all but one of them: the
+    /// resolution path is unchanged for those.</para>
+    /// </remarks>
+    public long? Count { get; init; }
 }
 
 /// <summary>
@@ -80,7 +96,13 @@ public sealed partial class ConfirmViewModel : ObservableObject
     public string Title => Loc.Text(_request.Title.Value);
 
     /// <summary>What will happen.</summary>
-    public string Message => Loc.Format(_request.Message.Value, [.. _request.MessageArguments]);
+    /// <remarks>
+    /// ⚠ A request carrying a <see cref="ConfirmRequest.Count"/> resolves through the plural family, so the
+    /// sentence agrees with the number in every language — see that member's remarks.
+    /// </remarks>
+    public string Message => _request.Count is { } count
+        ? Loc.FormatCount(_request.Message.Value, count, [.. _request.MessageArguments])
+        : Loc.Format(_request.Message.Value, [.. _request.MessageArguments]);
 
     /// <summary>The action's own name.</summary>
     public string ConfirmLabel => Loc.Text(_request.ConfirmLabel.Value);

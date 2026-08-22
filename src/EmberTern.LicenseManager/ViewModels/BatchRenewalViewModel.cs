@@ -164,7 +164,40 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
     public bool HasPreview => _previewed is { IsEmpty: false };
 
     /// <summary>⭐ <b>D‑3.</b> Whether the operation may run: something is ticked, and nothing is blocked.</summary>
-    public bool CanExtend => _previewed is { CanExecute: true };
+    /// <remarks>
+    /// ⚠ Since L10.4 it also answers <see langword="false"/> while a bulk send is running — 🔒 decision M,
+    /// see <see cref="IsBlockedByBulkSend"/>.
+    /// </remarks>
+    public bool CanExtend => !IsBlockedByBulkSend && _previewed is { CanExecute: true };
+
+    /// <summary>
+    /// ⛔ 🔒 <b>Decision M (§60.11 risk 1).</b> Set while a bulk send is in flight.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ The send loop <c>await</c>s, so the interface stays alive throughout — and every one of its
+    /// messages was COMPOSED before the first one left (§60.4 step 4). Extending a licence underneath a
+    /// running series would therefore mint a new artifact while a message describing the OLD one is still
+    /// queued to go out: the customer would receive a licence that had already been superseded, minutes
+    /// after it was. ⛔ The answer is to make the two operations mutually exclusive, not to re-compose
+    /// mid-run.
+    /// </remarks>
+    public bool IsBlockedByBulkSend
+    {
+        get => _isBlockedByBulkSend;
+        set
+        {
+            if (_isBlockedByBulkSend == value)
+            {
+                return;
+            }
+
+            _isBlockedByBulkSend = value;
+            OnPropertyChanged();
+            Announce();
+        }
+    }
+
+    private bool _isBlockedByBulkSend;
 
     /// <summary>Whether anything at all is standing in the way.</summary>
     public bool HasBlockers => _previewed is { } plan && plan.Blocked.Count > 0;

@@ -128,7 +128,8 @@ public sealed class LocalizationMechanismTests
         var found = Catalogs().Select(c => c.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
 
         // ⚠ Updated deliberately by L8.2 (the two catalogs the message strip and the confirmation dialog
-        //   resolve through), by L8.4 (the twelve the C# surfaces resolve through) and by L9 (About).
+        //   resolve through), by L8.4 (the twelve the C# surfaces resolve through), by L9 (About) and by
+        //   L10.4 (the bulk-send card's own running commentary).
         //   ⛔ This list is a TRIPWIRE, not bookkeeping: a new catalog must fail here and be added
         //   on purpose, because a catalog nobody swept is a catalog nobody guards.
         Assert.Equal(
@@ -136,6 +137,7 @@ public sealed class LocalizationMechanismTests
                 nameof(AboutCatalog),
                 nameof(ArtifactStandingText),
                 nameof(BatchCatalog),
+                nameof(BulkSendCatalog),
                 nameof(ConfirmCatalog),
                 nameof(FileTypeCatalog),
                 nameof(FilterCatalog),

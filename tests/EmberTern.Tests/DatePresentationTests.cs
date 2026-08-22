@@ -244,6 +244,12 @@ public class DatePresentationTests
                 "The licences list and its detail line. ISO is the License Manager's ratified date form "
                 + "(§36.2) and matches what its own register stores, so an operator can correlate a row "
                 + "with the .db by eye.",
+            ["src/EmberTern.LicenseManager/ViewModels/BulkSendViewModel.cs"] =
+                "The bulk-send report's per-attempt TIME (L10.4). ISO is the License Manager's ratified "
+                + "date form for EVERY date (§36.2, terminology.md §4.4), and this one is read beside "
+                + "`licence.sent` audit lines that store the same instant as RFC 3339 — so an operator "
+                + "correlating a report row with the register by eye is comparing two renderings of one "
+                + "format rather than translating between two.",
             ["src/EmberTern.LicenseManager/ViewModels/AboutViewModel.cs"] =
                 "The About window's release date (L9). ⭐ The PRODUCT renders this one date in the "
                 + "reader's long-date pattern, arguing that a single prominent date is exactly the case "

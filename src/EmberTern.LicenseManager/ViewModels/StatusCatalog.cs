@@ -391,6 +391,48 @@ internal static class StatusCatalog
     /// vaguer than the run.</remarks>
     public static MessageKey BulkNotAttemptedRunStopped => Key(nameof(BulkNotAttemptedRunStopped));
 
+    // ── Bulk sending: what the strip says about a run (L10.4) ────────────────────────
+    // ⭐ These are the sentences RAISED at one moment and read at another. The card's own running
+    //   commentary — the preview, the progress line, the report's conclusion — lives in `BulkSendCatalog`.
+    //   ⛔ The one sentence both surfaces say is `BulkRunSentOfPlanned`, and it is read from HERE by both.
+
+    /// <summary>The selection or the e-mail settings changed since this preview was built…</summary>
+    /// <remarks>
+    /// ⚠ A sentence of its own rather than a reuse of <see cref="PreviewOutOfDate"/>: that one names a
+    /// target date and says nothing was ISSUED, neither of which is true here. ⛔ Widening it to serve both
+    /// would make it vaguer than either operation.
+    /// </remarks>
+    public static MessageKey BulkPreviewOutOfDate => Key(nameof(BulkPreviewOutOfDate));
+
+    /// <summary>Tick at least one licence to send.</summary>
+    public static MessageKey BulkTickAtLeastOneLicence => Key(nameof(BulkTickAtLeastOneLicence));
+
+    /// <summary>{0} messages would be sent, more than the limit of {1} for one run…</summary>
+    /// <remarks>
+    /// ⭐ Read by BOTH the card (which shows why the action is unavailable) and the strip (if the command is
+    /// reached anyway). ⛔ Raising the limit means going into Settings deliberately — §60.0 forbids any way
+    /// around it.
+    /// </remarks>
+    public static MessageKey BulkOverRunLimit => Key(nameof(BulkOverRunLimit));
+
+    /// <summary>Nothing was sent: the message for {0} ({1}) could not be composed. {2}</summary>
+    /// <remarks>
+    /// ⭐ §60.4 step 4 in one sentence: everything is composed before anything leaves, so a licence that
+    /// cannot be composed stops the whole run and is NAMED. ⚠ {2} carries the composer's own sentences.
+    /// </remarks>
+    public static MessageKey BulkComposeFailed => Key(nameof(BulkComposeFailed));
+
+    /// <summary>{0} of {1} messages were sent.</summary>
+    /// <remarks>
+    /// ⭐⭐ The run's headline, and the ONE sentence the card and the strip share — the arrangement
+    /// <c>BatchRenewalViewModel</c> uses for its own result. ⚠ The counts come from the result's attempt
+    /// list, so this can never overstate what happened.
+    /// </remarks>
+    public static MessageKey BulkRunSentOfPlanned => Key(nameof(BulkRunSentOfPlanned));
+
+    /// <summary>The report was copied to the clipboard.</summary>
+    public static MessageKey BulkReportCopied => Key(nameof(BulkReportCopied));
+
     /// <summary>A username cannot be used without STARTTLS — the password would travel unencrypted. Either en...</summary>
     public static MessageKey SmtpUsernameNeedsStartTls => Key(nameof(SmtpUsernameNeedsStartTls));
 

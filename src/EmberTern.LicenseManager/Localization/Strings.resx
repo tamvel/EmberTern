@@ -1292,4 +1292,178 @@
   <data name="Status.BulkNotAttemptedRunStopped" xml:space="preserve">
     <value>Not sent — the run stopped earlier.</value>
   </data>
+  <data name="Bulk.TickLicences" xml:space="preserve">
+    <value>Tick the licences you want to send.</value>
+  </data>
+  <data name="Bulk.WillSend.one" xml:space="preserve">
+    <value>{0} message will be sent.</value>
+  </data>
+  <data name="Bulk.WillSend.other" xml:space="preserve">
+    <value>{0} messages will be sent.</value>
+  </data>
+  <data name="Bulk.ToAddresses.one" xml:space="preserve">
+    <value>It goes to {0} address.</value>
+  </data>
+  <data name="Bulk.ToAddresses.other" xml:space="preserve">
+    <value>They go to {0} addresses.</value>
+  </data>
+  <data name="Bulk.AtLeast" xml:space="preserve">
+    <value>It will take at least {0}.</value>
+  </data>
+  <data name="Bulk.DuplicateAddresses.one" xml:space="preserve">
+    <value>{0} address will receive more than one message.</value>
+  </data>
+  <data name="Bulk.DuplicateAddresses.other" xml:space="preserve">
+    <value>{0} addresses will receive more than one message.</value>
+  </data>
+  <data name="Bulk.SkippedCount.one" xml:space="preserve">
+    <value>{0} licence is skipped.</value>
+  </data>
+  <data name="Bulk.SkippedCount.other" xml:space="preserve">
+    <value>{0} licences are skipped.</value>
+  </data>
+  <data name="Bulk.HeldSection" xml:space="preserve">
+    <value>Held ({0})</value>
+  </data>
+  <data name="Bulk.SendableSection" xml:space="preserve">
+    <value>Will be sent ({0})</value>
+  </data>
+  <data name="Bulk.Pacing" xml:space="preserve">
+    <value>One message every {0} s, at most {1} per run, through {2}.</value>
+  </data>
+  <data name="Bulk.AcceptedNotDelivered" xml:space="preserve">
+    <value>“Sent” means the server accepted the message. It does not mean the customer received it.</value>
+  </data>
+  <data name="Bulk.SendingNow" xml:space="preserve">
+    <value>Sending {0} of {1} — {2} &lt;{3}&gt;</value>
+  </data>
+  <data name="Bulk.WaitingSeconds" xml:space="preserve">
+    <value>Waiting {0} s…</value>
+  </data>
+  <data name="Bulk.Stopping" xml:space="preserve">
+    <value>Stopping — finishing the current attempt…</value>
+  </data>
+  <data name="Bulk.ProgressSent.one" xml:space="preserve">
+    <value>{0} sent</value>
+  </data>
+  <data name="Bulk.ProgressSent.other" xml:space="preserve">
+    <value>{0} sent</value>
+  </data>
+  <data name="Bulk.ConclusionNothingToSend" xml:space="preserve">
+    <value>Nothing was sent — no ticked licence qualified.</value>
+  </data>
+  <data name="Bulk.ConclusionCompleted" xml:space="preserve">
+    <value>The run finished and every message was accepted.</value>
+  </data>
+  <data name="Bulk.ConclusionStoppedAfterError" xml:space="preserve">
+    <value>The run stopped after an error.</value>
+  </data>
+  <data name="Bulk.ConclusionStoppedByOperator" xml:space="preserve">
+    <value>You stopped the run.</value>
+  </data>
+  <data name="Bulk.ReportFailed.one" xml:space="preserve">
+    <value>{0} failed</value>
+  </data>
+  <data name="Bulk.ReportFailed.other" xml:space="preserve">
+    <value>{0} failed</value>
+  </data>
+  <data name="Bulk.ReportSkipped.one" xml:space="preserve">
+    <value>{0} skipped</value>
+  </data>
+  <data name="Bulk.ReportSkipped.other" xml:space="preserve">
+    <value>{0} skipped</value>
+  </data>
+  <data name="Bulk.ReportNotAttempted.one" xml:space="preserve">
+    <value>{0} not attempted</value>
+  </data>
+  <data name="Bulk.ReportNotAttempted.other" xml:space="preserve">
+    <value>{0} not attempted</value>
+  </data>
+  <data name="Bulk.ElapsedTime" xml:space="preserve">
+    <value>Time: {0}</value>
+  </data>
+  <data name="Bulk.ShowDetails" xml:space="preserve">
+    <value>Show details ({0})</value>
+  </data>
+  <data name="Bulk.HideDetails" xml:space="preserve">
+    <value>Hide details ({0})</value>
+  </data>
+  <data name="Bulk.OutcomeSent" xml:space="preserve">
+    <value>Sent</value>
+  </data>
+  <data name="Bulk.OutcomeFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="Bulk.OutcomeSkipped" xml:space="preserve">
+    <value>Skipped</value>
+  </data>
+  <data name="Bulk.OutcomeNotAttempted" xml:space="preserve">
+    <value>Not attempted</value>
+  </data>
+  <data name="Bulk.ColumnStatus" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Bulk.ColumnCustomer" xml:space="preserve">
+    <value>Customer</value>
+  </data>
+  <data name="Bulk.ColumnEmail" xml:space="preserve">
+    <value>E-mail</value>
+  </data>
+  <data name="Bulk.ColumnLicenceId" xml:space="preserve">
+    <value>Licence identifier</value>
+  </data>
+  <data name="Bulk.ColumnTime" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="Bulk.ColumnReason" xml:space="preserve">
+    <value>Reason</value>
+  </data>
+  <data name="Bulk.ColumnServerMessage" xml:space="preserve">
+    <value>Server message</value>
+  </data>
+  <data name="Bulk.DurationHoursMinutes" xml:space="preserve">
+    <value>{0} h {1} min</value>
+  </data>
+  <data name="Bulk.DurationMinutesSeconds" xml:space="preserve">
+    <value>{0} min {1} s</value>
+  </data>
+  <data name="Bulk.DurationSecondsOnly" xml:space="preserve">
+    <value>{0} s</value>
+  </data>
+  <data name="Confirm.BulkSendTitle" xml:space="preserve">
+    <value>Send these licences?</value>
+  </data>
+  <data name="Confirm.BulkSendMessage.one" xml:space="preserve">
+    <value>{0} message will be sent through {1}. It will take at least {2}. This cannot be recalled.</value>
+  </data>
+  <data name="Confirm.BulkSendMessage.other" xml:space="preserve">
+    <value>{0} messages will be sent through {1}. It will take at least {2}. This cannot be recalled.</value>
+  </data>
+  <data name="Confirm.BulkSendAction" xml:space="preserve">
+    <value>Send messages</value>
+  </data>
+  <data name="Status.BulkPreviewOutOfDate" xml:space="preserve">
+    <value>The selection or the e-mail settings changed since this preview was built, so nothing was sent. The preview below is up to date — check it and send again.</value>
+  </data>
+  <data name="Status.BulkTickAtLeastOneLicence" xml:space="preserve">
+    <value>Tick at least one licence to send.</value>
+  </data>
+  <data name="Status.BulkOverRunLimit.one" xml:space="preserve">
+    <value>{0} message would be sent, more than the limit of {1} for one run. Raise the limit in Settings, or tick fewer licences.</value>
+  </data>
+  <data name="Status.BulkOverRunLimit.other" xml:space="preserve">
+    <value>{0} messages would be sent, more than the limit of {1} for one run. Raise the limit in Settings, or tick fewer licences.</value>
+  </data>
+  <data name="Status.BulkComposeFailed" xml:space="preserve">
+    <value>Nothing was sent: the message for {0} ({1}) could not be composed. {2}</value>
+  </data>
+  <data name="Status.BulkRunSentOfPlanned.one" xml:space="preserve">
+    <value>{0} of {1} messages was sent.</value>
+  </data>
+  <data name="Status.BulkRunSentOfPlanned.other" xml:space="preserve">
+    <value>{0} of {1} messages were sent.</value>
+  </data>
+  <data name="Status.BulkReportCopied" xml:space="preserve">
+    <value>The report was copied to the clipboard.</value>
+  </data>
 </root>
