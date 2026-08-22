@@ -75,7 +75,11 @@ public static class RegisterJsonl
 
         var lines = new List<string>();
 
-        foreach (var customer in register.GetCustomers())
+        // ⚠⚠ GetAllCustomers, never GetCustomers: this export is the register's escape hatch, and the
+        //    filtered read would silently leave every RETIRED customer out of the file somebody reaches
+        //    for when the application will not open. Rule #11 — the export may not know less than the
+        //    database. Same call, same reason, as GetAllLicenses below.
+        foreach (var customer in register.GetAllCustomers())
         {
             lines.Add(Write(writer =>
             {
@@ -87,6 +91,11 @@ public static class RegisterJsonl
                 WriteOptional(writer, "lastName", customer.LastName);
                 WriteOptional(writer, "email", customer.Email);
                 WriteOptional(writer, "notes", customer.Notes);
+
+                // ⚠ And retirement travels with them, for the reason the licence's does.
+                WriteOptional(writer, "retiredAt",
+                    customer.RetiredAt is { } retired ? Stamp(retired) : null);
+
                 writer.WriteString("createdAt", Stamp(customer.CreatedAt));
                 writer.WriteString("updatedAt", Stamp(customer.UpdatedAt));
             }));

@@ -1494,7 +1494,7 @@
     <value>Customer {0} is not in the register, so there is nothing to remove.</value>
   </data>
   <data name="Status.CustomerStillHasLicences" xml:space="preserve">
-    <value>{0} still has {1} licence(s), so the customer cannot be removed. An issued licence carries artifacts that can never be deleted, and the register has to be able to say who was delivered what. Remove the licences first, if that is really what you mean to do.</value>
+    <value>{0} still has {1} active licence(s), so the customer cannot be removed. Remove those licences first if that is really what you mean to do — a customer whose licences have all been retired can then be retired themselves, and the whole history is kept either way.</value>
   </data>
   <data name="Status.CustomerRemoved" xml:space="preserve">
     <value>{0} was removed. The register’s history still records who they were — that entry cannot be deleted.</value>
@@ -1555,5 +1555,14 @@
   </data>
   <data name="Confirm.RemoveLicenceAction" xml:space="preserve">
     <value>Remove licence</value>
+  </data>
+  <data name="Status.CustomerIsRetired" xml:space="preserve">
+    <value>{0} was retired out of the active register and cannot be changed, and no new licence can be written for them. Their licence history and their audit trail are intact and readable.</value>
+  </data>
+  <data name="Status.CustomerRetired" xml:space="preserve">
+    <value>{0} was retired. They are gone from the active register, and their {1} licence row(s), every artifact ever issued and the whole audit trail are kept — they cannot be deleted.</value>
+  </data>
+  <data name="Confirm.RetireCustomerMessage" xml:space="preserve">
+    <value>{0} ({1}) has no active licences, but {2} retired licence row(s) that can never be deleted — an issued licence carries artifacts the register must keep. The customer will therefore be RETIRED: they leave the active register and can no longer be edited or given a licence, and their whole history is kept. This is an administrative action.</value>
   </data>
 </root>

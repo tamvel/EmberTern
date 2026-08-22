@@ -467,7 +467,17 @@ internal static class StatusCatalog
     /// <summary>Customer {0} is not in the register, so there is nothing to remove.</summary>
     public static MessageKey CustomerNotInRegister => Key(nameof(CustomerNotInRegister));
 
-    /// <summary>{0} still has {1} licence(s) and cannot be removed…</summary>
+    /// <summary>{0} was retired out of the active register and cannot be changed.</summary>
+    /// <remarks>
+    /// ⭐ Raised when something tries to EDIT a retired customer, when something tries to write a LICENCE
+    /// for one, and when something tries to retire them twice. ⛔ There is no "unretire".
+    /// </remarks>
+    public static MessageKey CustomerIsRetired => Key(nameof(CustomerIsRetired));
+
+    /// <summary>{0} was retired. Their {1} licence(s) and the whole history are kept.</summary>
+    public static MessageKey CustomerRetired => Key(nameof(CustomerRetired));
+
+    /// <summary>{0} still has {1} ACTIVE licence(s) and cannot be removed…</summary>
     /// <remarks>
     /// ⭐ It states the OBSTACLE and what to do about it, because the operator can act on it: remove the
     /// licences first. ⛔ Not "this cannot be done" — a refusal that does not say what stands in the way is

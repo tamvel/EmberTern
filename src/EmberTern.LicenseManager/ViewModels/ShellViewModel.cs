@@ -417,7 +417,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
             return;
         }
 
-        LicenceRemoval outcome;
+        RemovalOutcome outcome;
         try
         {
             outcome = _register.RemoveLicense(licence.LicenseId);
@@ -438,7 +438,7 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         // ⚠ And the history panel, which was showing that licence's artifacts.
         History.Load(null);
 
-        Message = outcome == LicenceRemoval.Deleted
+        Message = outcome == RemovalOutcome.Deleted
             ? StatusMessage.Success(StatusCatalog.LicenceDeleted, shortId)
             : StatusMessage.Success(
                 StatusCatalog.LicenceRetired,
@@ -447,22 +447,27 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     }
 
     /// <summary>
-    /// Removes the selected customer — after saying exactly what that does, and only when it is safe.
+    /// Removes the selected customer from the active register — after saying which of the two things that
+    /// means, and only when it is allowed.
     /// </summary>
     /// <remarks>
-    /// <para>⭐⭐ <b>THREE ANSWERS, and only one of them is a question.</b> Nothing selected is a nudge;
-    /// a customer who still has licences is a REFUSAL that names the obstacle; and a customer who has none
-    /// is the only case that reaches a confirmation. ⛔ A confirmation offered for something that cannot
+    /// <para>⭐⭐ <b>THREE ANSWERS, and the same shape as removing a licence.</b> Nothing selected is a
+    /// nudge; a customer with a LIVE licence is a refusal that names how many; and a customer with none is
+    /// the only case that reaches a confirmation. ⛔ A confirmation offered for something that cannot
     /// happen teaches the operator that confirmations are noise.</para>
     ///
-    /// <para>⭐ The count is read from the REGISTER rather than from <c>Licenses</c>, which is a snapshot
-    /// taken when the customer was selected. A licence added since would be invisible to that list, and
-    /// the guard has to hold against what the database contains, not against what a panel remembers.
-    /// ⚠ The register checks again inside its own transaction — this one is for the WORDS, that one is the
-    /// guarantee.</para>
+    /// <para>⚠⚠ <b>The count that decides the REFUSAL and the count that decides the ACT are two different
+    /// numbers, deliberately.</b> Live licences decide whether this is allowed at all; the total row count
+    /// — retired ones included — decides whether the register can delete the customer or must retire them.
+    /// ⛔ Collapsing them is precisely the defect this repairs: a single count that ignored retired
+    /// licences reads zero, the application attempts a DELETE, and SQLite refuses it on a row the operator
+    /// was never shown.</para>
     ///
-    /// <para>⛔ <b>With no confirmer wired it REFUSES rather than proceeding</b> — the rule L6.1a's
-    /// <c>Forget settings</c> established, and the stakes here are the same class: an operator's data.</para>
+    /// <para>⭐ Both are read from the REGISTER rather than from the panels, which are snapshots taken when
+    /// the customer was selected. The register reads them again inside its own transaction; these are for
+    /// the WORDS, those are the guarantee.</para>
+    ///
+    /// <para>⛔ <b>With no confirmer wired it REFUSES rather than proceeding.</b></para>
     /// </remarks>
     [RelayCommand]
     private async Task RemoveCustomerAsync()
@@ -473,13 +478,13 @@ public sealed partial class ShellViewModel : MessageHostViewModel
             return;
         }
 
-        var licences = _register.CountLicenses(customer.CustomerId);
-        if (licences > 0)
+        var active = _register.CountActiveLicenses(customer.CustomerId);
+        if (active > 0)
         {
             Message = StatusMessage.Warning(
                 StatusCatalog.CustomerStillHasLicences,
                 customer.Name,
-                licences.ToString(CultureInfo.InvariantCulture));
+                active.ToString(CultureInfo.InvariantCulture));
             return;
         }
 
@@ -489,12 +494,19 @@ public sealed partial class ShellViewModel : MessageHostViewModel
             return;
         }
 
+        // ⭐ ALL rows, retired included — the foreign key's own view, and the only number that may decide
+        //   whether a DELETE is even attempted.
+        var rows = _register.CountLicenses(customer.CustomerId);
+
         var confirmed = await Confirm(new ConfirmRequest(
             ConfirmCatalog.RemoveCustomerTitle,
-            ConfirmCatalog.RemoveCustomerMessage,
+            rows == 0
+                ? ConfirmCatalog.RemoveCustomerMessage
+                : ConfirmCatalog.RetireCustomerMessage,
             ConfirmCatalog.RemoveCustomerAction,
             customer.Name,
-            customer.CustomerId)).ConfigureAwait(true);
+            customer.CustomerId,
+            rows.ToString(CultureInfo.InvariantCulture))).ConfigureAwait(true);
 
         if (!confirmed)
         {
@@ -502,14 +514,14 @@ public sealed partial class ShellViewModel : MessageHostViewModel
             return;
         }
 
+        RemovalOutcome outcome;
         try
         {
-            _register.DeleteCustomer(customer.CustomerId);
+            outcome = _register.RemoveCustomer(customer.CustomerId);
         }
         catch (RegisterIntegrityException e)
         {
-            // ⭐ The register's own sentence, resolved from its key. ⛔ Not `e.Message`, which is the
-            //   English diagnostic half.
+            // ⭐ The register's own sentence, resolved from its key. ⛔ Not `e.Message`.
             Message = StatusMessage.Error(e.Key, [.. e.Arguments]);
             return;
         }
@@ -519,7 +531,12 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         NewCustomerCommand.Execute(null);
         ReloadCustomers();
 
-        Message = StatusMessage.Success(StatusCatalog.CustomerRemoved, customer.Name);
+        Message = outcome == RemovalOutcome.Deleted
+            ? StatusMessage.Success(StatusCatalog.CustomerRemoved, customer.Name)
+            : StatusMessage.Success(
+                StatusCatalog.CustomerRetired,
+                customer.Name,
+                rows.ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>Creates or updates the customer.</summary>

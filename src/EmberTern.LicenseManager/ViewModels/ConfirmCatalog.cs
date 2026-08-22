@@ -84,6 +84,14 @@ internal static class ConfirmCatalog
     /// <summary>Remove licence</summary>
     public static MessageKey RemoveLicenceAction => Key(nameof(RemoveLicenceAction));
 
+    /// <summary>{0} ({1}) has {2} retired licence(s) … the customer will be retired.</summary>
+    /// <remarks>
+    /// ⭐ The second of two messages, exactly as the licence side has: the operator is confirming a
+    /// different act — retiring a row whose licence history is permanent, rather than erasing one that
+    /// never had any — and one hedged sentence would be vague about the part that matters.
+    /// </remarks>
+    public static MessageKey RetireCustomerMessage => Key(nameof(RetireCustomerMessage));
+
     /// <summary>Remove this customer?</summary>
     public static MessageKey RemoveCustomerTitle => Key(nameof(RemoveCustomerTitle));
 

@@ -32,7 +32,7 @@ namespace EmberTern.LicenseManager.Data;
 public sealed class LicenseRegister : IDisposable
 {
     /// <summary>The schema version this build writes.</summary>
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     private readonly SqliteConnection _connection;
     private readonly Func<DateTimeOffset> _clock;
@@ -127,6 +127,11 @@ public sealed class LicenseRegister : IDisposable
         if (from < 3)
         {
             Execute(SchemaV3, transaction);
+        }
+
+        if (from < 4)
+        {
+            Execute(SchemaV4, transaction);
         }
 
         Execute("INSERT INTO schema_meta(key, value) VALUES('version', $v) " +
@@ -251,6 +256,22 @@ public sealed class LicenseRegister : IDisposable
         ALTER TABLE licenses ADD COLUMN retired_at TEXT;
         """;
 
+    // ⭐⭐ SCHEMA 4 — the same column on `customers`, and it exists because SCHEMA 3 CREATED AN
+    //    INCONSISTENCY WITHOUT IT.
+    //
+    //    Retiring a customer's every licence emptied their list on screen and left them undeletable:
+    //    `licenses` references `customers`, and a RETIRED licence is still a row. The operator saw an
+    //    empty list, asked to remove the customer, and got a refusal naming licences they could no longer
+    //    see. ⛔ The fix is NOT to stop counting retired licences — that would produce a count of zero
+    //    followed by a foreign-key error from the database a moment later, which is the one thing a
+    //    pre-flight check may not do.
+    //
+    //    ⭐ So a customer retires exactly as a licence does, and for the same reason: the row cannot go,
+    //    so it leaves the active register instead.
+    private const string SchemaV4 = """
+        ALTER TABLE customers ADD COLUMN retired_at TEXT;
+        """;
+
     // ── Customers ───────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Creates or updates a customer, and records it.</summary>
@@ -265,6 +286,20 @@ public sealed class LicenseRegister : IDisposable
 
         var now = _clock();
         var existing = GetCustomer(customer.CustomerId);
+
+        // ⭐⭐ A RETIRED CUSTOMER IS NOT EDITABLE, and the reason is the one the licence side already
+        //    states: they are invisible to every surface, so a write that succeeded would change
+        //    something the operator cannot see and cannot check. ⛔ And it must also stop a NEW LICENCE
+        //    being written for them — `SaveLicense` refuses separately, because a licence save does not
+        //    come through here.
+        if (existing is { IsRetired: true })
+        {
+            throw new RegisterIntegrityException(
+                StatusCatalog.CustomerIsRetired,
+                $"Customer {customer.CustomerId} was retired out of the active register and cannot be " +
+                "changed. Their licences and their history are intact and readable.",
+                existing.Name);
+        }
         var saved = customer with
         {
             Name = customer.Name.Trim(),
@@ -302,13 +337,42 @@ public sealed class LicenseRegister : IDisposable
         return saved;
     }
 
-    /// <summary>Every customer, by name.</summary>
+    /// <summary>Every ACTIVE customer, by name.</summary>
+    /// <remarks>
+    /// ⚠⚠ <b>Retired customers are excluded, and that is what "removed from the active register" MEANS.</b>
+    /// ⭐ Every consumer of this is a working surface — the customers rail, the search, the batch's lookup
+    /// — and none of them may offer a customer the register considers done.
+    /// ⛔ For a reader that must see EVERYTHING (the JSONL escape hatch, the backup's own counts) the
+    /// method is <see cref="GetAllCustomers"/>. A reader that quietly used this one would export less than
+    /// the database holds — the rule-#11 trap the licence side already had to answer.
+    /// </remarks>
     public IReadOnlyList<CustomerRecord> GetCustomers() =>
+        Read("SELECT * FROM customers WHERE retired_at IS NULL ORDER BY name COLLATE NOCASE;",
+            ReadCustomer);
+
+    /// <summary>Every customer the register holds, retired ones included, by name.</summary>
+    /// <remarks>
+    /// ⭐ The counterpart of <see cref="GetAllLicenses"/>, and it exists for the same two readers: the
+    /// JSONL export and the backup's counts. ⛔ Not for a working surface.
+    /// </remarks>
+    public IReadOnlyList<CustomerRecord> GetAllCustomers() =>
         Read("SELECT * FROM customers ORDER BY name COLLATE NOCASE;", ReadCustomer);
 
     /// <summary>One customer, or <see langword="null"/>.</summary>
-    public CustomerRecord? GetCustomer(string customerId) => ReadOne(
-        "SELECT * FROM customers WHERE customer_id = $id;", ReadCustomer, ("$id", customerId));
+    /// <remarks>
+    /// ⚠ This one DOES find a retired customer, unlike <see cref="GetCustomers"/> — it is the identity
+    /// lookup the register's own guards use, and a guard that could not see a retired row could not refuse
+    /// to write to it. Same arrangement as <see cref="GetLicense(string)"/>.
+    /// </remarks>
+    public CustomerRecord? GetCustomer(string customerId) => GetCustomer(customerId, null);
+
+    // ⚠⚠ THE TRANSACTION IS THREADED THROUGH, and it is not optional: Microsoft.Data.Sqlite refuses a
+    //    command with no transaction while one is pending on the connection. A guard that read a customer
+    //    the convenient way from inside a licence save threw `InvalidOperationException` on every save —
+    //    the same rule this file already states for the licence reads.
+    private CustomerRecord? GetCustomer(string customerId, SqliteTransaction? transaction) => ReadOne(
+        "SELECT * FROM customers WHERE customer_id = $id;", transaction, ReadCustomer,
+        ("$id", customerId));
 
     /// <summary>How many licences a customer has. ⭐ What decides whether they can be removed at all.</summary>
     /// <remarks>
@@ -330,30 +394,66 @@ public sealed class LicenseRegister : IDisposable
         r => r.GetInt32(0), ("$id", customerId))[0];
 
     /// <summary>
-    /// Removes a customer who has no licences, and records that it happened.
+    /// How many ACTIVE licences a customer has — ⭐ what decides whether they may be removed at all.
     /// </summary>
     /// <remarks>
-    /// <para>⭐⭐ <b>"Removed" means the working row goes and the HISTORY keeps them, and that is the only
-    /// shape this register allows.</b> The audit log is append-only at the database (a trigger aborts every
-    /// DELETE on it), so the <c>customer.deleted</c> line written here — carrying the whole record in
-    /// <c>before_json</c> — outlives the row permanently. ⛔ Nothing is lost, which is Architecture rule
-    /// #11 applied to an operator's mistake rather than to a signature.</para>
+    /// <para>⭐⭐ <b>The SECOND of two counts, and keeping them apart is the whole repair.</b> They answer
+    /// different questions and a single number cannot serve both:</para>
+    /// <list type="bullet">
+    ///   <item><see cref="CountLicenses"/> — every row, retired included. The FOREIGN KEY's own view, and
+    ///   the only number that may decide whether a <c>DELETE</c> is attempted.</item>
+    ///   <item>this one — the live licences. What the operator can see, and therefore what a refusal is
+    ///   allowed to talk about.</item>
+    /// </list>
+    /// <para>⛔ <b>Do not collapse them.</b> Making the single count ignore retired rows was the obvious
+    /// fix and it is the wrong one: it reads zero, the application attempts a <c>DELETE</c>, and SQLite
+    /// refuses it on a row the operator was never shown. A pre-flight check that hands the failure to the
+    /// database is worse than no check at all.</para>
+    /// </remarks>
+    public int CountActiveLicenses(string customerId) => CountActiveLicenses(customerId, null);
+
+    private int CountActiveLicenses(string customerId, SqliteTransaction? transaction) => Read(
+        "SELECT COUNT(*) FROM licenses WHERE customer_id = $id AND retired_at IS NULL;", transaction,
+        r => r.GetInt32(0), ("$id", customerId))[0];
+
+    /// <summary>
+    /// Takes a customer out of the active register, and records that it happened.
+    /// </summary>
+    /// <returns>
+    /// <see cref="RemovalOutcome.Deleted"/> when the row itself is gone, or
+    /// <see cref="RemovalOutcome.Retired"/> when it was kept and marked.
+    /// </returns>
+    /// <remarks>
+    /// <para>⭐⭐ <b>THREE ANSWERS, AND THE DATA CHOOSES — the exact counterpart of
+    /// <see cref="RemoveLicense"/>.</b></para>
+    /// <list type="bullet">
+    ///   <item><b>Still has an ACTIVE licence</b> → refused, naming how many. That is a rule of ours and
+    ///   it is the one of the three that is: a customer with a live licence is not somebody to tidy away,
+    ///   and their licences are removable one at a time by an operator who means it.</item>
+    ///   <item><b>No licence rows at all</b> → the row is DELETED. Nothing references it, so nothing is
+    ///   orphaned.</item>
+    ///   <item><b>Only RETIRED licences</b> → the row is RETIRED. ⚠⚠ <b>This is the case schema 3 left
+    ///   broken.</b> A retired licence is still a row in <c>licenses</c> pointing here, so
+    ///   <c>DELETE FROM customers</c> fails with <c>SQLITE_CONSTRAINT_FOREIGNKEY</c> however empty the
+    ///   customer's list looks on screen.</item>
+    /// </list>
     ///
-    /// <para>⭐⭐ <b>A customer with even ONE licence is REFUSED, and it is not a policy — it is what the
-    /// schema already says.</b> <c>licenses.customer_id</c> is a foreign key and <c>PRAGMA foreign_keys</c>
-    /// is ON, so the DELETE would fail anyway; and the cascade an impatient version of this would need is
-    /// unreachable, because <c>issued_artifacts</c> aborts every DELETE by trigger. So there is no order of
-    /// operations that removes a customer who has ever been issued anything. ⭐ Refusing WITH THE COUNT is
-    /// therefore the honest answer rather than a limitation: the operator is told what stands in the way,
-    /// and removing the licences is a decision they take separately and deliberately.</para>
+    /// <para>⛔⛔ <b>THE DELETE BRANCH IS TAKEN ONLY WHEN THE ROW COUNT IS ZERO — never when a count that
+    /// ignored retired licences happens to read zero.</b> "The counter said 0, we tried, the database said
+    /// no" is the failure this method is shaped to make unreachable: the two counts are asked separately
+    /// and they mean different things. <see cref="CountActiveLicenses"/> decides whether the operation is
+    /// ALLOWED; <see cref="CountLicenses"/> decides which of the two it IS.</para>
     ///
-    /// <para>⚠ The count is read INSIDE the transaction, so the answer the refusal quotes is the answer the
-    /// DELETE would have faced.</para>
+    /// <para>⭐ Both counts are read INSIDE the transaction, so the answers the decision rests on are the
+    /// answers the statement would have faced.</para>
+    ///
+    /// <para>⛔ The audit log is untouched in every case, and cannot be: it is append-only at the database.
+    /// All three paths that change anything ADD a line carrying the whole record in <c>before_json</c>.</para>
     /// </remarks>
     /// <exception cref="RegisterIntegrityException">
-    /// The customer is not in the register, or still has licences.
+    /// The customer is not in the register, is already retired, or still has an active licence.
     /// </exception>
-    public void DeleteCustomer(string customerId)
+    public RemovalOutcome RemoveCustomer(string customerId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(customerId);
 
@@ -361,9 +461,7 @@ public sealed class LicenseRegister : IDisposable
 
         using var transaction = _connection.BeginTransaction();
 
-        var existing = ReadOne(
-            "SELECT * FROM customers WHERE customer_id = $id;", transaction, ReadCustomer,
-            ("$id", customerId));
+        var existing = GetCustomer(customerId, transaction);
 
         if (existing is null)
         {
@@ -373,34 +471,64 @@ public sealed class LicenseRegister : IDisposable
                 customerId);
         }
 
-        var licences = CountLicenses(customerId, transaction);
+        if (existing.IsRetired)
+        {
+            throw new RegisterIntegrityException(
+                StatusCatalog.CustomerIsRetired,
+                $"Customer {customerId} was already retired out of the active register.",
+                existing.Name);
+        }
 
-        if (licences > 0)
+        // ⭐ WHETHER the operation is allowed. A live licence is the operator's business to deal with
+        //   first, and it is the only refusal here that is a decision of ours rather than the schema's.
+        var active = CountActiveLicenses(customerId, transaction);
+
+        if (active > 0)
         {
             throw new RegisterIntegrityException(
                 StatusCatalog.CustomerStillHasLicences,
-                $"Customer {customerId} still has {licences} licence(s). A licence that has been issued " +
-                "carries immutable artifacts, so removing the customer would leave the register unable to " +
-                "say who was delivered what.",
+                $"Customer {customerId} still has {active} active licence(s). Remove those first if that " +
+                "is really what you mean to do.",
                 existing.Name,
-                licences.ToString(CultureInfo.InvariantCulture));
+                active.ToString(CultureInfo.InvariantCulture));
         }
 
-        Execute("DELETE FROM customers WHERE customer_id = $id;", transaction, ("$id", customerId));
+        // ⭐⭐ WHICH operation it is. ⛔ ALL rows, retired included — this is the foreign key's own view,
+        //    and it is the only number that may decide whether a DELETE is attempted.
+        var rows = CountLicenses(customerId, transaction);
+        var outcome = rows == 0 ? RemovalOutcome.Deleted : RemovalOutcome.Retired;
+
+        if (outcome == RemovalOutcome.Deleted)
+        {
+            Execute("DELETE FROM customers WHERE customer_id = $id;", transaction, ("$id", customerId));
+        }
+        else
+        {
+            Execute(
+                "UPDATE customers SET retired_at = $at, updated_at = $at WHERE customer_id = $id;",
+                transaction, ("$at", Stamp(now)), ("$id", customerId));
+        }
 
         // ⭐ The whole record in `before_json`, so the history can still answer "who was c-0007?" — and,
-        //   if it ever matters, hand the values back. ⛔ `after_json` is null: there is no after.
+        //   for the retired case, `after_json` shows the row as it now stands.
         AppendAudit(transaction, new AuditEntry
         {
             At = now,
             Actor = _actor,
-            Action = "customer.deleted",
+            Action = outcome == RemovalOutcome.Deleted ? "customer.deleted" : "customer.retired",
             TargetType = "customer",
             TargetId = customerId,
             BeforeJson = JsonSerializer.Serialize(existing),
+            AfterJson = outcome == RemovalOutcome.Deleted
+                ? null
+                : JsonSerializer.Serialize(existing with { RetiredAt = now, UpdatedAt = now }),
+            Note = string.Create(
+                CultureInfo.InvariantCulture,
+                $"{rows} licence row(s) kept; the audit trail is kept."),
         });
 
         transaction.Commit();
+        return outcome;
     }
 
     /// <summary>The next free <c>c-NNNN</c> identifier.</summary>
@@ -470,6 +598,20 @@ public sealed class LicenseRegister : IDisposable
         //    without this a save would quietly edit a retired row and leave it retired — the worst of
         //    both. ⛔ There is no "unretire": nothing has asked for one, and a reversal nobody requested
         //    is a second way for a licence to come back into the active register.
+        // ⭐⭐ AND NO NEW LICENCE FOR A RETIRED CUSTOMER. ⚠ A licence save does not go through
+        //    `SaveCustomer`, so that guard cannot reach this — and without one here, "Nowa licencja" on a
+        //    customer who is out of the active register would succeed and produce a licence attached to
+        //    somebody nothing lists. ⛔ The foreign key would happily allow it: the customer row is still
+        //    there, which is exactly why it needs saying in code.
+        if (GetCustomer(license.CustomerId, transaction) is { IsRetired: true } retiredOwner)
+        {
+            throw new RegisterIntegrityException(
+                StatusCatalog.CustomerIsRetired,
+                $"Customer {license.CustomerId} was retired out of the active register, so no licence " +
+                "can be written for them.",
+                retiredOwner.Name);
+        }
+
         if (existing is { IsRetired: true })
         {
             throw new RegisterIntegrityException(
@@ -539,8 +681,8 @@ public sealed class LicenseRegister : IDisposable
     /// Takes a licence out of the active register, and records that it happened.
     /// </summary>
     /// <returns>
-    /// <see cref="LicenceRemoval.Deleted"/> when the row itself is gone, or
-    /// <see cref="LicenceRemoval.Retired"/> when it was kept and marked.
+    /// <see cref="RemovalOutcome.Deleted"/> when the row itself is gone, or
+    /// <see cref="RemovalOutcome.Retired"/> when it was kept and marked.
     /// </returns>
     /// <remarks>
     /// <para>⭐⭐ <b>TWO OUTCOMES, AND THE SCHEMA CHOOSES BETWEEN THEM — not a policy.</b> Measured against
@@ -567,7 +709,7 @@ public sealed class LicenseRegister : IDisposable
     /// holds the row, so <see cref="CountLicenses"/> keeps counting it — see that method.</para>
     /// </remarks>
     /// <exception cref="RegisterIntegrityException">The licence is not in the register, or already retired.</exception>
-    public LicenceRemoval RemoveLicense(string licenseId)
+    public RemovalOutcome RemoveLicense(string licenseId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(licenseId);
 
@@ -599,9 +741,9 @@ public sealed class LicenseRegister : IDisposable
             "SELECT COUNT(*) FROM issued_artifacts WHERE lid = $lid;", transaction,
             r => r.GetInt32(0), ("$lid", licenseId))[0];
 
-        var outcome = artifacts == 0 ? LicenceRemoval.Deleted : LicenceRemoval.Retired;
+        var outcome = artifacts == 0 ? RemovalOutcome.Deleted : RemovalOutcome.Retired;
 
-        if (outcome == LicenceRemoval.Deleted)
+        if (outcome == RemovalOutcome.Deleted)
         {
             Execute("DELETE FROM licenses WHERE lid = $lid;", transaction, ("$lid", licenseId));
         }
@@ -618,11 +760,11 @@ public sealed class LicenseRegister : IDisposable
         {
             At = now,
             Actor = _actor,
-            Action = outcome == LicenceRemoval.Deleted ? "licence.deleted" : "licence.retired",
+            Action = outcome == RemovalOutcome.Deleted ? "licence.deleted" : "licence.retired",
             TargetType = "licence",
             TargetId = licenseId,
             BeforeJson = JsonSerializer.Serialize(existing),
-            AfterJson = outcome == LicenceRemoval.Deleted
+            AfterJson = outcome == RemovalOutcome.Deleted
                 ? null
                 : JsonSerializer.Serialize(existing with { RetiredAt = now, UpdatedAt = now }),
             Note = string.Create(
@@ -1378,6 +1520,7 @@ public sealed class LicenseRegister : IDisposable
         LastName = Text(reader, "last_name"),
         Email = Text(reader, "email"),
         Notes = Text(reader, "notes"),
+        RetiredAt = Text(reader, "retired_at") is { } retired ? Parse(retired) : null,
         CreatedAt = Parse(reader.GetString(reader.GetOrdinal("created_at"))),
         UpdatedAt = Parse(reader.GetString(reader.GetOrdinal("updated_at"))),
     };

@@ -259,7 +259,9 @@ public sealed record SnapshotCounts(
     {
         ArgumentNullException.ThrowIfNull(register);
         return new SnapshotCounts(
-            register.GetCustomers().Count,
+            // ⚠ ALL of them, matching GetAllLicenses on the next line: these counts describe what the
+            //   backup CARRIES, and a backup is a whole-file snapshot that carries retired rows too.
+            register.GetAllCustomers().Count,
             register.GetAllLicenses().Count,
             register.GetAllArtifacts().Count,
             register.GetCurrentArtifactPointers().Count,

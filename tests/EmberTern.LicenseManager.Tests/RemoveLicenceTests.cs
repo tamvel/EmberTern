@@ -117,9 +117,14 @@ public sealed class RemoveLicenceTests
         {
             raw.Open();
 
+            // ⚠ BOTH columns, or this is not a v2 file — schema 3 added the licence's and schema 4 the
+            //   customer's. Dropping one and claiming version 2 would send the migration into an ALTER
+            //   TABLE for a column that already exists, and the test would fail for its own reason rather
+            //   than for the register's.
             using var down = raw.CreateCommand();
             down.CommandText =
                 "ALTER TABLE licenses DROP COLUMN retired_at;" +
+                "ALTER TABLE customers DROP COLUMN retired_at;" +
                 "UPDATE schema_meta SET value = '2' WHERE key = 'version';";
             down.ExecuteNonQuery();
         }
@@ -129,8 +134,10 @@ public sealed class RemoveLicenceTests
 
         Assert.Equal(LicenseRegister.CurrentSchemaVersion, upgraded.SchemaVersion);
 
-        // ⭐ Everything is still there, and every existing licence reads as active.
-        Assert.Single(upgraded.GetCustomers());
+        // ⭐ Everything is still there, and every existing row reads as active.
+        var carriedCustomer = Assert.Single(upgraded.GetCustomers());
+        Assert.False(carriedCustomer.IsRetired);
+
         var carried = Assert.Single(upgraded.GetLicenses(customer.CustomerId));
         Assert.Equal(licence.LicenseId, carried.LicenseId);
         Assert.False(carried.IsRetired);
@@ -138,7 +145,7 @@ public sealed class RemoveLicenceTests
         Assert.Single(upgraded.GetArtifacts(licence.LicenseId));
 
         // ⭐ And the new operation works on the upgraded file.
-        Assert.Equal(LicenceRemoval.Retired, upgraded.RemoveLicense(licence.LicenseId));
+        Assert.Equal(RemovalOutcome.Retired, upgraded.RemoveLicense(licence.LicenseId));
         Assert.Empty(upgraded.GetLicenses(customer.CustomerId));
         Assert.True(upgraded.GetLicense(licence.LicenseId)!.IsRetired);
     }
@@ -153,7 +160,7 @@ public sealed class RemoveLicenceTests
         var customer = manager.SaveCustomer();
         var licence = manager.SaveLicense(customer);
 
-        Assert.Equal(LicenceRemoval.Deleted, manager.Register.RemoveLicense(licence.LicenseId));
+        Assert.Equal(RemovalOutcome.Deleted, manager.Register.RemoveLicense(licence.LicenseId));
 
         Assert.Null(manager.Register.GetLicense(licence.LicenseId));
         Assert.Empty(manager.Register.GetLicenses(customer.CustomerId));
@@ -191,7 +198,7 @@ public sealed class RemoveLicenceTests
         Assert.Equal(2, artifactsBefore);
         Assert.NotNull(pointerBefore);
 
-        Assert.Equal(LicenceRemoval.Retired, manager.Register.RemoveLicense(licence.LicenseId));
+        Assert.Equal(RemovalOutcome.Retired, manager.Register.RemoveLicense(licence.LicenseId));
 
         // ⭐⭐ EVERYTHING THAT WAS EVER ISSUED IS STILL THERE, byte for byte.
         var artifactsAfter = manager.Register.GetArtifacts(licence.LicenseId);
@@ -324,21 +331,27 @@ public sealed class RemoveLicenceTests
         manager.Register.RemoveLicense(licence.LicenseId);
 
         Assert.Equal(0, manager.Register.CountLicenses(customer.CustomerId));
-        manager.Register.DeleteCustomer(customer.CustomerId);
+        manager.Register.RemoveCustomer(customer.CustomerId);
         Assert.Null(manager.Register.GetCustomer(customer.CustomerId));
     }
 
     /// <summary>
-    /// ⚠⚠ <b>RETIRING a licence does NOT make its customer removable — and that is the foreign key, not a
-    /// rule of ours.</b>
+    /// ⚠⚠ <b>Retiring a licence makes its customer RETIREABLE, not DELETABLE — and the difference is the
+    /// foreign key rather than a rule of ours.</b>
     /// </summary>
     /// <remarks>
-    /// ⭐ The row is still in <c>licenses</c> pointing at the customer, so the customer's own DELETE still
-    /// fails on it. <c>CountLicenses</c> therefore counts retired licences: a pre-flight check that said
-    /// "zero" and then let the database refuse a moment later is the one thing it may not do.
+    /// <para>⚠⚠ <b>This test asserted the opposite until the customer side was repaired, and the change is
+    /// the whole repair.</b> It used to demand a REFUSAL here, which is exactly the dead end a real
+    /// operator hit: every licence removed, the list empty on screen, and the customer still unremovable
+    /// with a message naming licences they could no longer see.</para>
+    /// <para>⭐ What has NOT changed is why: the retired licence is still a row pointing at the customer,
+    /// so <c>DELETE FROM customers</c> still fails on it. <c>CountLicenses</c> therefore still counts
+    /// retired rows — it is what decides that this must be a retirement rather than a delete.
+    /// <c>CountActiveLicenses</c> is the separate number that decides whether the operation is allowed at
+    /// all. ⛔ Collapsing the two is what would put the failure back in the database's hands.</para>
     /// </remarks>
     [Fact]
-    public void RetiringALicenceDoesNotMakeItsCustomerRemovable()
+    public void RetiringALicenceMakesItsCustomerRetireableNotDeletable()
     {
         using var manager = new ManagerFixture();
         var customer = manager.SaveCustomer();
@@ -347,11 +360,20 @@ public sealed class RemoveLicenceTests
 
         manager.Register.RemoveLicense(licence.LicenseId);
 
+        // ⭐ The row the foreign key sees is still there; the licence the operator sees is not.
         Assert.Equal(1, manager.Register.CountLicenses(customer.CustomerId));
+        Assert.Equal(0, manager.Register.CountActiveLicenses(customer.CustomerId));
 
-        var refused = Assert.Throws<RegisterIntegrityException>(
-            () => manager.Register.DeleteCustomer(customer.CustomerId));
-        Assert.Equal(StatusCatalog.CustomerStillHasLicences, refused.Key);
+        // ⭐⭐ So the customer CAN now be removed — as a retirement, which is the only thing the schema
+        //    allows. ⛔ Never as a DELETE that the database would refuse a moment later.
+        Assert.Equal(RemovalOutcome.Retired, manager.Register.RemoveCustomer(customer.CustomerId));
+
+        Assert.True(manager.Register.GetCustomer(customer.CustomerId)!.IsRetired);
+        Assert.Empty(manager.Register.GetCustomers());
+
+        // ⭐ And the licence history is untouched.
+        Assert.Single(manager.Register.GetAllLicenses());
+        Assert.Single(manager.Register.GetArtifacts(licence.LicenseId));
     }
 
     /// <summary>⭐ A customer with OTHER licences still cannot be removed. (The user's case 8.)</summary>
@@ -367,7 +389,7 @@ public sealed class RemoveLicenceTests
 
         Assert.Equal(1, manager.Register.CountLicenses(customer.CustomerId));
         Assert.Throws<RegisterIntegrityException>(
-            () => manager.Register.DeleteCustomer(customer.CustomerId));
+            () => manager.Register.RemoveCustomer(customer.CustomerId));
     }
 
     // ── The view model ──────────────────────────────────────────────────────────────────────────────

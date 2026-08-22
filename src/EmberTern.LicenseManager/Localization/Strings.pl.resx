@@ -1561,7 +1561,7 @@
     <value>Klienta {0} nie ma w rejestrze, więc nie ma czego usuwać.</value>
   </data>
   <data name="Status.CustomerStillHasLicences" xml:space="preserve">
-    <value>{0} ma jeszcze {1} licencję/licencje, więc klienta nie da się usunąć. Wystawiona licencja niesie artefakty, których nigdy nie da się skasować, a rejestr musi umieć powiedzieć, komu co dostarczono. Najpierw usuń licencje, jeśli naprawdę o to Ci chodzi.</value>
+    <value>{0} ma jeszcze {1} aktywną/-e licencję/licencje, więc klienta nie da się usunąć. Najpierw usuń te licencje, jeśli naprawdę o to Ci chodzi — klienta, którego wszystkie licencje zostały wycofane, można potem wycofać, a cała historia i tak zostaje.</value>
   </data>
   <data name="Status.CustomerRemoved" xml:space="preserve">
     <value>Klient {0} został usunięty. Historia rejestru nadal pamięta, kim był — tego wpisu nie da się skasować.</value>
@@ -1628,5 +1628,14 @@
   </data>
   <data name="Confirm.RemoveLicenceAction" xml:space="preserve">
     <value>Usuń licencję</value>
+  </data>
+  <data name="Status.CustomerIsRetired" xml:space="preserve">
+    <value>Klient {0} został wycofany z aktywnego rejestru i nie da się go zmienić ani wystawić mu nowej licencji. Historia jego licencji i linia audytu są nienaruszone i czytelne.</value>
+  </data>
+  <data name="Status.CustomerRetired" xml:space="preserve">
+    <value>Klient {0} został wycofany. Nie ma go już w aktywnym rejestrze, a jego {1} wiersz(y) licencji, każdy kiedykolwiek wystawiony artefakt i cała linia audytu zostają — nie da się ich skasować.</value>
+  </data>
+  <data name="Confirm.RetireCustomerMessage" xml:space="preserve">
+    <value>{0} ({1}) nie ma żadnych aktywnych licencji, ale ma {2} wycofany/-e wiersz(e) licencji, których nigdy nie da się skasować — wystawiona licencja niesie artefakty, które rejestr musi zachować. Klient zostanie więc WYCOFANY: znika z aktywnego rejestru, nie będzie go można edytować ani dać mu licencji, a cała historia zostaje. To operacja administracyjna.</value>
   </data>
 </root>

@@ -29,6 +29,26 @@ public sealed record CustomerRecord
     /// <summary>⛔ Administrative notes. Never travel in a licence — see §9.2.</summary>
     public string? Notes { get; init; }
 
+    /// <summary>
+    /// When this customer was retired out of the active register, or <see langword="null"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>The exact counterpart of <see cref="LicenseRecord.RetiredAt"/>, and it exists because
+    /// the licence one created an inconsistency without it:</b> retiring a customer's every licence emptied
+    /// their list, and the customer still could not be deleted — <c>licenses</c> references
+    /// <c>customers</c>, and a retired licence is still a row. The operator saw nothing and could do
+    /// nothing.</para>
+    /// <para>⛔ NOT a status. This record has no status vocabulary at all, and inventing one to carry a
+    /// single administrative fact would be the same wrong-role trap the licence side refused.</para>
+    /// <para>⛔ A retired customer is invisible to every OPERATION — not listed, not editable, and no new
+    /// licence can be written for them. ⭐ Their licences, their artifacts and their whole audit trail are
+    /// untouched.</para>
+    /// </remarks>
+    public DateTimeOffset? RetiredAt { get; init; }
+
+    /// <summary>Whether this customer has been retired out of the active register.</summary>
+    public bool IsRetired => RetiredAt is not null;
+
     /// <summary>When the record was created.</summary>
     public DateTimeOffset CreatedAt { get; init; }
 
@@ -259,26 +279,37 @@ public static class IssueReasons
 /// carry it and no reader can encounter it.</para>
 /// </summary>
 /// <summary>
-/// What removing a licence actually did to the register.
+/// What removing a row actually did to the register — the same two answers for a licence and for a
+/// customer.
 /// </summary>
 /// <remarks>
-/// <para>⭐⭐ <b>The SCHEMA chooses between these, not a policy and not the operator.</b> Measured:
-/// <c>DELETE FROM licenses</c> succeeds for a licence that was never issued and fails with
-/// <c>SQLITE_CONSTRAINT_FOREIGNKEY</c> for one that was — <c>issued_artifacts</c> references it, and those
-/// rows are refused deletion by a trigger.</para>
-/// <para>⭐ It is REPORTED rather than hidden because the two outcomes differ in a way the operator can
-/// see afterwards: one licence is gone from the register entirely, the other is still there and still
-/// carries everything that was ever issued for it.</para>
+/// <para>⭐⭐ <b>THE DATA CHOOSES BETWEEN THESE, not a policy and not the operator.</b> Both tables sit at
+/// the parent end of a foreign key whose children can never be deleted, so in both cases the question
+/// "can this row go?" has an answer the schema already knows:</para>
+/// <list type="bullet">
+///   <item><b>A licence</b> — <c>issued_artifacts</c> references it, and a trigger refuses to delete those
+///   rows. Measured: <c>DELETE FROM licenses</c> succeeds for a licence that was never issued and fails
+///   with <c>SQLITE_CONSTRAINT_FOREIGNKEY</c> for one that was.</item>
+///   <item><b>A customer</b> — <c>licenses</c> references it, and a RETIRED licence is still a row. So a
+///   customer whose every licence was retired cannot be deleted either, however empty their list looks.
+///   ⚠ That is exactly the inconsistency this enum's second consumer exists to remove.</item>
+/// </list>
+/// <para>⭐ It is REPORTED rather than hidden, because the two outcomes differ in a way the operator can
+/// check afterwards: one row is gone from the register entirely, the other is still there and still
+/// carries everything that was ever attached to it.</para>
+/// <para>⛔ ONE enum for both, deliberately. Two identical ones would be two names for one responsibility
+/// (the rule gotcha #195 records), and the day one of them grew a third value the other would silently
+/// stay behind.</para>
 /// </remarks>
-public enum LicenceRemoval
+public enum RemovalOutcome
 {
-    /// <summary>The row itself is gone. ⚠ Only reachable for a licence that was never issued.</summary>
+    /// <summary>The row itself is gone. ⚠ Only reachable when nothing references it.</summary>
     Deleted,
 
     /// <summary>
     /// The row was kept and stamped <c>retired_at</c>, and has left every active read.
     /// </summary>
-    /// <remarks>⭐ Its artifacts, its current-artifact pointer and its audit trail are untouched.</remarks>
+    /// <remarks>⭐ Everything that referenced it — artifacts, pointers, licences, audit — is untouched.</remarks>
     Retired,
 }
 

@@ -1,8 +1,10 @@
 using System;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using EmberTern.LicenseManager.Data;
 using EmberTern.LicenseManager.ViewModels;
+using Microsoft.Data.Sqlite;
 using Xunit;
 
 namespace EmberTern.LicenseManager.Tests;
@@ -32,7 +34,7 @@ public sealed class RemoveCustomerTests
         using var manager = new ManagerFixture();
         var customer = manager.SaveCustomer("ACME Sp. z o.o.");
 
-        manager.Register.DeleteCustomer(customer.CustomerId);
+        manager.Register.RemoveCustomer(customer.CustomerId);
 
         Assert.Null(manager.Register.GetCustomer(customer.CustomerId));
         Assert.DoesNotContain(manager.Register.GetCustomers(), c => c.CustomerId == customer.CustomerId);
@@ -49,6 +51,214 @@ public sealed class RemoveCustomerTests
         Assert.Null(line.AfterJson);
     }
 
+    /// <summary>
+    /// ⚠⚠ <b>THE MEASUREMENT THIS WHOLE REPAIR RESTS ON: a customer whose every licence is RETIRED still
+    /// cannot be deleted.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐ A retired licence is still a ROW in <c>licenses</c> pointing at the customer, so the foreign
+    /// key holds exactly as it does for an active one. That is why "just stop counting retired licences"
+    /// is the wrong fix: the counter would read zero, the application would attempt a <c>DELETE</c>, and
+    /// SQLite would refuse it on a row the operator was never shown.</para>
+    /// <para>⛔ It talks to the connection rather than through our own API, because the claim is about the
+    /// SCHEMA. ⭐ If this ever stops throwing, the retirement branch has lost its reason.</para>
+    /// </remarks>
+    [Fact]
+    public void ACustomerWhoseLicencesAreAllRetiredStillCannotBeDeleted()
+    {
+        using var manager = new ManagerFixture();
+        var customer = manager.SaveCustomer();
+        var licence = manager.SaveLicense(customer);
+        manager.Workflow.Issue(manager.Session, licence, customer, IssueReasons.Initial);
+
+        manager.Register.RemoveLicense(licence.LicenseId);
+
+        // ⭐ The customer's list is empty on every surface…
+        Assert.Empty(manager.Register.GetLicenses(customer.CustomerId));
+        Assert.Equal(0, manager.Register.CountActiveLicenses(customer.CustomerId));
+
+        // …and the row is still there, which is the whole point.
+        Assert.Equal(1, manager.Register.CountLicenses(customer.CustomerId));
+
+        var connection = (SqliteConnection)typeof(LicenseRegister)
+            .GetField("_connection", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetValue(manager.Register)!;
+
+        using var delete = connection.CreateCommand();
+        delete.CommandText = "DELETE FROM customers WHERE customer_id = $id;";
+        delete.Parameters.AddWithValue("$id", customer.CustomerId);
+
+        var refused = Assert.Throws<SqliteException>(() => delete.ExecuteNonQuery());
+        Assert.Equal(19, refused.SqliteErrorCode);
+        Assert.Equal(787, refused.SqliteExtendedErrorCode);
+    }
+
+    /// <summary>⭐ Only retired licences → the customer is RETIRED, and everything is kept. (Case 3.)</summary>
+    [Fact]
+    public void ACustomerWithOnlyRetiredLicencesIsRetired()
+    {
+        using var manager = new ManagerFixture();
+        var customer = manager.SaveCustomer("Zeta Sp. z o.o.");
+        var licence = manager.SaveLicense(customer);
+        manager.Workflow.Issue(manager.Session, licence, customer, IssueReasons.Initial);
+        manager.Register.RemoveLicense(licence.LicenseId);
+
+        var auditBefore = manager.Register.GetAudit(new AuditQuery { Limit = 10_000 }).Count;
+
+        Assert.Equal(RemovalOutcome.Retired, manager.Register.RemoveCustomer(customer.CustomerId));
+
+        // ⛔ Gone from the active list… (case 6)
+        Assert.DoesNotContain(manager.Register.GetCustomers(), c => c.CustomerId == customer.CustomerId);
+
+        // …and still in the register, marked.
+        var row = manager.Register.GetCustomer(customer.CustomerId);
+        Assert.NotNull(row);
+        Assert.True(row!.IsRetired);
+        Assert.NotNull(row.RetiredAt);
+
+        // ⭐ The historical licence and its artifact are untouched. (Case 8.)
+        Assert.Single(manager.Register.GetAllLicenses());
+        Assert.Single(manager.Register.GetArtifacts(licence.LicenseId));
+
+        // ⭐ And the audit only GREW. (Case 9.)
+        Assert.True(manager.Register.GetAudit(new AuditQuery { Limit = 10_000 }).Count > auditBefore);
+
+        var line = Assert.Single(
+            manager.Register.GetAudit(new AuditQuery { Action = "customer.retired" }));
+        Assert.Equal(customer.CustomerId, line.TargetId);
+        Assert.NotNull(line.BeforeJson);
+        Assert.NotNull(line.AfterJson);
+    }
+
+    /// <summary>⭐ Several retired licences → still a retirement, not a delete. (Case 4.)</summary>
+    [Fact]
+    public void ACustomerWithSeveralRetiredLicencesIsRetired()
+    {
+        using var manager = new ManagerFixture();
+        var customer = manager.SaveCustomer();
+
+        foreach (var _ in new[] { 1, 2, 3 })
+        {
+            var licence = manager.SaveLicense(customer);
+            manager.Workflow.Issue(manager.Session, licence, customer, IssueReasons.Initial);
+            manager.Register.RemoveLicense(licence.LicenseId);
+            manager.Now = manager.Now.AddMinutes(1);
+        }
+
+        Assert.Equal(3, manager.Register.CountLicenses(customer.CustomerId));
+        Assert.Equal(0, manager.Register.CountActiveLicenses(customer.CustomerId));
+
+        Assert.Equal(RemovalOutcome.Retired, manager.Register.RemoveCustomer(customer.CustomerId));
+        Assert.Equal(3, manager.Register.GetAllLicenses().Count);
+    }
+
+    /// <summary>⛔ One active licence beside a retired one is still a refusal. (Case 5.)</summary>
+    /// <remarks>
+    /// ⚠ And the refusal names ONE, not two: the operator can only act on what they can see, so a count
+    /// that included the retired licence would send them looking for a licence nothing lists.
+    /// </remarks>
+    [Fact]
+    public void AnActiveLicenceBesideARetiredOneIsStillARefusal()
+    {
+        using var manager = new ManagerFixture();
+        var customer = manager.SaveCustomer("Eta S.A.");
+
+        var retired = manager.SaveLicense(customer);
+        manager.Workflow.Issue(manager.Session, retired, customer, IssueReasons.Initial);
+        manager.Register.RemoveLicense(retired.LicenseId);
+
+        manager.SaveLicense(customer);
+
+        var refused = Assert.Throws<RegisterIntegrityException>(
+            () => manager.Register.RemoveCustomer(customer.CustomerId));
+
+        Assert.Equal(StatusCatalog.CustomerStillHasLicences, refused.Key);
+        Assert.Contains("1", refused.Arguments.Select(a => a?.ToString()));
+        Assert.DoesNotContain("2", refused.Arguments.Select(a => a?.ToString()));
+
+        Assert.False(manager.Register.GetCustomer(customer.CustomerId)!.IsRetired);
+    }
+
+    /// <summary>
+    /// ⭐ A retired customer stays retired across a restart, and is closed to writes. (Cases 7 and 10.)
+    /// </summary>
+    /// <remarks>
+    /// ⚠ Reopened from the FILE, which is what "after a restart" means — re-reading through the instance
+    /// that wrote it would prove nothing about what was persisted.
+    /// </remarks>
+    [Fact]
+    public void ARetiredCustomerSurvivesARestartAndIsClosedToWrites()
+    {
+        using var manager = new ManagerFixture();
+        var customer = manager.SaveCustomer("Theta Sp.j.");
+        var licence = manager.SaveLicense(customer);
+        manager.Workflow.Issue(manager.Session, licence, customer, IssueReasons.Initial);
+        manager.Register.RemoveLicense(licence.LicenseId);
+        manager.Register.RemoveCustomer(customer.CustomerId);
+
+        var path = manager.Paths.Register;
+        manager.Register.Dispose();
+
+        using var reopened = LicenseRegister.Open(path, () => manager.Now, actor: "tester");
+
+        // ⛔ Still gone from the active list. (Case 7.)
+        Assert.Empty(reopened.GetCustomers());
+        Assert.True(reopened.GetCustomer(customer.CustomerId)!.IsRetired);
+
+        // ⭐ And still there for anyone reading everything.
+        Assert.Single(reopened.GetAllCustomers());
+
+        // ⛔ Not editable… (case 10)
+        var edit = Assert.Throws<RegisterIntegrityException>(
+            () => reopened.SaveCustomer(customer with { Name = "Renamed" }));
+        Assert.Equal(StatusCatalog.CustomerIsRetired, edit.Key);
+
+        // ⛔ …and no new licence can be written for them.
+        var licenceForGhost = Assert.Throws<RegisterIntegrityException>(
+            () => reopened.SaveLicense(new LicenseRecord
+            {
+                LicenseId = EmberTern.Licensing.Issuing.LicenseIssuer.NewLicenseId(),
+                CustomerId = customer.CustomerId,
+                Product = EmberTern.Licensing.LicenseConstants.ProductId,
+                Seats = 1,
+                NotBefore = manager.Now,
+                ExpiresAt = manager.Now.AddYears(1),
+                Status = LicenseStatuses.Active,
+            }));
+        Assert.Equal(StatusCatalog.CustomerIsRetired, licenceForGhost.Key);
+
+        // ⛔ And not retired twice.
+        var again = Assert.Throws<RegisterIntegrityException>(
+            () => reopened.RemoveCustomer(customer.CustomerId));
+        Assert.Equal(StatusCatalog.CustomerIsRetired, again.Key);
+    }
+
+    /// <summary>⭐⭐ Retirement travels in the JSONL escape hatch, exactly as a licence's does.</summary>
+    [Fact]
+    public void RetirementTravelsInTheJsonlExport()
+    {
+        using var manager = new ManagerFixture();
+        var kept = manager.SaveCustomer("Iota S.A.");
+        var retired = manager.SaveCustomer("Kappa Sp. z o.o.");
+
+        var licence = manager.SaveLicense(retired);
+        manager.Workflow.Issue(manager.Session, licence, retired, IssueReasons.Initial);
+        manager.Register.RemoveLicense(licence.LicenseId);
+        manager.Register.RemoveCustomer(retired.CustomerId);
+
+        var lines = RegisterJsonl.Export(manager.Register);
+
+        // ⛔⛔ THE RETIRED CUSTOMER IS IN THE FILE. An export that used the filtered read would leave them
+        //    out of the one document that exists for when this application will not open.
+        var retiredLine = lines.Single(l => l.Contains(retired.CustomerId, StringComparison.Ordinal)
+            && l.Contains($"\"type\":\"{RegisterJsonl.CustomerType}\"", StringComparison.Ordinal));
+        var keptLine = lines.Single(l => l.Contains(kept.CustomerId, StringComparison.Ordinal)
+            && l.Contains($"\"type\":\"{RegisterJsonl.CustomerType}\"", StringComparison.Ordinal));
+
+        Assert.Contains("\"retiredAt\":\"", retiredLine, StringComparison.Ordinal);
+        Assert.Contains("\"retiredAt\":null", keptLine, StringComparison.Ordinal);
+    }
+
     /// <summary>⛔ A customer with a licence is REFUSED, and the refusal names the obstacle.</summary>
     [Fact]
     public void ACustomerWithALicenceIsRefused()
@@ -58,7 +268,7 @@ public sealed class RemoveCustomerTests
         manager.SaveLicense(customer);
 
         var refused = Assert.Throws<RegisterIntegrityException>(
-            () => manager.Register.DeleteCustomer(customer.CustomerId));
+            () => manager.Register.RemoveCustomer(customer.CustomerId));
 
         Assert.Equal(StatusCatalog.CustomerStillHasLicences, refused.Key);
 
@@ -77,7 +287,7 @@ public sealed class RemoveCustomerTests
         using var manager = new ManagerFixture();
 
         var refused = Assert.Throws<RegisterIntegrityException>(
-            () => manager.Register.DeleteCustomer("c-9999"));
+            () => manager.Register.RemoveCustomer("c-9999"));
 
         Assert.Equal(StatusCatalog.CustomerNotInRegister, refused.Key);
     }
@@ -212,6 +422,69 @@ public sealed class RemoveCustomerTests
 
         Assert.Equal(StatusCatalog.SelectCustomerToRemove, shell.Message?.Key);
         Assert.Single(manager.Register.GetCustomers());
+    }
+
+    /// <summary>
+    /// ⭐⭐ <b>The operator is told WHICH of the two acts they are confirming — and the retirement branch
+    /// reaches the register.</b> (Cases 3, 6 and 11 at the view-model level.)
+    /// </summary>
+    [Fact]
+    public async Task TheConfirmationSaysWhichOfTheTwoWillHappen()
+    {
+        using var manager = new ManagerFixture();
+
+        var bare = manager.SaveCustomer("Lambda Sp. z o.o.");
+        var withHistory = manager.SaveCustomer("Mu S.A.");
+        var licence = manager.SaveLicense(withHistory);
+        manager.Workflow.Issue(manager.Session, licence, withHistory, IssueReasons.Initial);
+        manager.Register.RemoveLicense(licence.LicenseId);
+
+        ConfirmRequest? asked = null;
+        var shell = Shell(manager, confirmed: true);
+        shell.Confirm = request =>
+        {
+            asked = request;
+            return Task.FromResult(true);
+        };
+
+        shell.SelectedCustomer = shell.Customers.Single(c => c.CustomerId == bare.CustomerId);
+        await shell.RemoveCustomerCommand.ExecuteAsync(null);
+        Assert.Equal(ConfirmCatalog.RemoveCustomerMessage, asked?.Message);
+        Assert.Equal(StatusCatalog.CustomerRemoved, shell.Message?.Key);
+
+        shell.SelectedCustomer = shell.Customers.Single(c => c.CustomerId == withHistory.CustomerId);
+        await shell.RemoveCustomerCommand.ExecuteAsync(null);
+        Assert.Equal(ConfirmCatalog.RetireCustomerMessage, asked?.Message);
+        Assert.Equal(StatusCatalog.CustomerRetired, shell.Message?.Key);
+
+        // ⛔ Gone from the list the operator reads…
+        Assert.Empty(shell.Customers);
+
+        // …and still in the register, with its licence history.
+        Assert.True(manager.Register.GetCustomer(withHistory.CustomerId)!.IsRetired);
+        Assert.Single(manager.Register.GetAllLicenses());
+    }
+
+    /// <summary>
+    /// ⛔⛔ <b>Cancelling the RETIREMENT changes nothing either.</b> (Case 11, on the branch that was added.)
+    /// </summary>
+    [Fact]
+    public async Task CancellingTheRetirementChangesNothing()
+    {
+        using var manager = new ManagerFixture();
+        var customer = manager.SaveCustomer();
+        var licence = manager.SaveLicense(customer);
+        manager.Workflow.Issue(manager.Session, licence, customer, IssueReasons.Initial);
+        manager.Register.RemoveLicense(licence.LicenseId);
+
+        var shell = Shell(manager, confirmed: false);
+        shell.SelectedCustomer = shell.Customers.Single();
+
+        await shell.RemoveCustomerCommand.ExecuteAsync(null);
+
+        Assert.False(manager.Register.GetCustomer(customer.CustomerId)!.IsRetired);
+        Assert.Single(shell.Customers);
+        Assert.Empty(manager.Register.GetAudit(new AuditQuery { Action = "customer.retired" }));
     }
 
     private static ShellViewModel Shell(ManagerFixture manager, bool confirmed)
