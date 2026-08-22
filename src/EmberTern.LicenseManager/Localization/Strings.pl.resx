@@ -1287,4 +1287,22 @@
   <data name="About.Close" xml:space="preserve">
     <value>Zamknij</value>
   </data>
+  <data name="Status.SmtpBulkDelayOutOfRange" xml:space="preserve">
+    <value>Przerwa między wiadomościami w wysyłce grupowej musi wynosić od {0} do {1} sekund, a nie {2}.</value>
+  </data>
+  <data name="Status.SmtpBulkLimitOutOfRange" xml:space="preserve">
+    <value>Jedna seria może wysłać od {0} do {1} wiadomości, a nie {2}.</value>
+  </data>
+  <data name="Settings.BulkSending" xml:space="preserve">
+    <value>Wysyłka grupowa</value>
+  </data>
+  <data name="Settings.BulkSendingDescription" xml:space="preserve">
+    <value>Te dwie wartości ograniczają tempo serii i dają czas na jej przerwanie. Nie są obietnicą dostarczalności — o niej decydują rekordy SPF, DKIM i DMARC Twojej domeny oraz reputacja adresu nadawcy, a tego ta aplikacja nie widzi.</value>
+  </data>
+  <data name="Settings.BulkDelay" xml:space="preserve">
+    <value>Przerwa między wiadomościami, w sekundach</value>
+  </data>
+  <data name="Settings.BulkMaxPerRun" xml:space="preserve">
+    <value>Najwięcej wiadomości w jednej serii</value>
+  </data>
 </root>

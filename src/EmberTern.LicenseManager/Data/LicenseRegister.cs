@@ -1013,6 +1013,62 @@ public sealed class LicenseRegister : IDisposable
         Note = Text(reader, "note"),
     };
 
+    /// <summary>
+    /// When each licence was last SENT to a customer — the newest <c>licence.sent</c> per <c>lid</c>,
+    /// or an empty map when nothing has ever been sent.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>ONE aggregate query for the whole register, and the alternatives were measured
+    /// rather than judged.</b> Its consumer is a bulk-send preview that is rebuilt on every keystroke in a
+    /// search box, over a selection that may hold hundreds of licences:</para>
+    /// <list type="bullet">
+    ///   <item>⛔ <b>Not one <see cref="GetAudit"/> per licence.</b> <c>audit_log</c> carries no index on
+    ///   <c>(target_type, target_id, action)</c> — only its primary key — so each such call is a full
+    ///   table scan, and the shape would be one scan per selected licence per typed character.</item>
+    ///   <item>⛔⛔ <b>Not <see cref="GetAudit"/> at all.</b> Its <see cref="AuditQuery.Limit"/>
+    ///   defaults to 200, so aggregating over what it returns would answer confidently and WRONGLY on any
+    ///   register with a longer history — with no error and no way to notice. That is the specific defect
+    ///   <c>AHistoryLongerThanTheAuditQueryLimit_IsNotTruncated</c> exists to make unreachable.</item>
+    /// </list>
+    /// <para>⚠⚠ <b><c>MAX(at)</c> is a TEXT maximum, and it is only the newest timestamp because the
+    /// stored format is fixed-width UTC</b> — <c>LicensePayload.TimestampFormat</c> is
+    /// <c>yyyy-MM-dd'T'HH:mm:ss'Z'</c>, so lexicographic order IS chronological order. ⛔ A format that
+    /// ever gained a numeric offset or a variable-width field would make this aggregate pick the wrong row
+    /// silently. Pinned by <c>TheNewestSendWins_EvenWhenItIsNotTheNewestRow</c>.</para>
+    /// <para>⚠ It answers about DELIVERY ATTEMPTS THAT SUCCEEDED and nothing else: a
+    /// <c>licence.send-failed</c> line is not a send, and an <c>.eml</c> export
+    /// (<c>licence.exported</c>) is deliberately not one either — a file existing is not a message
+    /// reaching anybody.</para>
+    /// <para>⚠ And "sent" means the SERVER ACCEPTED it. ⛔ Never "the customer received it": with one
+    /// recipient per message a provider commonly accepts mail for a bad address and bounces it later,
+    /// which this application cannot see at all.</para>
+    /// </remarks>
+    public IReadOnlyDictionary<string, DateTimeOffset> GetLastSentAt()
+    {
+        var rows = Read(
+            """
+            SELECT target_id AS lid, MAX(at) AS last_sent
+              FROM audit_log
+             WHERE target_type = $type AND action = $action
+             GROUP BY target_id;
+            """,
+            reader => (
+                Lid: reader.GetString(reader.GetOrdinal("lid")),
+                LastSent: Parse(reader.GetString(reader.GetOrdinal("last_sent")))),
+            ("$type", AuditTargets.Licence),
+            ("$action", AuditActions.LicenceSent));
+
+        // ⚠ Ordinal, like every other identity comparison over a `lid` in this file: the ids are
+        //   generated hex and a culture-aware comparison would be a different question.
+        var map = new Dictionary<string, DateTimeOffset>(rows.Count, StringComparer.Ordinal);
+        foreach (var row in rows)
+        {
+            map[row.Lid] = row.LastSent;
+        }
+
+        return map;
+    }
+
     /// <summary>Records something that is not a table mutation — a key ceremony, an export.</summary>
     public void Record(string action, string targetType, string targetId, string? note = null)
     {
@@ -1157,9 +1213,30 @@ public sealed class LicenseRegister : IDisposable
         return reader.Read() ? map(reader) : null;
     }
 
+    /// <summary>
+    /// How many statements this register has prepared since it was opened.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>A MEASUREMENT SEAM, and it exists because the claim it measures cannot be reached
+    /// through the public API.</b> <see cref="GetLastSentAt"/> answers for the whole register in one
+    /// statement, and the design it replaced was one full <c>audit_log</c> scan PER SELECTED LICENCE per
+    /// keystroke (§60.7). ⚠ The property that matters is therefore the STATEMENT COUNT, not a
+    /// duration — a wall-clock threshold on a developer machine is a flaky test, and it could not tell
+    /// "one query" from "five hundred fast ones".</para>
+    /// <para>⚠ It counts commands PREPARED, which for every read path in this class is one per
+    /// executed statement, and it deliberately does not distinguish reads from writes: a caller measuring
+    /// a cost takes the difference across the call it is measuring.</para>
+    /// <para>⛔ Not a diagnostic surface and not public: nothing in the application reads it, and it
+    /// must not grow a consumer. Same arrangement, and same honest provenance, as the
+    /// <c>InternalsVisibleTo</c> the csproj already carries for <c>BackupWorkflow</c>'s verification path.</para>
+    /// </remarks>
+    internal long StatementsExecuted { get; private set; }
+
     private SqliteCommand NewCommand(
         string sql, SqliteTransaction? transaction, (string Name, object? Value)[] parameters)
     {
+        StatementsExecuted++;
+
         var command = _connection.CreateCommand();
         command.CommandText = sql;
         command.Transaction = transaction;

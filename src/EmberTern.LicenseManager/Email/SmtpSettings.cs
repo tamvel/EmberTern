@@ -45,6 +45,48 @@ public sealed record SmtpSettings
     /// <summary>The submission port nearly every provider uses for <c>STARTTLS</c>.</summary>
     public const int DefaultPort = 587;
 
+    // ══ BULK SENDING (L10.1) ═══════════════════════════════════════════════════════════════════════
+    // ⭐⭐ These two are a RATE LIMITER and an operator's window to notice something wrong — ⛔ never a
+    //    promise about deliverability. What actually decides whether a mailbox accepts a run is SPF /
+    //    DKIM / DMARC on the sender's domain, the IP's reputation and whether recipients mark it as
+    //    spam, and none of that is in this application. §60.9 says so in the design; it is repeated
+    //    here because this is where somebody would come looking for the guarantee.
+    //
+    // ⚠ They live on the SMTP settings because they are properties of DELIVERY, not preferences about
+    //   the interface — which also keeps the configuration to one file, exactly as MessageLanguage did.
+
+    /// <summary>
+    /// How long to wait between two messages of a bulk run, in seconds.
+    /// </summary>
+    /// <remarks>
+    /// 🔒 15 by the user's decision (§60.9). Chosen for two jobs at once: it keeps a run far below any
+    /// per-minute limit, and it leaves a real window in which an operator can read the progress line and
+    /// stop the run. ⚠ At this value a 38-message run takes about nine minutes, which is the honest cost.
+    /// </remarks>
+    public const int DefaultBulkDelaySeconds = 15;
+
+    /// <summary>The shortest delay the operator may configure. ⚠ Not zero — a run with no pacing at all is the thing this exists to prevent.</summary>
+    public const int MinBulkDelaySeconds = 1;
+
+    /// <summary>The longest delay the operator may configure — ten minutes between messages.</summary>
+    public const int MaxBulkDelaySeconds = 600;
+
+    /// <summary>
+    /// The most messages one bulk run may attempt.
+    /// </summary>
+    /// <remarks>
+    /// 🔒 50 by the user's decision (§60.9). ⛔ Exceeding it makes the action UNAVAILABLE rather than
+    /// warning about it, and raising it means going into this window — a deliberate step, which is the
+    /// point: the limit exists so that "tick 200 licences and click once" cannot happen by accident.
+    /// </remarks>
+    public const int DefaultBulkMaxPerRun = 50;
+
+    /// <summary>The smallest run limit that still permits a run.</summary>
+    public const int MinBulkMaxPerRun = 1;
+
+    /// <summary>The largest run limit the operator may configure.</summary>
+    public const int MaxBulkMaxPerRun = 500;
+
     /// <summary>Nothing configured yet — what the settings window opens on before a first save.</summary>
     public static SmtpSettings Empty { get; } = new();
 
@@ -97,6 +139,18 @@ public sealed record SmtpSettings
     /// </summary>
     public string MessageLanguage { get; init; } = MessageLanguages.Default;
 
+    /// <summary>
+    /// Seconds to wait between two messages of a bulk run. ⭐ See <see cref="DefaultBulkDelaySeconds"/>
+    /// for what this does and does not promise.
+    /// </summary>
+    public int BulkDelaySeconds { get; init; } = DefaultBulkDelaySeconds;
+
+    /// <summary>
+    /// The most messages one bulk run may attempt. ⛔ A selection above it disables the action rather
+    /// than warning about it.
+    /// </summary>
+    public int BulkMaxPerRun { get; init; } = DefaultBulkMaxPerRun;
+
     /// <summary>True when a host and a sender address are present — the minimum an <c>.eml</c> needs.</summary>
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(FromAddress);
@@ -122,6 +176,34 @@ public sealed record SmtpSettings
         if (!MessageLanguages.IsSupported(MessageLanguage))
         {
             problems.Add(new LocalizedText(StatusCatalog.SmtpUnknownMessageLanguage, MessageLanguage));
+        }
+
+        // ⚠⚠ CHECKED UNCONDITIONALLY, unlike Port — and the difference is deliberate rather than an
+        //    oversight. The port is only meaningful once a host exists, so it is judged inside that
+        //    branch; these two are properties of the SETTINGS themselves and a nonsense value is a fault
+        //    whether or not a server has been typed yet. ⭐ They are also the two values a future bulk run
+        //    reads without asking a question first, so "stored out of range" must be unreachable.
+        // ⭐ REFUSED, never clamped. That is this window's established behaviour — `Save` reports every
+        //   problem and writes nothing — and it is worth stating because §60.7 described it as clamping,
+        //   which measurement did not support: `PortText` parses and reports, it does not repair. One
+        //   numeric field that silently rewrites what the operator typed while another refuses would be
+        //   two behaviours in one form.
+        if (BulkDelaySeconds is < MinBulkDelaySeconds or > MaxBulkDelaySeconds)
+        {
+            problems.Add(new LocalizedText(
+                StatusCatalog.SmtpBulkDelayOutOfRange,
+                MinBulkDelaySeconds.ToString(CultureInfo.InvariantCulture),
+                MaxBulkDelaySeconds.ToString(CultureInfo.InvariantCulture),
+                BulkDelaySeconds.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        if (BulkMaxPerRun is < MinBulkMaxPerRun or > MaxBulkMaxPerRun)
+        {
+            problems.Add(new LocalizedText(
+                StatusCatalog.SmtpBulkLimitOutOfRange,
+                MinBulkMaxPerRun.ToString(CultureInfo.InvariantCulture),
+                MaxBulkMaxPerRun.ToString(CultureInfo.InvariantCulture),
+                BulkMaxPerRun.ToString(CultureInfo.InvariantCulture)));
         }
 
         if (string.IsNullOrWhiteSpace(FromAddress))

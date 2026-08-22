@@ -5419,8 +5419,38 @@ czysto, zero migracji** (ta sama reguła, którą v2 dostało od v1):
 | `BulkDelaySeconds` | **15** | 1–600 | ⭐ ogranicznik tempa i okno na reakcję, ⛔ nie gwarancja dostarczalności |
 | `BulkMaxPerRun` | **50** | 1–500 | ⛔ przekroczenie **wyłącza akcję**, nie ostrzega |
 
-⚠ Pola numeryczne commitują się na **blur albo Enter**, nigdy per znak, i poza zakresem **przycinają,
-nie resetują** (reguła Settings Center, którą LM stosuje już do portu).
+⚠⚠ **KOREKTA WYKONANA W L10.1, ratyfikowana przez użytkownika 2026-08-22 (decyzja A).** Pierwsza
+redakcja tego akapitu brzmiała: *„pola numeryczne commitują się na blur albo Enter, nigdy per
+znak, i poza zakresem **przycinają, nie resetują** (reguła Settings Center, którą LM stosuje już
+do portu)”*. ⛔ **Druga połowa była nieprawdziwa i pomiar tego nie potwierdził**: to okno nie
+przycina niczego — `PortText` parsuje i **raportuje**, a `Save` zgłasza *wszystkie* problemy naraz i
+**nic nie zapisuje**.
+
+⭐ **Obowiązuje zachowanie OKNA, nie zdania w tej specyfikacji:** commit na **blur albo Enter**, nigdy
+per znak — a wartość poza zakresem jest **ODMAWIANA, nigdy naprawiana**, i to, co operator wpisał,
+**zostaje w polu**. ⛔ Jedno pole liczbowe, które po cichu przepisuje wpisaną liczbę, obok drugiego,
+które odmawia, to dwa zachowania w jednym formularzu — a zgodność z oknem jest ważniejsza niż
+zgodność ze zdaniem, które to okno opisało błędnie.
+
+⚠ Zakresy sprawdzane są **bezwarunkowo**, inaczej niż port (ten ma sens dopiero, gdy istnieje host):
+to własności samych ustawień, a przyszła seria czyta je bez zadawania pytań, więc „zapisane poza
+zakresem” musi być nieosiągalne. Przypięte przez `BulkSendSettingsTests`
+(`ADelayOutsideItsRangeIsRefusedAndNotRepaired`, `TheRangesAreCheckedEvenWithNoServer`).
+
+⭐ **Trzy rzeczy, których plan nie przewidział, dodane w L10.1** (✅ ratyfikowane przy odbiorze):
+
+- **`AuditActions.LicenceSent` + `AuditTargets.Licence`** w `Data/RegisterRecords.cs` — czytelnik musi
+  nazwać to, co pisze `LicenceDelivery`, czyli wartość zyskuje DRUGIEGO właściciela. ⛔ `LicenceDelivery`
+  **nie zostało tknięte** (§60.7 tego zabrania); zgodność dowodzona jest **behawioralnie** — test wykonuje
+  prawdziwą wysyłkę i sprawdza, że rejestr ją widzi, co dowodzi ŚCIEŻKI, a nie zgodności dwóch napisów.
+  ⏭ Zwinięcie do jednego właściciela zostało zaproponowane i świadomie **nieprzyjęte**.
+- **`LicenseRegister.StatementsExecuted`** (`internal`, bez konsumenta w aplikacji) — szew pomiarowy,
+  bo twierdzenia „jedno zapytanie” nie da się osiągnąć przez publiczne API. ⚠ Mierzy się LICZBĘ
+  INSTRUKCJI, nie czas: próg czasowy na maszynie deweloperskiej jest testem migotliwym i nie
+  odróżniłby „jednego zapytania” od „pięciuset szybkich”.
+- **`SmtpSettingsStoreTests.ThisBuildWritesVersionTwo` wycofany** — przypinał literał `2` i zapalił się,
+  gdy wersja legalnie się przesunęła; kształt gotchy **#407**. Zastąpiony testem RELACJI
+  (`plik == CurrentVersion`) plus **jedną** zapadką na numer.
 
 **Pozostałe pliki:**
 
@@ -5556,7 +5586,7 @@ też powód, dla którego K1 jest znośne.
 
 | Krok | Zakres | Testy |
 |---|---|---|
-| **L10.1** | `SmtpSettings` v3 · `GetLastSentAt` · sekcja w Ustawieniach | v2 czyta się czysto · przycinanie zakresów · **jedno** zapytanie audytu (pomiar ~500 licencji) · `Limit=200` nie obcina |
+| **L10.1** ✅ **wykonane 2026-08-22** | `SmtpSettings` v3 · `GetLastSentAt` · sekcja w Ustawieniach | v2 czyta się czysto · zakresy **odmawiane, nie przycinane** (korekta §60.7) · **jedno** zapytanie audytu (zmierzone na 500 licencjach) · `Limit=200` nie obcina |
 | **L10.2** | `BulkSend.cs` — PLAN | 4 warunki osobno · `blocked` wstrzymany · wygasły artefakt wstrzymany · **`NotYetValid` przechodzi** · „już wysłane" liczone wobec `IssuedAt` (⭐ odnowienie **nie** jest pominięte) · duplikaty adresów · limit serii · `Matches` czuły na kolejność/adres/verdykt |
 | **L10.3** | `BulkSendRun.cs` — PROGRESS + RESULT | ⭐ **niezmiennik `Planned == Sent+Failed+Skipped+NotAttempted`** · `Completed` rośnie co próbę, ⛔ nigdy przy odczekaniu · **K1**: po błędzie reszta to `NotAttempted`, wynik `StoppedAfterError` · przerwanie **dokańcza** bieżącą próbę · `StoppedByOperator` ≠ `StoppedAfterError` · `licence.sent`/`licence.send-failed` po KAŻDEJ próbie · `licence.batch-sent` raz · `Elapsed` z wstrzykniętego zegara |
 | **L10.4** | `BulkSendViewModel` + katalog + EN/PL | brak `Confirm` → **odmowa** (reguła „Forget settings") · plan zmieniony → **odmowa** · porażka kompozycji → nic nie wyszło, licencja nazwana · raport **przeżywa zmianę języka** (⭐ sprawdzone na ZREALIZOWANYM wyjściu, nie na XAML-u — #370) · ticki: zdjęte tylko wysłane · TSV zawiera podsumowanie **i** szczegóły |

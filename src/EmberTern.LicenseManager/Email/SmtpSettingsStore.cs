@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text;
 using System.Text.Json;
@@ -67,13 +67,14 @@ public sealed class SmtpSettingsStore
     /// <summary>
     /// The container version this build writes. A newer one is refused rather than guessed at.
     ///
-    /// <para>⭐ <b>v2 (L6.1a) added <c>messageLanguage</c>, and v1 still reads correctly.</b> Every stored
-    /// field is nullable by design (§13.4's forward-compatibility rule applied to this file), so a v1 file
-    /// simply has no language and takes <see cref="MessageLanguages.Default"/> — there is no migration
-    /// step, no rewrite on read, and nothing an operator has to do. ⚠ This is the SETTINGS file's version;
+    /// <para>⭐ <b>v2 (L6.1a) added <c>messageLanguage</c>; v3 (L10.1) added <c>bulkDelaySeconds</c>
+    /// and <c>bulkMaxPerRun</c> — and v1 and v2 both still read correctly.</b> Every stored field is
+    /// nullable by design (§13.4's forward-compatibility rule applied to this file), so an older file
+    /// simply has no value for the newer keys and takes their defaults — there is no migration step, no
+    /// rewrite on read, and nothing an operator has to do. ⚠ This is the SETTINGS file's version;
     /// ⛔ the register schema is untouched and stays at 2.</para>
     /// </summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -157,6 +158,14 @@ public sealed class SmtpSettingsStore
             //   `Resolve` here: an unrecognised code is kept as WRITTEN so the settings window can say
             //   what it found, and is resolved only at the moment a message is composed.
             MessageLanguage = stored.MessageLanguage ?? MessageLanguages.Default,
+
+            // ⭐⭐ v2 → v3: absent in every file written before L10.1, so a v2 file takes the
+            //    DEFAULTS and there is no migration step, no rewrite on read and nothing an operator
+            //    has to do. ⚠ The value is taken as WRITTEN and is not repaired here — the same
+            //    posture as `messageLanguage`: `Validate` is what reports an out-of-range number, so the
+            //    settings window can SAY what it found instead of silently showing something else.
+            BulkDelaySeconds = stored.BulkDelaySeconds ?? SmtpSettings.DefaultBulkDelaySeconds,
+            BulkMaxPerRun = stored.BulkMaxPerRun ?? SmtpSettings.DefaultBulkMaxPerRun,
         };
 
         if (string.IsNullOrEmpty(stored.Password))
@@ -202,6 +211,8 @@ public sealed class SmtpSettingsStore
             FromName = settings.FromName,
             Username = settings.Username,
             MessageLanguage = settings.MessageLanguage,
+            BulkDelaySeconds = settings.BulkDelaySeconds,
+            BulkMaxPerRun = settings.BulkMaxPerRun,
             Password = LocalDpapiProtector.Protect(settings.Password),
             PasswordProtection = ProtectionLabel,
         };
@@ -245,6 +256,12 @@ public sealed class SmtpSettingsStore
 
         /// <summary>⭐ Added in v2. Absent in a v1 file, which then takes the default.</summary>
         [JsonPropertyName("messageLanguage")] public string? MessageLanguage { get; init; }
+
+        /// <summary>⭐ Added in v3 (L10.1). Absent in a v1 or v2 file, which then takes the default.</summary>
+        [JsonPropertyName("bulkDelaySeconds")] public int? BulkDelaySeconds { get; init; }
+
+        /// <summary>⭐ Added in v3 (L10.1). Absent in a v1 or v2 file, which then takes the default.</summary>
+        [JsonPropertyName("bulkMaxPerRun")] public int? BulkMaxPerRun { get; init; }
 
         /// <summary>⛔ Ciphertext, always. Never a readable password.</summary>
         [JsonPropertyName("password")] public string? Password { get; init; }

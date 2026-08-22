@@ -227,6 +227,22 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
     [ObservableProperty]
     private SmtpSecurityOption _selectedSecurity;
 
+    /// <summary>Seconds between two messages of a bulk run (L10.1).</summary>
+    /// <remarks>
+    /// ⚠⚠ <b>This value has no consumer until L10.5, and that is a knowing exception rather than the
+    /// dead-surface trap</b> (#233). The two cases this repository already refused look similar and are
+    /// not: <c>ClientLibraryPath</c> offered a decision that could NEVER have an effect on the code path
+    /// the application actually takes, and L8's language picker was shown DISABLED because nothing stored
+    /// what it chose. Here the value is stored, is read back, and its reader arrives inside the same stage
+    /// (§60.12). ⛔ It is still the only surface L10.1 puts on screen — no bulk-send UI exists yet.
+    /// </remarks>
+    [ObservableProperty]
+    private int _bulkDelaySeconds = SmtpSettings.DefaultBulkDelaySeconds;
+
+    /// <summary>The most messages one bulk run may attempt (L10.1).</summary>
+    [ObservableProperty]
+    private int _bulkMaxPerRun = SmtpSettings.DefaultBulkMaxPerRun;
+
     /// <summary>The address the customer sees.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(DeliverySummary))]
@@ -534,6 +550,8 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
         Username = Username.Trim(),
         Password = Password,
         MessageLanguage = MessageLanguage.Code,
+        BulkDelaySeconds = BulkDelaySeconds,
+        BulkMaxPerRun = BulkMaxPerRun,
     };
 
     private void Reload()
@@ -590,6 +608,8 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
         FromName = settings.FromName;
         Username = settings.Username;
         Password = settings.Password;
+        BulkDelaySeconds = settings.BulkDelaySeconds;
+        BulkMaxPerRun = settings.BulkMaxPerRun;
 
         SelectedSecurity = SecurityOptions.FirstOrDefault(o => o.Value == settings.Security)
             ?? SecurityOptions[0];
@@ -600,6 +620,44 @@ public sealed partial class SettingsViewModel : MessageHostViewModel
         var language = MessageLanguages.Resolve(settings.MessageLanguage);
         MessageLanguage = MessageLanguageOptions.FirstOrDefault(o => o.Code == language)
             ?? MessageLanguageOptions[0];
+    }
+
+    /// <summary>The pause between bulk messages, as text. ⚠ Commits on blur or Enter, like the port.</summary>
+    /// <remarks>
+    /// ⭐⭐ <b>An unparseable or out-of-range value is KEPT, not repaired</b> — the same posture
+    /// <see cref="PortText"/> takes, and it is deliberate rather than inherited by accident. `Save`
+    /// reports every problem at once and writes nothing, so the operator sees WHAT is wrong with the
+    /// number they typed. ⛔ A field that silently clamped while the one above it refused would be two
+    /// numeric behaviours in one form. (§60.7 described this as clamping; the window does not clamp, and
+    /// the window is the thing to be consistent with.)
+    /// </remarks>
+    public string BulkDelayText
+    {
+        get => BulkDelaySeconds.ToString(CultureInfo.InvariantCulture);
+        set
+        {
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+            {
+                BulkDelaySeconds = parsed;
+            }
+
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>The run limit, as text. ⚠ Same contract as <see cref="BulkDelayText"/>.</summary>
+    public string BulkMaxPerRunText
+    {
+        get => BulkMaxPerRun.ToString(CultureInfo.InvariantCulture);
+        set
+        {
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+            {
+                BulkMaxPerRun = parsed;
+            }
+
+            OnPropertyChanged();
+        }
     }
 
     /// <summary>The port as text, for the one field that is not a string. ⚠ Commits on blur or Enter.</summary>

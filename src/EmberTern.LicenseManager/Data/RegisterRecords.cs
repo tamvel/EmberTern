@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 
 namespace EmberTern.LicenseManager.Data;
 
@@ -148,6 +148,48 @@ public sealed record AuditEntry
 
     /// <summary>A free-text remark.</summary>
     public string? Note { get; init; }
+}
+
+/// <summary>
+/// The audit actions a READER has to name. Persisted verbatim, so append-only.
+///
+/// <para>⚠⚠ <b>Deliberately NOT the whole vocabulary, and that is the point of the doc comment.</b>
+/// The register and its workflows write around twenty actions and every one of them is a literal at its
+/// own single write site — which is correct, because a value written in exactly one place has exactly
+/// one owner. A name arrives HERE only when something has to <b>read back</b> what another component
+/// wrote, because that is the moment the string acquires a SECOND owner and becomes the hand-typed
+/// derived value gotcha #284 is about.</para>
+///
+/// <para>⛔ So this is not a refactoring target: moving the other actions here would create the second
+/// owner it exists to prevent.</para>
+/// </summary>
+public static class AuditActions
+{
+    /// <summary>
+    /// A licence artifact left this application by e-mail and the server accepted it.
+    /// </summary>
+    /// <remarks>
+    /// ⭐ Written by <c>LicenceDelivery</c>, read by <see cref="LicenseRegister.GetLastSentAt"/>. ⚠ The
+    /// two are proved to agree BEHAVIOURALLY — a test performs a delivery and asserts the register sees
+    /// it — rather than by comparing this constant against a literal, which would only prove that two
+    /// strings match and not that the path works.
+    /// ⛔ It says the SERVER ACCEPTED the message; it never says the customer received it.
+    /// </remarks>
+    public const string LicenceSent = "licence.sent";
+}
+
+/// <summary>
+/// The audit target types a READER has to name. Persisted verbatim, so append-only.
+/// </summary>
+/// <remarks>
+/// ⭐ Same rule, and same narrow scope, as <see cref="AuditActions"/>: a name arrives here only when
+/// something reads back what another component wrote. ⚠ <c>customer</c>, <c>batch</c> and <c>key</c>
+/// are deliberately absent — nothing reads them yet.
+/// </remarks>
+public static class AuditTargets
+{
+    /// <summary>A licence. ⭐ The <c>target_id</c> beside it is the <c>lid</c>.</summary>
+    public const string Licence = "licence";
 }
 
 /// <summary>The reasons an artifact gets issued. Persisted verbatim, so append-only.</summary>

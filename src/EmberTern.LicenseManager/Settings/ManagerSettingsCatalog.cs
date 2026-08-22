@@ -121,6 +121,26 @@ public static class ManagerSettingsCatalog
     /// <summary>The SMTP group's caption on the E-mail page.</summary>
     public static string SmtpSettings => Word(nameof(SmtpSettings));
 
+    /// <summary>The bulk-sending group's caption on the E-mail page (L10.1).</summary>
+    public static string BulkSending => Word(nameof(BulkSending));
+
+    /// <summary>
+    /// ⛔⛔ The sentence that keeps these two fields honest: they limit the PACE of a run, and they
+    /// are not a promise about deliverability.
+    /// </summary>
+    /// <remarks>
+    /// ⭐ It is on screen rather than in a comment because the operator is the person who would
+    /// otherwise assume it. What actually decides whether a mailbox accepts a run — SPF, DKIM, DMARC and
+    /// the sender's reputation — is outside this application entirely (§60.9).
+    /// </remarks>
+    public static string BulkSendingDescription => Word(nameof(BulkSendingDescription));
+
+    /// <summary>The pause-between-messages row's caption.</summary>
+    public static string BulkDelay => Word(nameof(BulkDelay));
+
+    /// <summary>The messages-per-run row's caption.</summary>
+    public static string BulkMaxPerRun => Word(nameof(BulkMaxPerRun));
+
     /// <summary>⭐ The one sentence that tells an operator whether they are done: nothing is set yet.</summary>
     public static string DeliveryNotConfigured => Word(nameof(DeliveryNotConfigured));
 

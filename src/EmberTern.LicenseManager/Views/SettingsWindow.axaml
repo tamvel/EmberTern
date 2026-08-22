@@ -258,6 +258,31 @@
                    Margin="{DynamicResource Margin.SectionGap}"
                    Text="{lm:Loc Settings.ItIndependentInterfaceLanguageAppliesEvery}" />
 
+        <!-- ══ BULK SENDING ═════════════════════════════════════ -->
+        <!-- ⚠⚠ THE ONE SURFACE L10.1 PUTS ON SCREEN, and its consumer arrives in L10.5. That is a
+             knowing exception rather than the dead-surface trap (#233) — the reasoning is on
+             `SettingsViewModel.BulkDelaySeconds`, and the short version is that the value IS stored and IS
+             read back, unlike `ClientLibraryPath` (which could never have an effect) and unlike L8's
+             disabled language picker (which stored nothing).
+             ⛔ No bulk-send UI belongs here or anywhere else yet: §60.12 puts the card in L10.5. -->
+        <TextBlock Classes="section" Text="{lm:Loc Settings.BulkSending}" />
+
+        <!-- ⛔⛔ THE HONEST SENTENCE, on screen rather than in a comment: these two limit the PACE of a
+             run, and they are not a promise about deliverability. The operator is exactly the person who
+             would otherwise assume they are (§60.9). -->
+        <TextBlock Name="BulkSendingNote" Classes="hint" TextWrapping="Wrap"
+                   Margin="{DynamicResource Margin.FieldGap}"
+                   Text="{lm:Loc Settings.BulkSendingDescription}" />
+
+        <TextBlock Classes="field-label" Text="{lm:Loc Settings.BulkDelay}" />
+        <!-- ⚠ Commits on blur or Enter, never per keystroke — and an out-of-range value is REPORTED by
+             Save rather than silently rewritten, exactly as the port above it. -->
+        <TextBox Name="BulkDelayBox" Margin="{DynamicResource Margin.FieldGap}"
+                 Text="{Binding BulkDelayText}" />
+
+        <TextBlock Classes="field-label" Text="{lm:Loc Settings.BulkMaxPerRun}" />
+        <TextBox Name="BulkMaxPerRunBox" Margin="{DynamicResource Margin.SectionGap}"
+                 Text="{Binding BulkMaxPerRunText}" />
         <!-- ⭐ ONE message surface, and the LAST child: the body band's padding separates it from the
              footer, so it carries no bottom margin of its own.
 

@@ -1253,4 +1253,22 @@
   <data name="About.Close" xml:space="preserve">
     <value>Close</value>
   </data>
+  <data name="Status.SmtpBulkDelayOutOfRange" xml:space="preserve">
+    <value>The pause between bulk messages must be between {0} and {1} seconds, not {2}.</value>
+  </data>
+  <data name="Status.SmtpBulkLimitOutOfRange" xml:space="preserve">
+    <value>A bulk run may send between {0} and {1} messages, not {2}.</value>
+  </data>
+  <data name="Settings.BulkSending" xml:space="preserve">
+    <value>Bulk sending</value>
+  </data>
+  <data name="Settings.BulkSendingDescription" xml:space="preserve">
+    <value>These two limit the pace of a bulk run and leave you time to stop it. They are not a promise about deliverability — that depends on your domain’s SPF, DKIM and DMARC records and on the sending address’s reputation, neither of which this application can see.</value>
+  </data>
+  <data name="Settings.BulkDelay" xml:space="preserve">
+    <value>Pause between messages, in seconds</value>
+  </data>
+  <data name="Settings.BulkMaxPerRun" xml:space="preserve">
+    <value>Most messages one run may send</value>
+  </data>
 </root>

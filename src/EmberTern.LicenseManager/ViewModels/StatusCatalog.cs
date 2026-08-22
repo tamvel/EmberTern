@@ -346,6 +346,17 @@ internal static class StatusCatalog
     /// <summary>The port must be between 1 and 65535, not {0}.</summary>
     public static MessageKey SmtpPortOutOfRange => Key(nameof(SmtpPortOutOfRange));
 
+    /// <summary>The pause between bulk messages must be between {0} and {1} seconds, not {2}.</summary>
+    /// <remarks>
+    /// ⚠ The bounds travel as ARGUMENTS rather than being written into the sentence: they are
+    /// constants on <c>SmtpSettings</c>, and a translated sentence spelling them would be a second copy
+    /// that goes stale the day a bound moves (#284).
+    /// </remarks>
+    public static MessageKey SmtpBulkDelayOutOfRange => Key(nameof(SmtpBulkDelayOutOfRange));
+
+    /// <summary>A bulk run may send between {0} and {1} messages, not {2}.</summary>
+    public static MessageKey SmtpBulkLimitOutOfRange => Key(nameof(SmtpBulkLimitOutOfRange));
+
     /// <summary>A username cannot be used without STARTTLS — the password would travel unencrypted. Either en...</summary>
     public static MessageKey SmtpUsernameNeedsStartTls => Key(nameof(SmtpUsernameNeedsStartTls));
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text;
 using EmberTern.LicenseManager.Email;
@@ -261,14 +261,45 @@ public sealed class SmtpSettingsStoreTests : IDisposable
         Assert.Equal(MessageLanguages.Default, load.Settings.MessageLanguage);
     }
 
-    /// <summary>This build writes v2, and says so in the file.</summary>
+    /// <summary>
+    /// ⭐⭐ <b>This build writes ITS OWN version into the file — asserted as a RELATIONSHIP, not
+    /// against a number.</b>
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ <b>It used to be called <c>ThisBuildWritesVersionTwo</c> and pinned the literal <c>2</c>,
+    /// and L10.1 turned it red by raising the container to v3 for the two bulk-sending values.</b> A test
+    /// named after a version number reads as <i>"you broke the settings file"</i> on the day the version
+    /// legitimately moves — gotcha #407's exact shape, met here in the author's own suite. ⭐ The claim
+    /// that must ALWAYS hold is the relationship: whatever this build's <c>CurrentVersion</c> is, that is
+    /// what lands in the file, and a header that was silently omitted would fail this.
+    /// <para>⭐ The NUMBER is pinned exactly once, just below, and deliberately as a TRIPWIRE: raising a
+    /// persisted container version must be a decision somebody takes, not a diff nobody reads.</para>
+    /// </remarks>
     [Fact]
-    public void ThisBuildWritesVersionTwo()
+    public void ThisBuildWritesItsOwnVersionIntoTheFile()
     {
         _store.Save(Sample);
 
-        Assert.Equal(2, SmtpSettingsStore.CurrentVersion);
-        Assert.Contains("\"version\": 2", File.ReadAllText(_store.FilePath), StringComparison.Ordinal);
+        Assert.Contains(
+            $"\"version\": {SmtpSettingsStore.CurrentVersion}",
+            File.ReadAllText(_store.FilePath),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// ⛔ <b>THE TRIPWIRE over the container version.</b> v1 → v2 added <c>messageLanguage</c> (L6.1a);
+    /// v2 → v3 added <c>bulkDelaySeconds</c> and <c>bulkMaxPerRun</c> (L10.1).
+    /// </summary>
+    /// <remarks>
+    /// ⚠ A failure here is not a defect — it means somebody raised the version, and the questions it
+    /// forces are the right ones: is every new field NULLABLE in the wire shape, does the previous version
+    /// still read, and is there a test proving it against a file this build did not write? ⭐ For v3 that
+    /// test is <c>BulkSendSettingsTests.AVersion2FileReadsCleanlyAndTakesTheNewDefaults</c>.
+    /// </remarks>
+    [Fact]
+    public void TheContainerVersionIsWhatThisStageSet()
+    {
+        Assert.Equal(3, SmtpSettingsStore.CurrentVersion);
     }
 
     /// <summary>The language survives the round trip, and is stored in clear - it is not a secret.</summary>
