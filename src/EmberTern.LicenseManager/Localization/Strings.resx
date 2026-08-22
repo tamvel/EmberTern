@@ -1526,4 +1526,34 @@
   <data name="Bulk.HeaderReady.other" xml:space="preserve">
     <value>{0} messages ready</value>
   </data>
+  <data name="Main.RemoveLicence" xml:space="preserve">
+    <value>Remove licence…</value>
+  </data>
+  <data name="Status.SelectLicenceToRemove" xml:space="preserve">
+    <value>Select a licence in the list first.</value>
+  </data>
+  <data name="Status.LicenceNotInRegister" xml:space="preserve">
+    <value>Licence {0} is not in the register, so there is nothing to remove.</value>
+  </data>
+  <data name="Status.LicenceIsRetired" xml:space="preserve">
+    <value>Licence {0} was retired out of the active register and cannot be changed. Its artifacts and its history are intact and readable; the row itself is done.</value>
+  </data>
+  <data name="Status.LicenceDeleted" xml:space="preserve">
+    <value>Licence {0} was removed. It was never issued, so nothing was ever delivered under it — and the register’s history still records that it existed.</value>
+  </data>
+  <data name="Status.LicenceRetired" xml:space="preserve">
+    <value>Licence {0} was retired. It is gone from the active register, and its {1} issued artifact(s) and its whole history are kept — they cannot be deleted.</value>
+  </data>
+  <data name="Confirm.RemoveLicenceTitle" xml:space="preserve">
+    <value>Remove this licence?</value>
+  </data>
+  <data name="Confirm.RemoveLicenceNeverIssuedMessage" xml:space="preserve">
+    <value>Licence {0} was never issued, so nothing was ever delivered under it. It will be removed from the register entirely. The history keeps a record that it existed. This is an administrative action.</value>
+  </data>
+  <data name="Confirm.RemoveLicenceIssuedMessage" xml:space="preserve">
+    <value>Licence {0} has {1} issued artifact(s). It will be retired: it leaves the active register and can no longer be issued, renewed or sent — and every artifact ever issued for it, together with its whole audit trail, is kept and cannot be deleted. This is an administrative action.</value>
+  </data>
+  <data name="Confirm.RemoveLicenceAction" xml:space="preserve">
+    <value>Remove licence</value>
+  </data>
 </root>

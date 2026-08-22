@@ -1599,4 +1599,34 @@
   <data name="Bulk.HeaderReady.many" xml:space="preserve">
     <value>{0} wiadomości do wysłania</value>
   </data>
+  <data name="Main.RemoveLicence" xml:space="preserve">
+    <value>Usuń licencję…</value>
+  </data>
+  <data name="Status.SelectLicenceToRemove" xml:space="preserve">
+    <value>Najpierw zaznacz licencję na liście.</value>
+  </data>
+  <data name="Status.LicenceNotInRegister" xml:space="preserve">
+    <value>Licencji {0} nie ma w rejestrze, więc nie ma czego usuwać.</value>
+  </data>
+  <data name="Status.LicenceIsRetired" xml:space="preserve">
+    <value>Licencja {0} została wycofana z aktywnego rejestru i nie da się jej zmienić. Jej artefakty i historia są nienaruszone i czytelne; sam wiersz jest zamknięty.</value>
+  </data>
+  <data name="Status.LicenceDeleted" xml:space="preserve">
+    <value>Licencja {0} została usunięta. Nigdy jej nie wystawiono, więc nic pod nią nie zostało dostarczone — a historia rejestru nadal pamięta, że istniała.</value>
+  </data>
+  <data name="Status.LicenceRetired" xml:space="preserve">
+    <value>Licencja {0} została wycofana. Nie ma jej już w aktywnym rejestrze, a jej {1} wystawiony/-e artefakt(y) i cała historia zostają — nie da się ich skasować.</value>
+  </data>
+  <data name="Confirm.RemoveLicenceTitle" xml:space="preserve">
+    <value>Usunąć tę licencję?</value>
+  </data>
+  <data name="Confirm.RemoveLicenceNeverIssuedMessage" xml:space="preserve">
+    <value>Licencji {0} nigdy nie wystawiono, więc nic pod nią nie zostało dostarczone. Zostanie usunięta z rejestru w całości. Historia zachowa ślad, że istniała. To operacja administracyjna.</value>
+  </data>
+  <data name="Confirm.RemoveLicenceIssuedMessage" xml:space="preserve">
+    <value>Licencja {0} ma {1} wystawiony/-e artefakt(y). Zostanie wycofana: znika z aktywnego rejestru i nie będzie już można jej wystawić, przedłużyć ani wysłać — a każdy artefakt kiedykolwiek dla niej wystawiony wraz z całą linią audytu zostaje i nie da się go skasować. To operacja administracyjna.</value>
+  </data>
+  <data name="Confirm.RemoveLicenceAction" xml:space="preserve">
+    <value>Usuń licencję</value>
+  </data>
 </root>

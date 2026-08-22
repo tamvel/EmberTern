@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using EmberTern.LicenseManager.Localization;
+using EmberTern.LicenseManager.Services;
 using EmberTern.LicenseManager.ViewModels;
 
 namespace EmberTern.LicenseManager.Data;
@@ -31,7 +32,7 @@ namespace EmberTern.LicenseManager.Data;
 public sealed class LicenseRegister : IDisposable
 {
     /// <summary>The schema version this build writes.</summary>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     private readonly SqliteConnection _connection;
     private readonly Func<DateTimeOffset> _clock;
@@ -121,6 +122,11 @@ public sealed class LicenseRegister : IDisposable
                 SELECT lid, MAX(artifact_id), $now FROM issued_artifacts GROUP BY lid;
                 """,
                 transaction, ("$now", Stamp(_clock())));
+        }
+
+        if (from < 3)
+        {
+            Execute(SchemaV3, transaction);
         }
 
         Execute("INSERT INTO schema_meta(key, value) VALUES('version', $v) " +
@@ -223,6 +229,28 @@ public sealed class LicenseRegister : IDisposable
         LEFT JOIN license_current_artifact c ON c.lid = a.lid;
         """;
 
+    // ⭐⭐ SCHEMA 3 — RETIREMENT, and it is a COLUMN rather than a third `LicenseStatuses` value.
+    //
+    //    A licence that has ever been issued CANNOT be deleted, and that is measured rather than assumed:
+    //    `DELETE FROM licenses` on such a row fails with SQLITE_CONSTRAINT_FOREIGNKEY (19/787), because
+    //    `issued_artifacts` references it — and those rows cannot be deleted either, by trigger. There is
+    //    no order of operations that removes an issued licence. So "remove it from the active register"
+    //    has to mean something the schema can actually do.
+    //
+    //    ⛔ NOT a third status. `LicenseStatuses` describes the AGREEMENT (`active` / `blocked`, and
+    //    §26.2 records that `blocked` is bookkeeping — a licence in the field keeps working). Retirement is
+    //    an ADMINISTRATIVE fact about the register, orthogonal to it: a retired licence was active or
+    //    blocked, and that stays true. Folding the two together would put a retired row in the Blocked
+    //    filter and would make every reader that switches on the status learn a value that answers a
+    //    different question.
+    //
+    //    ⭐ A TIMESTAMP rather than a flag, for the reason every other column here is one: "when" is the
+    //    fact worth keeping, and a NULL is a perfectly good "not retired". Nullable, so every existing row
+    //    reads as active with no backfill.
+    private const string SchemaV3 = """
+        ALTER TABLE licenses ADD COLUMN retired_at TEXT;
+        """;
+
     // ── Customers ───────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>Creates or updates a customer, and records it.</summary>
@@ -284,8 +312,16 @@ public sealed class LicenseRegister : IDisposable
 
     /// <summary>How many licences a customer has. ⭐ What decides whether they can be removed at all.</summary>
     /// <remarks>
-    /// ⚠ Through <c>Read</c> rather than <c>ReadOne</c>: that one is constrained to reference types, and a
-    /// count is not one. ⭐ <c>COUNT(*)</c> always returns exactly one row, so the first is the answer.
+    /// <para>⚠ Through <c>Read</c> rather than <c>ReadOne</c>: that one is constrained to reference types,
+    /// and a count is not one. ⭐ <c>COUNT(*)</c> always returns exactly one row, so the first is the
+    /// answer.</para>
+    /// <para>⚠⚠ <b>RETIRED LICENCES ARE COUNTED, and that is not an oversight — it is the foreign key.</b>
+    /// A retired licence is still a ROW in <c>licenses</c> pointing at this customer, so the customer's
+    /// own DELETE still fails on it. Excluding them here would produce a count of zero and then a refusal
+    /// from the database a moment later, which is the one thing a pre-flight check may not do.
+    /// ⭐ So retiring a licence removes it from every OPERATION; it does not make its customer removable.
+    /// A customer whose every licence was issued is a customer the register keeps, and that follows from
+    /// the artifacts being immutable rather than from any rule of ours.</para>
     /// </remarks>
     public int CountLicenses(string customerId) => CountLicenses(customerId, null);
 
@@ -428,6 +464,21 @@ public sealed class LicenseRegister : IDisposable
                 license.LicenseId, existing.CustomerId, license.CustomerId);
         }
 
+        // ⭐⭐ A RETIRED LICENCE IS NOT EDITABLE, and the reason is the same shape as the guard above: it
+        //    is invisible to every surface, so a write that succeeded would change something the operator
+        //    cannot see and cannot check. ⚠ The upsert below deliberately does not name `retired_at`, so
+        //    without this a save would quietly edit a retired row and leave it retired — the worst of
+        //    both. ⛔ There is no "unretire": nothing has asked for one, and a reversal nobody requested
+        //    is a second way for a licence to come back into the active register.
+        if (existing is { IsRetired: true })
+        {
+            throw new RegisterIntegrityException(
+                StatusCatalog.LicenceIsRetired,
+                $"Licence {license.LicenseId} was retired out of the active register and cannot be " +
+                "changed. Its artifacts and its history are intact and readable; the row itself is done.",
+                license.LicenseId);
+        }
+
         var saved = license with
         {
             CreatedAt = existing?.CreatedAt ?? now,
@@ -464,13 +515,131 @@ public sealed class LicenseRegister : IDisposable
         return saved;
     }
 
-    /// <summary>A customer's licences, newest expiry first.</summary>
+    /// <summary>A customer's ACTIVE licences, newest expiry first.</summary>
+    /// <remarks>
+    /// ⚠⚠ <b>Retired licences are excluded, and that is what "removed from the active register" MEANS.</b>
+    /// ⛔ Do not add an overload that includes them for convenience: every caller of this is an operation
+    /// (issue, renew, send), and a retired licence must not be reachable by any of them. The register still
+    /// holds the row — <see cref="GetAllLicenses"/> and the audit log are where it is still visible.
+    /// </remarks>
     public IReadOnlyList<LicenseRecord> GetLicenses(string customerId) => Read(
-        "SELECT * FROM licenses WHERE customer_id = $id ORDER BY expires_at DESC;",
+        "SELECT * FROM licenses WHERE customer_id = $id AND retired_at IS NULL " +
+        "ORDER BY expires_at DESC;",
         ReadLicense, ("$id", customerId));
 
     /// <summary>One licence, or <see langword="null"/>.</summary>
+    /// <remarks>
+    /// ⚠ This one DOES find a retired licence, unlike <see cref="GetLicenses"/> and
+    /// <see cref="QueryLicenses"/>. It is the identity lookup the register's own guards use — and a guard
+    /// that could not see a retired row could not refuse to write to it.
+    /// </remarks>
     public LicenseRecord? GetLicense(string licenseId) => GetLicense(licenseId, null);
+
+    /// <summary>
+    /// Takes a licence out of the active register, and records that it happened.
+    /// </summary>
+    /// <returns>
+    /// <see cref="LicenceRemoval.Deleted"/> when the row itself is gone, or
+    /// <see cref="LicenceRemoval.Retired"/> when it was kept and marked.
+    /// </returns>
+    /// <remarks>
+    /// <para>⭐⭐ <b>TWO OUTCOMES, AND THE SCHEMA CHOOSES BETWEEN THEM — not a policy.</b> Measured against
+    /// a real register: <c>DELETE FROM licenses</c> succeeds for a licence that was never issued, and
+    /// fails with <c>SQLITE_CONSTRAINT_FOREIGNKEY</c> (19/787) for one that was, because
+    /// <c>issued_artifacts</c> references it. ⛔ And that cannot be worked around: those rows are refused
+    /// deletion by a trigger, so there is no order of operations that removes an issued licence.</para>
+    ///
+    /// <list type="bullet">
+    ///   <item><b>Never issued</b> → the row is DELETED. Nothing is orphaned: with no artifact there is no
+    ///   <c>license_current_artifact</c> row either, which the same measurement confirmed
+    ///   (<c>PRAGMA foreign_key_check</c> reports nothing afterwards).</item>
+    ///   <item><b>Ever issued</b> → the row is RETIRED: <c>retired_at</c> is stamped and it leaves every
+    ///   active read. ⭐ Its artifacts, its current-artifact pointer and its whole audit trail are
+    ///   untouched — which is the point. The register can still answer "what exactly did we send this
+    ///   customer in 2026?" with the bytes.</item>
+    /// </list>
+    ///
+    /// <para>⛔ <b>The audit log is not touched in either case</b>, and cannot be: it is append-only at the
+    /// database. Both outcomes ADD a line carrying the whole row in <c>before_json</c>, so the register
+    /// remembers the licence either way — Architecture rule #11 applied to an operator's clean-up.</para>
+    ///
+    /// <para>⚠ Retiring a licence does NOT make its customer removable. The FK from <c>licenses</c> still
+    /// holds the row, so <see cref="CountLicenses"/> keeps counting it — see that method.</para>
+    /// </remarks>
+    /// <exception cref="RegisterIntegrityException">The licence is not in the register, or already retired.</exception>
+    public LicenceRemoval RemoveLicense(string licenseId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(licenseId);
+
+        var now = _clock();
+
+        using var transaction = _connection.BeginTransaction();
+
+        var existing = GetLicense(licenseId, transaction);
+
+        if (existing is null)
+        {
+            throw new RegisterIntegrityException(
+                StatusCatalog.LicenceNotInRegister,
+                $"Licence {licenseId} is not in the register, so there is nothing to remove.",
+                LicenceIdText.Short(licenseId));
+        }
+
+        if (existing.IsRetired)
+        {
+            throw new RegisterIntegrityException(
+                StatusCatalog.LicenceIsRetired,
+                $"Licence {licenseId} was already retired out of the active register.",
+                LicenceIdText.Short(licenseId));
+        }
+
+        // ⭐ The artifacts decide, and they are counted inside the transaction so the answer is the answer
+        //   the DELETE would have faced.
+        var artifacts = Read(
+            "SELECT COUNT(*) FROM issued_artifacts WHERE lid = $lid;", transaction,
+            r => r.GetInt32(0), ("$lid", licenseId))[0];
+
+        var outcome = artifacts == 0 ? LicenceRemoval.Deleted : LicenceRemoval.Retired;
+
+        if (outcome == LicenceRemoval.Deleted)
+        {
+            Execute("DELETE FROM licenses WHERE lid = $lid;", transaction, ("$lid", licenseId));
+        }
+        else
+        {
+            Execute(
+                "UPDATE licenses SET retired_at = $at, updated_at = $at WHERE lid = $lid;",
+                transaction, ("$at", Stamp(now)), ("$lid", licenseId));
+        }
+
+        // ⭐ The whole record in `before_json`, so the history can still answer "what was this licence?" —
+        //   and, for the retired case, `after_json` shows the row as it now stands.
+        AppendAudit(transaction, new AuditEntry
+        {
+            At = now,
+            Actor = _actor,
+            Action = outcome == LicenceRemoval.Deleted ? "licence.deleted" : "licence.retired",
+            TargetType = "licence",
+            TargetId = licenseId,
+            BeforeJson = JsonSerializer.Serialize(existing),
+            AfterJson = outcome == LicenceRemoval.Deleted
+                ? null
+                : JsonSerializer.Serialize(existing with { RetiredAt = now, UpdatedAt = now }),
+            Note = string.Create(
+                CultureInfo.InvariantCulture,
+                $"{artifacts} artifact(s) issued; the audit trail and every artifact are kept."),
+        });
+
+        transaction.Commit();
+        return outcome;
+    }
+
+    /// <summary>
+    /// How many artifacts were ever issued for a licence. ⭐ What decides how it can be removed.
+    /// </summary>
+    public int CountArtifacts(string licenseId) => Read(
+        "SELECT COUNT(*) FROM issued_artifacts WHERE lid = $lid;", null,
+        r => r.GetInt32(0), ("$lid", licenseId))[0];
 
     private LicenseRecord? GetLicense(string licenseId, SqliteTransaction? transaction) => ReadOne(
         "SELECT * FROM licenses WHERE lid = $lid;", transaction, ReadLicense, ("$lid", licenseId));
@@ -792,6 +961,12 @@ public sealed class LicenseRegister : IDisposable
         {
             conditions.Add(neverIssued ? "cur.artifact_id IS NULL" : "cur.artifact_id IS NOT NULL");
         }
+
+        // ⚠⚠ ALWAYS, and it is not a filter the caller may turn off. A retired licence is out of the
+        //    active register: it must not appear in the licences view, must not be tickable, and must
+        //    therefore be unreachable to the batch renewal and the bulk send, both of which read exactly
+        //    this method. ⛔ There is deliberately no `IncludeRetired` on the query — see GetLicenses.
+        conditions.Add("l.retired_at IS NULL");
 
         var sql = LicenseSummarySelect +
                   (conditions.Count == 0 ? string.Empty : " WHERE " + string.Join(" AND ", conditions)) +
@@ -1217,6 +1392,7 @@ public sealed class LicenseRegister : IDisposable
         ExpiresAt = Parse(reader.GetString(reader.GetOrdinal("expires_at"))),
         MaintenanceUntil = Text(reader, "maint_until") is { } m ? Parse(m) : null,
         Status = reader.GetString(reader.GetOrdinal("status")),
+        RetiredAt = Text(reader, "retired_at") is { } retired ? Parse(retired) : null,
         Notes = Text(reader, "notes"),
         CreatedAt = Parse(reader.GetString(reader.GetOrdinal("created_at"))),
         UpdatedAt = Parse(reader.GetString(reader.GetOrdinal("updated_at"))),

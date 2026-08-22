@@ -67,6 +67,28 @@ public sealed record LicenseRecord
     /// </summary>
     public required string Status { get; init; }
 
+    /// <summary>
+    /// When this licence was retired out of the active register, or <see langword="null"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>A COLUMN of its own, deliberately NOT a third <see cref="LicenseStatuses"/> value.</b>
+    /// <see cref="Status"/> describes the AGREEMENT; this describes the REGISTER. They are orthogonal — a
+    /// retired licence was active or blocked when it was retired, and that stays true — and folding them
+    /// together would put a retired row in the Blocked filter and make every reader that switches on the
+    /// status learn a value answering a different question.</para>
+    /// <para>⚠⚠ It exists because a licence that has ever been issued <b>cannot be deleted</b>: measured,
+    /// <c>DELETE FROM licenses</c> on such a row fails with <c>SQLITE_CONSTRAINT_FOREIGNKEY</c> (19/787)
+    /// from <c>issued_artifacts</c>, whose own rows a trigger refuses to delete. See
+    /// <c>LicenseRegister.RemoveLicense</c>.</para>
+    /// <para>⛔ A retired licence is invisible to every OPERATION — it is not listed, not tickable, not
+    /// renewable and not sendable. ⭐ Its artifacts, its current-artifact pointer and its whole audit trail
+    /// are untouched.</para>
+    /// </remarks>
+    public DateTimeOffset? RetiredAt { get; init; }
+
+    /// <summary>Whether this licence has been retired out of the active register.</summary>
+    public bool IsRetired => RetiredAt is not null;
+
     /// <summary>⛔ Administrative notes. Never travel in a licence.</summary>
     public string? Notes { get; init; }
 
@@ -236,6 +258,30 @@ public static class IssueReasons
 /// it does not breach the append-only vocabulary rule: nothing ever persisted it, so no stored row can
 /// carry it and no reader can encounter it.</para>
 /// </summary>
+/// <summary>
+/// What removing a licence actually did to the register.
+/// </summary>
+/// <remarks>
+/// <para>⭐⭐ <b>The SCHEMA chooses between these, not a policy and not the operator.</b> Measured:
+/// <c>DELETE FROM licenses</c> succeeds for a licence that was never issued and fails with
+/// <c>SQLITE_CONSTRAINT_FOREIGNKEY</c> for one that was — <c>issued_artifacts</c> references it, and those
+/// rows are refused deletion by a trigger.</para>
+/// <para>⭐ It is REPORTED rather than hidden because the two outcomes differ in a way the operator can
+/// see afterwards: one licence is gone from the register entirely, the other is still there and still
+/// carries everything that was ever issued for it.</para>
+/// </remarks>
+public enum LicenceRemoval
+{
+    /// <summary>The row itself is gone. ⚠ Only reachable for a licence that was never issued.</summary>
+    Deleted,
+
+    /// <summary>
+    /// The row was kept and stamped <c>retired_at</c>, and has left every active read.
+    /// </summary>
+    /// <remarks>⭐ Its artifacts, its current-artifact pointer and its audit trail are untouched.</remarks>
+    Retired,
+}
+
 public static class LicenseStatuses
 {
     /// <summary>Current.</summary>

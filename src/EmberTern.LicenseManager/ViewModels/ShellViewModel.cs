@@ -367,6 +367,86 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     }
 
     /// <summary>
+    /// Removes the selected licence from the active register — after saying exactly which of the two
+    /// things that means.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>TWO OUTCOMES, AND THE SCHEMA CHOOSES BETWEEN THEM</b> (see
+    /// <c>LicenseRegister.RemoveLicense</c>): a licence that was never issued is DELETED, one that was is
+    /// RETIRED. ⚠ The operator is told WHICH before they confirm, in two different sentences — they are
+    /// confirming two different acts, and one sentence covering both would have to be vague about exactly
+    /// the part that matters.</para>
+    ///
+    /// <para>⭐ The artifact count is read from the REGISTER rather than from the history panel, which is a
+    /// snapshot taken when the licence was selected. The register counts again inside its own transaction;
+    /// this one is for the WORDS, that one is the guarantee.</para>
+    ///
+    /// <para>⛔ <b>With no confirmer wired it REFUSES rather than proceeding</b> — the rule L6.1a's
+    /// <c>Forget settings</c> established.</para>
+    /// </remarks>
+    [RelayCommand]
+    private async Task RemoveLicenceAsync()
+    {
+        if (SelectedLicense is not { } licence)
+        {
+            Message = StatusMessage.Warning(StatusCatalog.SelectLicenceToRemove);
+            return;
+        }
+
+        if (Confirm is null)
+        {
+            Message = StatusMessage.Warning(StatusCatalog.ConfirmationUnavailableNothingSent);
+            return;
+        }
+
+        var artifacts = _register.CountArtifacts(licence.LicenseId);
+        var shortId = LicenceIdText.Short(licence.LicenseId);
+
+        var confirmed = await Confirm(new ConfirmRequest(
+            ConfirmCatalog.RemoveLicenceTitle,
+            artifacts == 0
+                ? ConfirmCatalog.RemoveLicenceNeverIssuedMessage
+                : ConfirmCatalog.RemoveLicenceIssuedMessage,
+            ConfirmCatalog.RemoveLicenceAction,
+            shortId,
+            artifacts.ToString(CultureInfo.InvariantCulture))).ConfigureAwait(true);
+
+        if (!confirmed)
+        {
+            // ⭐ Cancel changes nothing and says nothing — a "cancelled" notice reports the absence of an event.
+            return;
+        }
+
+        LicenceRemoval outcome;
+        try
+        {
+            outcome = _register.RemoveLicense(licence.LicenseId);
+        }
+        catch (RegisterIntegrityException e)
+        {
+            // ⭐ The register's own sentence, resolved from its key. ⛔ Not `e.Message`.
+            Message = StatusMessage.Error(e.Key, [.. e.Arguments]);
+            return;
+        }
+
+        // ⚠ The FORM is cleared as well as the list: the removed licence's fields left on screen would
+        //   invite a "Save terms" that recreates it under the same identifier.
+        ClearLicenseForm();
+        SelectedLicense = null;
+        ReloadLicenses();
+
+        // ⚠ And the history panel, which was showing that licence's artifacts.
+        History.Load(null);
+
+        Message = outcome == LicenceRemoval.Deleted
+            ? StatusMessage.Success(StatusCatalog.LicenceDeleted, shortId)
+            : StatusMessage.Success(
+                StatusCatalog.LicenceRetired,
+                shortId,
+                artifacts.ToString(CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
     /// Removes the selected customer — after saying exactly what that does, and only when it is safe.
     /// </summary>
     /// <remarks>

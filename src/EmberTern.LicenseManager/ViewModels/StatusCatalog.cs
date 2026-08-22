@@ -433,6 +433,30 @@ internal static class StatusCatalog
     /// <summary>The report was copied to the clipboard.</summary>
     public static MessageKey BulkReportCopied => Key(nameof(BulkReportCopied));
 
+    // ── Removing a licence ───────────────────────────────────────────────────────────
+    // ⭐⭐ TWO OUTCOMES, AND THE SCHEMA CHOOSES: a licence that was never issued is DELETED; one that was
+    //   is RETIRED, because `issued_artifacts` references it and those rows can never be deleted. Both
+    //   keep the audit trail — it is append-only at the database.
+
+    /// <summary>Select a licence in the list first.</summary>
+    public static MessageKey SelectLicenceToRemove => Key(nameof(SelectLicenceToRemove));
+
+    /// <summary>Licence {0} is not in the register, so there is nothing to remove.</summary>
+    public static MessageKey LicenceNotInRegister => Key(nameof(LicenceNotInRegister));
+
+    /// <summary>Licence {0} was retired out of the active register and cannot be changed.</summary>
+    /// <remarks>
+    /// ⭐ Raised by the register both when something tries to EDIT a retired licence and when something
+    /// tries to retire it twice. ⛔ There is no "unretire" — nothing has asked for one.
+    /// </remarks>
+    public static MessageKey LicenceIsRetired => Key(nameof(LicenceIsRetired));
+
+    /// <summary>Licence {0} was removed. It was never issued, so nothing was ever delivered under it.</summary>
+    public static MessageKey LicenceDeleted => Key(nameof(LicenceDeleted));
+
+    /// <summary>Licence {0} was retired. Its {1} issued artifact(s) and its whole history are kept.</summary>
+    public static MessageKey LicenceRetired => Key(nameof(LicenceRetired));
+
     // ── Removing a customer ──────────────────────────────────────────────────────────
     // ⭐ The register keeps the whole record in its append-only history, so "removed" means the working
     //   row is gone and the history is not. ⛔ Nothing about this is a cascade — see DeleteCustomer.

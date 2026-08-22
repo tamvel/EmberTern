@@ -430,10 +430,27 @@
                    same `InspectLatestCommand` the button below runs — the work here is the GESTURE, not a
                    second way of inspecting; ⛔ a parallel implementation is what makes "never issued"
                    explain itself on one path and fall silent on the other. -->
+              <!-- ⚠⚠ The same `PointerPressed` the customers rail carries, for the same reason: Avalonia's
+                   `ListBox` does not select on right-click (gotcha #16 / #99), so without it the menu would
+                   act on whatever was selected before — and its one action removes a licence. -->
               <ListBox MaxHeight="180" ItemsSource="{Binding Licenses}"
                        Name="CustomerLicenses"
                        DoubleTapped="OnLicenseDoubleTapped"
+                       PointerPressed="OnCustomerListPointerPressed"
                        SelectedItem="{Binding SelectedLicense}">
+                <ListBox.ContextMenu>
+                  <!-- ⛔ ONE row, and it is the administrative one. What it DOES depends on the licence and
+                       the register says which: a licence that was never issued is deleted outright, one
+                       that was is retired and keeps every artifact it ever produced. The confirmation
+                       states which of the two before anything happens. -->
+                  <ContextMenu Name="LicenceMenu">
+                    <MenuItem Name="LicenceMenuRemove"
+                              Header="{lm:Loc Main.RemoveLicence}"
+                              Icon="{lm:MenuIcon Icon.Trash}"
+                              Command="{Binding RemoveLicenceCommand}" />
+                  </ContextMenu>
+                </ListBox.ContextMenu>
+
                 <ListBox.ItemTemplate>
                   <DataTemplate x:DataType="data:LicenseRecord">
                     <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{DynamicResource Space.Md}">

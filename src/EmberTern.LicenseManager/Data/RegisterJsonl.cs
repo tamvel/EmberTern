@@ -106,6 +106,14 @@ public static class RegisterJsonl
                 WriteOptional(writer, "maintUntil",
                     license.MaintenanceUntil is { } maint ? Stamp(maint) : null);
                 writer.WriteString("status", license.Status);
+
+                // ⚠⚠ RETIREMENT TRAVELS. This export is the register's escape hatch — the file somebody
+                //    reads when the application will not open — and a licence that came back from it
+                //    without this field would silently return to the ACTIVE register. Rule #11: the
+                //    export may not know less than the database.
+                WriteOptional(writer, "retiredAt",
+                    license.RetiredAt is { } retired ? Stamp(retired) : null);
+
                 WriteOptional(writer, "notes", license.Notes);
                 writer.WriteString("createdAt", Stamp(license.CreatedAt));
                 writer.WriteString("updatedAt", Stamp(license.UpdatedAt));

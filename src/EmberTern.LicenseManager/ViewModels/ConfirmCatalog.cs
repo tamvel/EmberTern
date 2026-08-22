@@ -66,6 +66,24 @@ internal static class ConfirmCatalog
     /// <summary>Send messages</summary>
     public static MessageKey BulkSendAction => Key(nameof(BulkSendAction));
 
+    /// <summary>Remove this licence?</summary>
+    public static MessageKey RemoveLicenceTitle => Key(nameof(RemoveLicenceTitle));
+
+    /// <summary>Licence {0} … was never issued … it will be removed from the register entirely.</summary>
+    /// <remarks>
+    /// ⭐ The two outcomes get two SENTENCES rather than one hedged one. The operator is confirming a
+    /// different act in each case — one erases a row that never produced anything, the other retires a row
+    /// whose artifacts are permanent — and a single sentence covering both would have to be vague about
+    /// exactly the part that matters.
+    /// </remarks>
+    public static MessageKey RemoveLicenceNeverIssuedMessage => Key(nameof(RemoveLicenceNeverIssuedMessage));
+
+    /// <summary>Licence {0} … has {1} issued artifact(s) … it will be retired; the history is kept.</summary>
+    public static MessageKey RemoveLicenceIssuedMessage => Key(nameof(RemoveLicenceIssuedMessage));
+
+    /// <summary>Remove licence</summary>
+    public static MessageKey RemoveLicenceAction => Key(nameof(RemoveLicenceAction));
+
     /// <summary>Remove this customer?</summary>
     public static MessageKey RemoveCustomerTitle => Key(nameof(RemoveCustomerTitle));
 

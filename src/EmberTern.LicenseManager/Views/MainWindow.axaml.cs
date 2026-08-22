@@ -59,8 +59,13 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Selects the customer under a right-click, so the context menu acts on the row that was clicked.
+    /// Selects the row under a right-click, so the context menu acts on the row that was clicked.
     /// </summary>
+    /// <remarks>
+    /// ⭐ Shared by the customers rail and the licences list — one handler, because it is one rule about
+    /// one control type. ⛔ Not two named handlers: the next list to grow a menu would then be the one
+    /// somebody forgets to wire.
+    /// </remarks>
     /// <remarks>
     /// ⚠⚠ <b>Avalonia's <c>ListBox</c> does not select on right-click</b> (gotcha #16 / #99). Without this
     /// the menu acts on whatever was selected BEFORE — and the one action on it removes a customer, so the
