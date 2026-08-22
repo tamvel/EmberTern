@@ -52,6 +52,36 @@ public sealed partial class MainWindow : Window
             new ConfirmDialog { DataContext = new ConfirmViewModel(request) }.ShowDialog<bool>(this);
 
         shell.BulkSend.TextCopier = CopyToClipboardAsync;
+
+        // ⭐ The shell needs one too, for removing a customer — the one destructive act on this window.
+        shell.Confirm = request =>
+            new ConfirmDialog { DataContext = new ConfirmViewModel(request) }.ShowDialog<bool>(this);
+    }
+
+    /// <summary>
+    /// Selects the customer under a right-click, so the context menu acts on the row that was clicked.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ <b>Avalonia's <c>ListBox</c> does not select on right-click</b> (gotcha #16 / #99). Without this
+    /// the menu acts on whatever was selected BEFORE — and the one action on it removes a customer, so the
+    /// failure mode is removing the wrong one. ⭐ EmberTern answers the identical trap the identical way in
+    /// its own result grid.
+    /// ⛔ <c>e.Handled</c> is left FALSE on purpose: the click has to keep bubbling, or the menu it exists
+    /// to prepare never opens.
+    /// </remarks>
+    private void OnCustomerListPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (sender is not ListBox list ||
+            !e.GetCurrentPoint(list).Properties.IsRightButtonPressed ||
+            e.Source is not Visual source)
+        {
+            return;
+        }
+
+        if (source.FindAncestorOfType<ListBoxItem>(includeSelf: true) is { DataContext: { } row })
+        {
+            list.SelectedItem = row;
+        }
     }
 
     /// <summary>

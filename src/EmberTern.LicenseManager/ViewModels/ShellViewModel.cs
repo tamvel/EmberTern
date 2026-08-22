@@ -46,6 +46,16 @@ public sealed partial class ShellViewModel : MessageHostViewModel
     /// </summary>
     public Func<string, Task<string?>>? SaveFilePicker { get; set; }
 
+    /// <summary>
+    /// Asks the operator to confirm a destructive act. Assigned by the view.
+    /// </summary>
+    /// <remarks>
+    /// ⭐ The same arrangement <c>SettingsViewModel</c> and <c>SendLicenceViewModel</c> use: the dialog is
+    /// pure platform, so it arrives as a delegate and this view model keeps no Avalonia types. ⛔ A command
+    /// that needs one and finds it missing REFUSES rather than proceeding unguarded.
+    /// </remarks>
+    public Func<ConfirmRequest, Task<bool>>? Confirm { get; set; }
+
     /// <summary>Creates the shell.</summary>
     /// <param name="register">The register of record.</param>
     /// <param name="session">The unlocked signing key.</param>
@@ -354,6 +364,82 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         ClearLicenseForm();
 
         Message = StatusMessage.Info(StatusCatalog.NewCustomerHint);
+    }
+
+    /// <summary>
+    /// Removes the selected customer — after saying exactly what that does, and only when it is safe.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>THREE ANSWERS, and only one of them is a question.</b> Nothing selected is a nudge;
+    /// a customer who still has licences is a REFUSAL that names the obstacle; and a customer who has none
+    /// is the only case that reaches a confirmation. ⛔ A confirmation offered for something that cannot
+    /// happen teaches the operator that confirmations are noise.</para>
+    ///
+    /// <para>⭐ The count is read from the REGISTER rather than from <c>Licenses</c>, which is a snapshot
+    /// taken when the customer was selected. A licence added since would be invisible to that list, and
+    /// the guard has to hold against what the database contains, not against what a panel remembers.
+    /// ⚠ The register checks again inside its own transaction — this one is for the WORDS, that one is the
+    /// guarantee.</para>
+    ///
+    /// <para>⛔ <b>With no confirmer wired it REFUSES rather than proceeding</b> — the rule L6.1a's
+    /// <c>Forget settings</c> established, and the stakes here are the same class: an operator's data.</para>
+    /// </remarks>
+    [RelayCommand]
+    private async Task RemoveCustomerAsync()
+    {
+        if (SelectedCustomer is not { } customer)
+        {
+            Message = StatusMessage.Warning(StatusCatalog.SelectCustomerToRemove);
+            return;
+        }
+
+        var licences = _register.CountLicenses(customer.CustomerId);
+        if (licences > 0)
+        {
+            Message = StatusMessage.Warning(
+                StatusCatalog.CustomerStillHasLicences,
+                customer.Name,
+                licences.ToString(CultureInfo.InvariantCulture));
+            return;
+        }
+
+        if (Confirm is null)
+        {
+            Message = StatusMessage.Warning(StatusCatalog.ConfirmationUnavailableNothingSent);
+            return;
+        }
+
+        var confirmed = await Confirm(new ConfirmRequest(
+            ConfirmCatalog.RemoveCustomerTitle,
+            ConfirmCatalog.RemoveCustomerMessage,
+            ConfirmCatalog.RemoveCustomerAction,
+            customer.Name,
+            customer.CustomerId)).ConfigureAwait(true);
+
+        if (!confirmed)
+        {
+            // ⭐ Cancel changes nothing and says nothing — a "cancelled" notice reports the absence of an event.
+            return;
+        }
+
+        try
+        {
+            _register.DeleteCustomer(customer.CustomerId);
+        }
+        catch (RegisterIntegrityException e)
+        {
+            // ⭐ The register's own sentence, resolved from its key. ⛔ Not `e.Message`, which is the
+            //   English diagnostic half.
+            Message = StatusMessage.Error(e.Key, [.. e.Arguments]);
+            return;
+        }
+
+        // ⚠ The form is cleared as well as the list: leaving the removed customer's fields on screen would
+        //   invite a Save that recreates them with the same identifier.
+        NewCustomerCommand.Execute(null);
+        ReloadCustomers();
+
+        Message = StatusMessage.Success(StatusCatalog.CustomerRemoved, customer.Name);
     }
 
     /// <summary>Creates or updates the customer.</summary>

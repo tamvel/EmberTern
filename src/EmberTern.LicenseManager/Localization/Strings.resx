@@ -1484,4 +1484,46 @@
   <data name="Main.CopyReport" xml:space="preserve">
     <value>Copy report</value>
   </data>
+  <data name="Main.RemoveCustomer" xml:space="preserve">
+    <value>Remove customer…</value>
+  </data>
+  <data name="Status.SelectCustomerToRemove" xml:space="preserve">
+    <value>Select a customer in the list first.</value>
+  </data>
+  <data name="Status.CustomerNotInRegister" xml:space="preserve">
+    <value>Customer {0} is not in the register, so there is nothing to remove.</value>
+  </data>
+  <data name="Status.CustomerStillHasLicences" xml:space="preserve">
+    <value>{0} still has {1} licence(s), so the customer cannot be removed. An issued licence carries artifacts that can never be deleted, and the register has to be able to say who was delivered what. Remove the licences first, if that is really what you mean to do.</value>
+  </data>
+  <data name="Status.CustomerRemoved" xml:space="preserve">
+    <value>{0} was removed. The register’s history still records who they were — that entry cannot be deleted.</value>
+  </data>
+  <data name="Confirm.RemoveCustomerTitle" xml:space="preserve">
+    <value>Remove this customer?</value>
+  </data>
+  <data name="Confirm.RemoveCustomerMessage" xml:space="preserve">
+    <value>{0} ({1}) will be removed from the register. They have no licences, so nothing that was ever issued is affected, and the history keeps the whole record.</value>
+  </data>
+  <data name="Confirm.RemoveCustomerAction" xml:space="preserve">
+    <value>Remove customer</value>
+  </data>
+  <data name="Batch.HeaderTicked.one" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="Batch.HeaderTicked.other" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="Bulk.HeaderSending" xml:space="preserve">
+    <value>sending {0} of {1}…</value>
+  </data>
+  <data name="Bulk.HeaderFinished" xml:space="preserve">
+    <value>{0} of {1} sent</value>
+  </data>
+  <data name="Bulk.HeaderReady.one" xml:space="preserve">
+    <value>{0} message ready</value>
+  </data>
+  <data name="Bulk.HeaderReady.other" xml:space="preserve">
+    <value>{0} messages ready</value>
+  </data>
 </root>

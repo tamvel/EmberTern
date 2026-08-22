@@ -433,6 +433,28 @@ internal static class StatusCatalog
     /// <summary>The report was copied to the clipboard.</summary>
     public static MessageKey BulkReportCopied => Key(nameof(BulkReportCopied));
 
+    // ── Removing a customer ──────────────────────────────────────────────────────────
+    // ⭐ The register keeps the whole record in its append-only history, so "removed" means the working
+    //   row is gone and the history is not. ⛔ Nothing about this is a cascade — see DeleteCustomer.
+
+    /// <summary>Select a customer in the list first.</summary>
+    public static MessageKey SelectCustomerToRemove => Key(nameof(SelectCustomerToRemove));
+
+    /// <summary>Customer {0} is not in the register, so there is nothing to remove.</summary>
+    public static MessageKey CustomerNotInRegister => Key(nameof(CustomerNotInRegister));
+
+    /// <summary>{0} still has {1} licence(s) and cannot be removed…</summary>
+    /// <remarks>
+    /// ⭐ It states the OBSTACLE and what to do about it, because the operator can act on it: remove the
+    /// licences first. ⛔ Not "this cannot be done" — a refusal that does not say what stands in the way is
+    /// a refusal the operator has to guess at.
+    /// </remarks>
+    public static MessageKey CustomerStillHasLicences => Key(nameof(CustomerStillHasLicences));
+
+    /// <summary>{0} was removed. The register's history still records who they were.</summary>
+    /// <remarks>⭐ The second half is not reassurance, it is the fact — the audit line cannot be deleted.</remarks>
+    public static MessageKey CustomerRemoved => Key(nameof(CustomerRemoved));
+
     /// <summary>{0}:{1} did not answer within {2} seconds, so the attempt was abandoned…</summary>
     /// <remarks>
     /// ⭐⭐ The ONE failure notice in this application that is OURS rather than a server's. A timeout is

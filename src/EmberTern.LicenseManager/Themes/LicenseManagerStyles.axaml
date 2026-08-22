@@ -31,7 +31,7 @@
        it needs for the title bar, for Alt+Tab and for the taskbar; it is theme-independent by nature —
        an .ico carries its own artwork and is not repainted by our palette, in either theme. -->
   <Style Selector="Window">
-    <Setter Property="Icon" Value="avares://EmberTern.LicenseManager/Assets/Branding/EmberTern.ico" />
+    <Setter Property="Icon" Value="avares://EmberTern.LicenseManager/Assets/Branding/EmberTernLicenseManager.ico" />
   </Style>
 
   <!-- ── Text roles ──────────────────────────────────────────────────────────────────────────── -->
@@ -843,6 +843,32 @@
   </Style>
   <Style Selector="Border.message.error TextBlock">
     <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+  </Style>
+
+  <!-- ── A disclosure header ─────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ CHEVRON + TITLE, AND NO `Expander` — the idiom the product already uses for its own folding
+       sections (`DataImportTabView`'s format options, whose comment names the debugger launch panel as
+       where it came from). ⛔ An `Expander` is a templated control with its own header, its own toggle
+       glyph and its own animation: a new theming surface for a job a `Button` and a `bool` already do,
+       and §60.8 refused it once already for the report's detail toggle.
+
+       ⚠ It is a whole-width BUTTON rather than a clickable `Border`: a panel that folds is an ACTION, so
+       it has to be reachable from the keyboard and has to show a focus ring like every other action. A
+       `Border` with a pointer handler would be neither.
+
+       ⭐ It carries no colour and no height of its own — `Button.flat` already says what a low-emphasis
+       action looks like; this only says that this one fills its row and reads left-to-right. -->
+  <Style Selector="Button.disclosure">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.CellCompact}" />
+  </Style>
+
+  <!-- ⚠ The chevron stands BESIDE A SECTION TITLE, so it takes the row ladder (`Size.Icon`) rather than
+       the action one — the same call the product's own disclosure records. -->
+  <Style Selector="Button.disclosure Viewbox.icon">
+    <Setter Property="Width" Value="{DynamicResource Size.Icon}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon}" />
   </Style>
 
   <!-- ── The bulk send: the bar, and the four outcomes ───────────────────────────────────────── -->

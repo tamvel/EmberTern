@@ -68,6 +68,18 @@ of these paths needs to move.
 Pinned by `BrandingPresentationTests`: every window (including a bare `new Window()`) receives an icon, and
 the main window's titlebar contains no bitmap mark.
 
+### ⚠ The License Manager has its OWN icon since 2026-08-22 — it is not a fourth consumer
+
+`EmberTern.LicenseManager` used to reference `EmberTern.ico` across the project boundary. It no longer
+does: two byte-identical icons are two applications the operator cannot tell apart in the taskbar, and
+those two sit open side by side with one of them holding the signing key. Its artwork, its pipeline and the
+numbers measured for its own source are in
+[`../../../EmberTern.LicenseManager/Assets/Branding/BRANDING.md`](../../../EmberTern.LicenseManager/Assets/Branding/BRANDING.md).
+
+⭐ It still consumes `EmberTern_logo.png` — the About window is about EmberTern, and the License Manager is
+not a separate product. ⛔ Changing THIS file's `.ico` does not change the License Manager's, and must not:
+`LicenseManagerThemeTests` fails the build if the two ever become identical again.
+
 ---
 
 ## Replacing the artwork

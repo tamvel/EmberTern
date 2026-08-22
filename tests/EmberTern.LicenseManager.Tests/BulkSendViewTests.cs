@@ -142,6 +142,110 @@ public sealed class BulkSendViewTests
             Assert.False(Named<Button>(window, "BulkSendAction").IsEffectivelyEnabled);
         }, default);
 
+    // ── The disclosure ──────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐⭐ <b>Both operations start FOLDED, and folding one leaves the other exactly as it was.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠ Closed by default is what gives the licences grid its height: the two bulk operations sit
+    /// above the very list licences are ticked in, and an operation that is always unfolded takes that
+    /// space whether or not anyone is using it.</para>
+    /// <para>⛔ <b>This is NOT an accordion</b>, and the second half of this guard is what says so.
+    /// Opening one operation must never fold the other away underneath the operator's hands.</para>
+    /// </remarks>
+    [Fact]
+    public Task BothPanelsStartFoldedAndFoldIndependently() =>
+        _session.Dispatch(() =>
+        {
+            HeadlessTheme.UseTheme("Dark");
+
+            using var manager = new ManagerFixture();
+
+            // ⚠ Built here rather than through `Show`, which opens the send panel for every other guard.
+            var (shell, window) = Show(manager, licences: 2);
+            shell.BulkSend.IsExpanded = false;
+            window.UpdateLayout();
+
+            Assert.False(shell.BatchRenewal.IsExpanded);
+            Assert.False(shell.BulkSend.IsExpanded);
+
+            // ⭐ Folded means the BODY is gone from the screen; the header that opens it is not.
+            Assert.False(Named<Button>(window, "BulkSendAction").IsEffectivelyVisible);
+            Assert.False(Named<Button>(window, "ExtendSelected").IsEffectivelyVisible);
+            Assert.True(Named<Button>(window, "BulkDisclosure").IsEffectivelyVisible);
+            Assert.True(Named<Button>(window, "BatchDisclosure").IsEffectivelyVisible);
+
+            Named<Button>(window, "BulkDisclosure").Command!.Execute(null);
+            window.UpdateLayout();
+
+            Assert.True(Named<Button>(window, "BulkSendAction").IsEffectivelyVisible);
+
+            // ⛔⛔ THE OTHER PANEL DID NOT MOVE.
+            Assert.False(shell.BatchRenewal.IsExpanded);
+            Assert.False(Named<Button>(window, "ExtendSelected").IsEffectivelyVisible);
+
+            Named<Button>(window, "BatchDisclosure").Command!.Execute(null);
+            window.UpdateLayout();
+
+            Assert.True(Named<Button>(window, "ExtendSelected").IsEffectivelyVisible);
+            Assert.True(Named<Button>(window, "BulkSendAction").IsEffectivelyVisible);
+        }, default);
+
+    /// <summary>⭐ A folded panel still says where it stands — otherwise folding it would hide the state.</summary>
+    [Fact]
+    public Task AFoldedPanelStillReportsItsState() =>
+        _session.Dispatch(() =>
+        {
+            HeadlessTheme.UseTheme("Dark");
+
+            using var manager = new ManagerFixture();
+            var (shell, window) = Show(manager, licences: 3);
+
+            shell.BulkSend.IsExpanded = false;
+            shell.Browser.CheckAllShownCommand.Execute(null);
+            window.UpdateLayout();
+
+            var summary = Named<Button>(window, "BulkDisclosure")
+                .GetVisualDescendants().OfType<TextBlock>()
+                .Select(b => b.Text ?? string.Empty)
+                .ToList();
+
+            // ⭐ "3 messages ready" — the number, in the header, without opening anything.
+            Assert.Contains(summary, text => text.Contains('3', StringComparison.Ordinal));
+            Assert.NotEmpty(shell.BatchRenewal.HeaderSummary);
+
+            // ⚠ And it goes quiet once the panel is open: the body says it better, and a header repeating
+            //   what is two centimetres below it is noise.
+            shell.BulkSend.IsExpanded = true;
+            Assert.Empty(shell.BulkSend.HeaderSummary);
+        }, default);
+
+    /// <summary>
+    /// ⛔⛔ A RUN forces the panel open — a series may not go out behind a disclosure.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ Folded, the operator cannot see the bar, cannot read who is being written to, and — the one that
+    /// decides it — cannot reach "Stop sending".
+    /// </remarks>
+    [Fact]
+    public Task ARunOpensThePanelSoItCannotHappenOutOfSight() =>
+        _session.Dispatch(() =>
+        {
+            HeadlessTheme.UseTheme("Dark");
+
+            using var manager = new ManagerFixture();
+            var (shell, window) = Show(manager, licences: 2);
+
+            shell.BulkSend.IsExpanded = false;
+            window.UpdateLayout();
+
+            Send(shell, window);
+
+            Assert.True(shell.BulkSend.IsExpanded);
+            Assert.True(Named<Border>(window, "BulkReportBox").IsEffectivelyVisible);
+        }, default);
+
     // ── The bar ─────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -504,6 +608,11 @@ public sealed class BulkSendViewTests
         //    confirmation says nothing by design. ⭐ That the window overwrites it is CORRECT: the view
         //    owns that seam, and a guard has to work with that rather than around it.
         shell.BulkSend.Confirm = _ => Task.FromResult(true);
+
+        // ⚠ Opened for the same reason the batch panel is in its own guards: it is closed by default, and
+        //   everything below is about what is inside it. ⭐ The FOLDED state has a guard of its own.
+        shell.BulkSend.IsExpanded = true;
+        window.UpdateLayout();
 
         return (shell, window);
     }

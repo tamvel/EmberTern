@@ -129,6 +129,39 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
     /// <summary>Every ticked licence and what would happen to it — including the ones standing in the way.</summary>
     public ObservableCollection<BatchRenewalRow> Rows { get; } = [];
 
+    // ── Disclosure ──────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Whether this panel is open.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>Closed by default, and that is the whole point of the disclosure.</b> The licences view
+    /// carries two bulk operations above the grid the operator ticks licences IN, and an operation that is
+    /// always fully unfolded takes that space whether or not anyone is using it. ⛔ Not persisted: nothing
+    /// asked for it, and a preference nobody requested is a preference nobody maintains.</para>
+    /// <para>⭐ Independent of the other panel's state, deliberately — ⛔ this is NOT an accordion. Opening
+    /// one operation must never fold the other away underneath the operator's hands.</para>
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HeaderSummary))]
+    private bool _isExpanded;
+
+    /// <summary>Opens or closes the panel.</summary>
+    [RelayCommand]
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
+
+    /// <summary>
+    /// ⭐ What the header says while the panel is CLOSED — so a folded operation still reports its state.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ Empty while the panel is open: the body says it better, and a header repeating what is two
+    /// centimetres below it is noise.
+    /// </remarks>
+    public string HeaderSummary =>
+        IsExpanded || _browser.CheckedCount == 0
+            ? string.Empty
+            : BatchCatalog.HeaderTicked(_browser.CheckedCount);
+
     /// <summary>
     /// The date every ticked licence would run to.
     ///
@@ -482,6 +515,7 @@ public sealed partial class BatchRenewalViewModel : ObservableObject
         OnPropertyChanged(nameof(HasBlockers));
         OnPropertyChanged(nameof(PreviewSummary));
         OnPropertyChanged(nameof(BlockerSummary));
+        OnPropertyChanged(nameof(HeaderSummary));
         ExtendCommand.NotifyCanExecuteChanged();
     }
 

@@ -81,6 +81,21 @@ internal static class BulkSendCatalog
 
     // ── While it runs ───────────────────────────────────────────────────────────────────────────────
 
+    // ── What the FOLDED panel's header reports ──────────────────────────────────────────────────────
+    // ⭐ Three answers in the order that matters to somebody who folded the panel: a run in flight
+    //   outranks a finished one, and both outrank "this is what would go out".
+
+    /// <summary>A series is going out right now.</summary>
+    public static string HeaderSending(int completed, int total) =>
+        Say(nameof(HeaderSending), Number(completed), Number(total));
+
+    /// <summary>A series finished and its report is inside.</summary>
+    public static string HeaderFinished(int sent, int planned) =>
+        Say(nameof(HeaderFinished), Number(sent), Number(planned));
+
+    /// <summary>Nothing has run, but something would go out if it did.</summary>
+    public static string HeaderReady(int messages) => Counted(nameof(HeaderReady), messages);
+
     /// <summary>Which message is in flight, and to whom.</summary>
     /// <remarks>
     /// ⚠ The position is <c>Completed + 1</c>: <c>Completed</c> counts FINISHED attempts, so the message

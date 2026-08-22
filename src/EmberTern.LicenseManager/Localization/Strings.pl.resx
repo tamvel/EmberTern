@@ -1551,4 +1551,52 @@
   <data name="Main.CopyReport" xml:space="preserve">
     <value>Kopiuj raport</value>
   </data>
+  <data name="Main.RemoveCustomer" xml:space="preserve">
+    <value>Usuń klienta…</value>
+  </data>
+  <data name="Status.SelectCustomerToRemove" xml:space="preserve">
+    <value>Najpierw zaznacz klienta na liście.</value>
+  </data>
+  <data name="Status.CustomerNotInRegister" xml:space="preserve">
+    <value>Klienta {0} nie ma w rejestrze, więc nie ma czego usuwać.</value>
+  </data>
+  <data name="Status.CustomerStillHasLicences" xml:space="preserve">
+    <value>{0} ma jeszcze {1} licencję/licencje, więc klienta nie da się usunąć. Wystawiona licencja niesie artefakty, których nigdy nie da się skasować, a rejestr musi umieć powiedzieć, komu co dostarczono. Najpierw usuń licencje, jeśli naprawdę o to Ci chodzi.</value>
+  </data>
+  <data name="Status.CustomerRemoved" xml:space="preserve">
+    <value>Klient {0} został usunięty. Historia rejestru nadal pamięta, kim był — tego wpisu nie da się skasować.</value>
+  </data>
+  <data name="Confirm.RemoveCustomerTitle" xml:space="preserve">
+    <value>Usunąć tego klienta?</value>
+  </data>
+  <data name="Confirm.RemoveCustomerMessage" xml:space="preserve">
+    <value>{0} ({1}) zostanie usunięty z rejestru. Nie ma żadnych licencji, więc nic, co kiedykolwiek wystawiono, nie jest tym dotknięte, a historia zachowuje cały wpis.</value>
+  </data>
+  <data name="Confirm.RemoveCustomerAction" xml:space="preserve">
+    <value>Usuń klienta</value>
+  </data>
+  <data name="Batch.HeaderTicked.one" xml:space="preserve">
+    <value>zaznaczona {0}</value>
+  </data>
+  <data name="Batch.HeaderTicked.few" xml:space="preserve">
+    <value>zaznaczone {0}</value>
+  </data>
+  <data name="Batch.HeaderTicked.many" xml:space="preserve">
+    <value>zaznaczonych {0}</value>
+  </data>
+  <data name="Bulk.HeaderSending" xml:space="preserve">
+    <value>wysyłanie {0} z {1}…</value>
+  </data>
+  <data name="Bulk.HeaderFinished" xml:space="preserve">
+    <value>wysłano {0} z {1}</value>
+  </data>
+  <data name="Bulk.HeaderReady.one" xml:space="preserve">
+    <value>{0} wiadomość do wysłania</value>
+  </data>
+  <data name="Bulk.HeaderReady.few" xml:space="preserve">
+    <value>{0} wiadomości do wysłania</value>
+  </data>
+  <data name="Bulk.HeaderReady.many" xml:space="preserve">
+    <value>{0} wiadomości do wysłania</value>
+  </data>
 </root>

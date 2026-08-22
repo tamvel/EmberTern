@@ -387,33 +387,125 @@ public sealed class LicenseManagerThemeTests
             "A typography role consumed without its line height: " + string.Join("; ", offenders));
     }
 
+    /// <summary>
+    /// ⭐⭐ <b>The License Manager has its OWN icon — one file, referenced twice, and NEVER the product's.</b>
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠⚠ <b>This guard used to assert the exact opposite</b>, and the reversal is the user's
+    /// decision of 2026-08-22 rather than a drift. The old rule reasoned that the License Manager is the
+    /// same product's admin side and not a second brand — sound, and the RESULT was wrong: two icons that
+    /// are byte-identical are two applications nobody can tell apart in the taskbar, in Alt+Tab or in
+    /// Explorer, and these two sit open side by side doing very different things, one of them holding the
+    /// signing key.</para>
+    /// <para>⭐ What survives from the old rule is its teeth, pointed the other way: the artwork is
+    /// referenced from ONE place, and ⛔ the product's own <c>.ico</c> must not be reachable from here — a
+    /// leftover reference to it is exactly how the two would silently become identical again.</para>
+    /// </remarks>
     [Fact]
-    public void TheApplicationIconIsEmberTernsOwnAndIsLinkedNotCopied()
+    public void TheApplicationIconIsItsOwnAndIsReferencedFromOnePlace()
     {
-        // ⭐ The License Manager is the same product's admin side, not a second brand. It reaches for
-        //    EmberTern's existing .ico across the project boundary; ⛔ it does not copy it and it does
-        //    not carry artwork of its own. A copy is how two icons start diverging.
         var project = File.ReadAllText(Path.Combine(AppFolder, "EmberTern.LicenseManager.csproj"));
 
         // The Win32 icon compiled into the EXE — Explorer, file properties, taskbar button.
         Assert.Contains(
-            @"<ApplicationIcon>..\EmberTern.App\Assets\Branding\EmberTern.ico</ApplicationIcon>",
+            @"<ApplicationIcon>Assets\Branding\EmberTernLicenseManager.ico</ApplicationIcon>",
             project, StringComparison.Ordinal);
 
-        // The avares resource — the icon Avalonia paints in the title bar and hands to Alt+Tab.
-        Assert.Contains(
+        // ⛔ THE PRODUCT'S ICON IS NOT REACHABLE FROM HERE ANY MORE.
+        Assert.DoesNotContain(
             @"..\EmberTern.App\Assets\Branding\EmberTern.ico", project, StringComparison.Ordinal);
-        Assert.Contains(@"Link=""Assets\Branding\EmberTern.ico""", project, StringComparison.Ordinal);
 
-        var copied = Directory.EnumerateFiles(AppFolder, "*.ico", SearchOption.AllDirectories)
+        // ⭐ Exactly ONE .ico in this project, and it is the one both references name.
+        var icons = Directory.EnumerateFiles(AppFolder, "*.ico", SearchOption.AllDirectories)
             .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
                 StringComparison.Ordinal)
                 && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
                 StringComparison.Ordinal))
             .ToList();
 
-        Assert.True(copied.Count == 0,
-            "Icon artwork has been COPIED into the License Manager: " + string.Join("; ", copied));
+        var icon = Assert.Single(icons);
+        Assert.Equal("EmberTernLicenseManager.ico", Path.GetFileName(icon));
+
+        // ⛔⛔ AND IT IS NOT A COPY OF THE PRODUCT'S. The whole point of the change is that the two
+        //    differ; a future "one master, two applications" tidy-up would undo it silently.
+        var product = Path.Combine(
+            AppFolder, "..", "EmberTern.App", "Assets", "Branding", "EmberTern.ico");
+
+        Assert.NotEqual(File.ReadAllBytes(product), File.ReadAllBytes(icon));
+
+        // ⚠ The MASTER never ships — un-cropped, opaque background. Without the Remove it is embedded in
+        //   the assembly and someone eventually references it from XAML and gets a black square.
+        Assert.Contains(@"<AvaloniaResource Remove=""Assets\Branding\Masters\**"" />",
+            project, StringComparison.Ordinal);
+
+        Assert.True(
+            File.Exists(Path.Combine(
+                AppFolder, "Assets", "Branding", "Masters", "license-manager-icon-source.png")),
+            "The master the .ico is rendered from is missing — the artwork could not be regenerated.");
+    }
+
+    /// <summary>
+    /// ⭐⭐ Every entry in the shipped <c>.ico</c> is a well-formed 32-bit PNG frame of its declared size.
+    /// </summary>
+    /// <remarks>
+    /// <para>⚠⚠ <b>Asserted by walking the payloads, and BRANDING.md says why in detail:</b> both obvious
+    /// inspection routes lie about a perfectly good file. <c>Icon.ToBitmap()</c> decodes a PNG-compressed
+    /// frame as a raw DIB and returns colour noise, and <c>new Icon(path, new Size(256,256))</c> hands back
+    /// the 64px frame because GDI+ will not select PNG-compressed 256px entries at all. ⛔ Neither can
+    /// express the assertion that matters.</para>
+    /// <para>⭐ The 256px entry declares its width and height as <b>0</b> — the .ico spec's encoding of 256.
+    /// Writing 256 there produces a file Windows silently ignores, which is invisible until somebody looks
+    /// at a large icon view.</para>
+    /// </remarks>
+    [Fact]
+    public void EveryIconEntryIsAWellFormedFrameOfItsDeclaredSize()
+    {
+        var data = File.ReadAllBytes(
+            Path.Combine(AppFolder, "Assets", "Branding", "EmberTernLicenseManager.ico"));
+
+        Assert.Equal(0, BitConverter.ToUInt16(data, 0));           // reserved
+        Assert.Equal(1, BitConverter.ToUInt16(data, 2));           // type: icon
+
+        var count = BitConverter.ToUInt16(data, 4);
+        Assert.True(count >= 6, $"An icon with {count} entries cannot cover the sizes Windows asks for.");
+
+        var sizes = new List<int>();
+
+        for (var i = 0; i < count; i++)
+        {
+            var entry = 6 + (16 * i);
+            var declared = data[entry] == 0 ? 256 : data[entry];
+
+            Assert.Equal(data[entry], data[entry + 1]);            // square
+            Assert.Equal(32, BitConverter.ToUInt16(data, entry + 6));
+
+            var length = BitConverter.ToInt32(data, entry + 8);
+            var offset = BitConverter.ToInt32(data, entry + 12);
+
+            Assert.InRange(offset + length, 0, data.Length);
+
+            // ⭐ The PNG signature, at the offset the table points at.
+            Assert.Equal(0x89, data[offset]);
+            Assert.Equal((byte)'P', data[offset + 1]);
+
+            // ⭐ The decoded size equals the declared one. A PNG's IHDR width/height are big-endian at
+            //   byte 16 of the stream, which is all this needs — ⛔ no image decoder, no GDI+.
+            var width = (data[offset + 16] << 24) | (data[offset + 17] << 16)
+                | (data[offset + 18] << 8) | data[offset + 19];
+            var height = (data[offset + 20] << 24) | (data[offset + 21] << 16)
+                | (data[offset + 22] << 8) | data[offset + 23];
+
+            Assert.Equal(declared, width);
+            Assert.Equal(declared, height);
+
+            sizes.Add(declared);
+        }
+
+        // ⚠ The sizes Windows actually asks for. A missing 16 or 32 is the one nobody notices until the
+        //   taskbar scales a 256 down and it turns to mud.
+        Assert.Contains(16, sizes);
+        Assert.Contains(32, sizes);
+        Assert.Contains(256, sizes);
     }
 
     [Fact]
@@ -425,7 +517,7 @@ public sealed class LicenseManagerThemeTests
 
         Assert.Single(Regex.Matches(styles, @"Property=""Icon"""));
         Assert.Contains(
-            "avares://EmberTern.LicenseManager/Assets/Branding/EmberTern.ico",
+            "avares://EmberTern.LicenseManager/Assets/Branding/EmberTernLicenseManager.ico",
             styles, StringComparison.Ordinal);
 
         // ⚠⚠ NARROWED TO THE `<Window>` ELEMENT (L6.1a), and the narrowing is a REPAIR rather than a

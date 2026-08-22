@@ -307,6 +307,59 @@ public sealed partial class BulkSendViewModel : ObservableObject
     /// <summary>⭐ The FULL recipient list (§14.1) — every message that would actually be attempted.</summary>
     public ObservableCollection<BulkSendRow> Sendable { get; } = [];
 
+    // ── Disclosure ──────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Whether this panel is open.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>Closed by default</b>, for the reason <see cref="BatchRenewalViewModel.IsExpanded"/>
+    /// gives: the grid the operator ticks licences in is what needs the height. ⛔ Not persisted — nothing
+    /// asked for it. ⭐ Independent of the other panel; ⛔ this is not an accordion.</para>
+    /// <para>⚠ A RUN forces it open (see <see cref="Rebuild"/>'s caller). A series going out behind a
+    /// folded panel would be the one state this card must never be in: the operator could not see the
+    /// progress, could not read who is being written to, and — worst — could not reach Stop.</para>
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HeaderSummary))]
+    private bool _isExpanded;
+
+    /// <summary>Opens or closes the panel.</summary>
+    [RelayCommand]
+    private void ToggleExpanded() => IsExpanded = !IsExpanded;
+
+    /// <summary>
+    /// ⭐ What the header says while the panel is CLOSED — so a folded operation still reports its state.
+    /// </summary>
+    /// <remarks>
+    /// ⚠ Three answers in the order that matters to somebody who folded the panel: a run in flight outranks
+    /// a finished one, and both outrank "this is what would go out". ⭐ Empty while the panel is open.
+    /// </remarks>
+    public string HeaderSummary
+    {
+        get
+        {
+            if (IsExpanded)
+            {
+                return string.Empty;
+            }
+
+            if (IsSending)
+            {
+                return BulkSendCatalog.HeaderSending(Progress?.Completed ?? 0, ProgressTotal);
+            }
+
+            if (_result is { } result)
+            {
+                return BulkSendCatalog.HeaderFinished(result.Sent, result.Planned);
+            }
+
+            return _previewed is { } plan && plan.Sendable.Count > 0
+                ? BulkSendCatalog.HeaderReady(plan.Sendable.Count)
+                : string.Empty;
+        }
+    }
+
     /// <summary>Every ticked licence that never becomes a message, each with its reason. ⛔ Named, never dropped.</summary>
     public ObservableCollection<BulkSendRow> Held { get; } = [];
 
@@ -466,6 +519,7 @@ public sealed partial class BulkSendViewModel : ObservableObject
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanSend))]
     [NotifyPropertyChangedFor(nameof(CanStop))]
+    [NotifyPropertyChangedFor(nameof(HeaderSummary))]
     private bool _isSending;
 
     /// <summary>True once the operator asked to stop and the attempt in flight is finishing.</summary>
@@ -479,6 +533,7 @@ public sealed partial class BulkSendViewModel : ObservableObject
     [NotifyPropertyChangedFor(nameof(ProgressValue))]
     [NotifyPropertyChangedFor(nameof(ProgressLine))]
     [NotifyPropertyChangedFor(nameof(ProgressCounts))]
+    [NotifyPropertyChangedFor(nameof(HeaderSummary))]
     private BulkSendProgress? _progress;
 
     /// <summary>Raised whenever <see cref="IsSending"/> changes — what decision M is wired to.</summary>
@@ -762,6 +817,12 @@ public sealed partial class BulkSendViewModel : ObservableObject
 
         _stop = new CancellationTokenSource();
         IsStopping = false;
+
+        // ⭐⭐ THE PANEL OPENS ITSELF FOR A RUN, and it is not a courtesy: folded, the operator cannot see
+        //    the bar, cannot read who is being written to, and — the one that decides it — cannot reach
+        //    "Stop sending". ⛔ An outward-facing operation may not run behind a disclosure.
+        IsExpanded = true;
+
         SetSending(true);
 
         BulkSendResult result;
@@ -1033,6 +1094,7 @@ public sealed partial class BulkSendViewModel : ObservableObject
         OnPropertyChanged(nameof(SendableHeading));
         OnPropertyChanged(nameof(LimitWarning));
         OnPropertyChanged(nameof(ExceedsRunLimit));
+        OnPropertyChanged(nameof(HeaderSummary));
         SendCommand.NotifyCanExecuteChanged();
     }
 
@@ -1044,12 +1106,14 @@ public sealed partial class BulkSendViewModel : ObservableObject
         OnPropertyChanged(nameof(ResultCounts));
         OnPropertyChanged(nameof(ResultElapsed));
         OnPropertyChanged(nameof(DetailsLabel));
+        OnPropertyChanged(nameof(HeaderSummary));
     }
 
     private void AnnounceProgress()
     {
         OnPropertyChanged(nameof(ProgressLine));
         OnPropertyChanged(nameof(ProgressCounts));
+        OnPropertyChanged(nameof(HeaderSummary));
     }
 
     private static string? Blank(string value) =>

@@ -66,6 +66,20 @@ internal static class ConfirmCatalog
     /// <summary>Send messages</summary>
     public static MessageKey BulkSendAction => Key(nameof(BulkSendAction));
 
+    /// <summary>Remove this customer?</summary>
+    public static MessageKey RemoveCustomerTitle => Key(nameof(RemoveCustomerTitle));
+
+    /// <summary>{0} ({1}) will be removed from the register…</summary>
+    /// <remarks>
+    /// ⭐ It says what SURVIVES as well as what goes: the audit line keeps the whole record and cannot be
+    /// deleted, so this is reversible in the sense that matters — the operator can find out who they were.
+    /// ⛔ It is not offered at all when the customer has licences; that refusal happens before this.
+    /// </remarks>
+    public static MessageKey RemoveCustomerMessage => Key(nameof(RemoveCustomerMessage));
+
+    /// <summary>Remove customer</summary>
+    public static MessageKey RemoveCustomerAction => Key(nameof(RemoveCustomerAction));
+
     /// <summary>The way out. ⚠ Shared by every confirmation — see the type's remarks.</summary>
     public static MessageKey Cancel => Key(nameof(Cancel));
 }

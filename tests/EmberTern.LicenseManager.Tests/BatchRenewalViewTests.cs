@@ -136,7 +136,17 @@ public sealed class BatchRenewalViewTests
             using var manager = new ManagerFixture();
             var (shell, window) = Show(manager, licences: 2);
 
-            var row = Named<Border>(window, "BatchRenewalCard").GetVisualDescendants()
+            // ⚠⚠ SCOPED TO THE COMMAND ROW, by the STYLE CLASS the rule is about — not to the whole card.
+            //    The card grew a disclosure header (a whole-width button that folds the panel), and a
+            //    header is not a control standing in a command row: it legitimately wears a different
+            //    height. ⛔ Excluding it BY NAME would have been the sweep-keyed-on-a-name trap (#408) —
+            //    it would say nothing about the next control somebody adds outside the row. ⭐ Keyed on
+            //    `command-row`, this guard now states the rule it is named after.
+            var commandRow = Named<Border>(window, "BatchRenewalCard").GetVisualDescendants()
+                .OfType<Grid>()
+                .Single(g => g.Classes.Contains("command-row"));
+
+            var row = commandRow.GetVisualDescendants()
                 .OfType<Control>()
                 .Where(c => c is CalendarDatePicker or Button or TextBox && c.TemplatedParent is null)
                 .ToList();
@@ -261,6 +271,13 @@ public sealed class BatchRenewalViewTests
         var window = new MainWindow { DataContext = shell };
         window.Show();
         shell.ShowLicensesCommand.Execute(null);
+
+        // ⚠ The panel FOLDS since the disclosure landed, and it is closed by default so the licences grid
+        //   gets the height. Every guard below is about what is INSIDE it, so it is opened here — ⛔ not by
+        //   relaxing the guards to accept an invisible control, which would make them pass just as happily
+        //   over a panel that had stopped rendering at all. The folded state has its own guard in
+        //   `BulkSendViewTests`.
+        shell.BatchRenewal.IsExpanded = true;
         window.UpdateLayout();
         return window;
     }

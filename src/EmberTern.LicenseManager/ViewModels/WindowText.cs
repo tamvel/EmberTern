@@ -111,6 +111,10 @@ internal static class BatchCatalog
     /// <summary>⭐ The second sentence: how many of them have never been issued at all.</summary>
     public static string FirstIssues(int firstIssues) =>
         Loc.FormatCount(KeyPrefix + nameof(FirstIssues), firstIssues);
+
+    /// <summary>⭐ What the FOLDED panel's header reports — so a closed operation still says where it stands.</summary>
+    public static string HeaderTicked(int ticked) =>
+        Loc.FormatCount(KeyPrefix + nameof(HeaderTicked), ticked);
 }
 
 /// <summary>

@@ -282,6 +282,91 @@ public sealed class LicenseRegister : IDisposable
     public CustomerRecord? GetCustomer(string customerId) => ReadOne(
         "SELECT * FROM customers WHERE customer_id = $id;", ReadCustomer, ("$id", customerId));
 
+    /// <summary>How many licences a customer has. ⭐ What decides whether they can be removed at all.</summary>
+    /// <remarks>
+    /// ⚠ Through <c>Read</c> rather than <c>ReadOne</c>: that one is constrained to reference types, and a
+    /// count is not one. ⭐ <c>COUNT(*)</c> always returns exactly one row, so the first is the answer.
+    /// </remarks>
+    public int CountLicenses(string customerId) => CountLicenses(customerId, null);
+
+    private int CountLicenses(string customerId, SqliteTransaction? transaction) => Read(
+        "SELECT COUNT(*) FROM licenses WHERE customer_id = $id;", transaction,
+        r => r.GetInt32(0), ("$id", customerId))[0];
+
+    /// <summary>
+    /// Removes a customer who has no licences, and records that it happened.
+    /// </summary>
+    /// <remarks>
+    /// <para>⭐⭐ <b>"Removed" means the working row goes and the HISTORY keeps them, and that is the only
+    /// shape this register allows.</b> The audit log is append-only at the database (a trigger aborts every
+    /// DELETE on it), so the <c>customer.deleted</c> line written here — carrying the whole record in
+    /// <c>before_json</c> — outlives the row permanently. ⛔ Nothing is lost, which is Architecture rule
+    /// #11 applied to an operator's mistake rather than to a signature.</para>
+    ///
+    /// <para>⭐⭐ <b>A customer with even ONE licence is REFUSED, and it is not a policy — it is what the
+    /// schema already says.</b> <c>licenses.customer_id</c> is a foreign key and <c>PRAGMA foreign_keys</c>
+    /// is ON, so the DELETE would fail anyway; and the cascade an impatient version of this would need is
+    /// unreachable, because <c>issued_artifacts</c> aborts every DELETE by trigger. So there is no order of
+    /// operations that removes a customer who has ever been issued anything. ⭐ Refusing WITH THE COUNT is
+    /// therefore the honest answer rather than a limitation: the operator is told what stands in the way,
+    /// and removing the licences is a decision they take separately and deliberately.</para>
+    ///
+    /// <para>⚠ The count is read INSIDE the transaction, so the answer the refusal quotes is the answer the
+    /// DELETE would have faced.</para>
+    /// </remarks>
+    /// <exception cref="RegisterIntegrityException">
+    /// The customer is not in the register, or still has licences.
+    /// </exception>
+    public void DeleteCustomer(string customerId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(customerId);
+
+        var now = _clock();
+
+        using var transaction = _connection.BeginTransaction();
+
+        var existing = ReadOne(
+            "SELECT * FROM customers WHERE customer_id = $id;", transaction, ReadCustomer,
+            ("$id", customerId));
+
+        if (existing is null)
+        {
+            throw new RegisterIntegrityException(
+                StatusCatalog.CustomerNotInRegister,
+                $"Customer {customerId} is not in the register, so there is nothing to remove.",
+                customerId);
+        }
+
+        var licences = CountLicenses(customerId, transaction);
+
+        if (licences > 0)
+        {
+            throw new RegisterIntegrityException(
+                StatusCatalog.CustomerStillHasLicences,
+                $"Customer {customerId} still has {licences} licence(s). A licence that has been issued " +
+                "carries immutable artifacts, so removing the customer would leave the register unable to " +
+                "say who was delivered what.",
+                existing.Name,
+                licences.ToString(CultureInfo.InvariantCulture));
+        }
+
+        Execute("DELETE FROM customers WHERE customer_id = $id;", transaction, ("$id", customerId));
+
+        // ⭐ The whole record in `before_json`, so the history can still answer "who was c-0007?" — and,
+        //   if it ever matters, hand the values back. ⛔ `after_json` is null: there is no after.
+        AppendAudit(transaction, new AuditEntry
+        {
+            At = now,
+            Actor = _actor,
+            Action = "customer.deleted",
+            TargetType = "customer",
+            TargetId = customerId,
+            BeforeJson = JsonSerializer.Serialize(existing),
+        });
+
+        transaction.Commit();
+    }
+
     /// <summary>The next free <c>c-NNNN</c> identifier.</summary>
     public string NextCustomerId()
     {

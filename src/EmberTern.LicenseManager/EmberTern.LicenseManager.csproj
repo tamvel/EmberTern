@@ -15,10 +15,16 @@
          from that one PropertyGroup, which is what makes `ManagerInfo` and `AppInfo` structurally unable
          to disagree about which release this is. ⛔ And still never a version number in code. -->
     <Product>EmberTern License Manager</Product>
-    <!-- ⭐ The OS icon of the executable — EmberTern's own .ico, referenced across the project
-         boundary rather than copied. Same file, same brand, one master. This is what puts the icon
-         in Explorer, in the EXE properties and on the taskbar button. -->
-    <ApplicationIcon>..\EmberTern.App\Assets\Branding\EmberTern.ico</ApplicationIcon>
+    <!-- ⭐⭐ THE OS ICON — THIS APPLICATION'S OWN, and the reversal is deliberate (user, 2026-08-22).
+         It used to reference EmberTern's .ico across the project boundary, on the reasoning that the
+         License Manager is the same product's admin side rather than a second brand. ⚠ That reasoning
+         was sound and the RESULT was not: two icons that are byte-identical are two applications the
+         operator cannot tell apart in the taskbar, in Alt+Tab or in Explorer — and these two sit open
+         side by side doing very different things, one of them holding the signing key.
+         ⭐ Same family, distinct mark: a shield carrying the ember wing the product's icon carries, plus
+         a padlock. ⛔ The PRODUCT's icon is untouched, and nothing here is copied from it.
+         ⚠ Rendered from Assets\Branding\Masters\ by the pipeline in that folder's BRANDING.md. -->
+    <ApplicationIcon>Assets\Branding\EmberTernLicenseManager.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- ⭐⭐ THE TOKEN LAYER IS LINKED FROM EmberTern.App, NOT COPIED.
@@ -72,14 +78,19 @@
          project directory, so naming App.axaml, Views\**\*.axaml or the local Themes file here produces
          AVLN2002 "duplicate x:Class" rather than the belt-and-braces it looks like. -->
 
-    <!-- ⭐ THE WINDOW ICON — the same file as ApplicationIcon above, linked so that Avalonia can resolve
-         it as avares://EmberTern.LicenseManager/Assets/Branding/EmberTern.ico. ⛔ It is NOT copied into
-         this project: one master, two applications, exactly as with the token layer. The two references
-         answer different questions — ApplicationIcon is a Win32 resource compiled into the EXE (Explorer,
-         file properties, the taskbar button), this one is the icon Avalonia paints in the window's own
-         title bar and hands to Alt+Tab. Both are needed; neither replaces the other. -->
-    <AvaloniaResource Include="..\EmberTern.App\Assets\Branding\EmberTern.ico"
-                      Link="Assets\Branding\EmberTern.ico" />
+    <!-- ⭐ THE WINDOW ICON — the same file as ApplicationIcon above. The two references answer DIFFERENT
+         questions and neither replaces the other: ApplicationIcon is a Win32 resource compiled into the
+         EXE (Explorer, file properties, the taskbar button before a window exists), this one is what
+         Avalonia paints in the window's own title bar and hands to Alt+Tab.
+         ⚠ The Avalonia SDK already includes everything under Assets\, so this line is belt-and-braces —
+         the Remove below is the part that changes behaviour. -->
+    <AvaloniaResource Include="Assets\Branding\EmberTernLicenseManager.ico" />
+
+    <!-- ⚠⚠ THE MASTER NEVER SHIPS. Assets\Branding\Masters\ holds the SOURCE artwork the .ico is
+         rendered from — un-cropped, with an opaque background. Without this Remove it would be embedded
+         in the assembly, and someone would eventually reference it from XAML and get a black square.
+         ⭐ The same rule, spelled the same way, as EmberTern.App.csproj. -->
+    <AvaloniaResource Remove="Assets\Branding\Masters\**" />
 
     <!-- ⭐ THE UI MARK for the About window (L9) — the 256×256 transparent PNG, LINKED for exactly the
          same reason the .ico above is: one master, two applications. ⛔ Not copied.

@@ -268,7 +268,26 @@
                     Command="{Binding NewCustomerCommand}" />
           </Grid>
 
-          <ListBox ItemsSource="{Binding Customers}" SelectedItem="{Binding SelectedCustomer}">
+          <!-- ⚠⚠ `PointerPressed` SELECTS THE ROW UNDER A RIGHT-CLICK, and without it the menu below acts
+               on whatever was selected before. Avalonia's `ListBox` does not select on right-click — the
+               same trap EmberTern records as gotcha #16 / #99 and answers the same way in its own result
+               grid. ⭐ The handler leaves the event unhandled, so the click still bubbles and opens the
+               menu. -->
+          <ListBox Name="CustomerList" ItemsSource="{Binding Customers}"
+                   SelectedItem="{Binding SelectedCustomer}"
+                   PointerPressed="OnCustomerListPointerPressed">
+            <ListBox.ContextMenu>
+              <!-- ⛔ ONE row, and it is the destructive one, so it says exactly what it removes. The
+                   register refuses a customer who still has licences and the view model says so BEFORE
+                   any confirmation appears — see ShellViewModel.RemoveCustomerAsync. -->
+              <ContextMenu Name="CustomerMenu">
+                <MenuItem Name="CustomerMenuRemove"
+                          Header="{lm:Loc Main.RemoveCustomer}"
+                          Icon="{lm:MenuIcon Icon.Trash}"
+                          Command="{Binding RemoveCustomerCommand}" />
+              </ContextMenu>
+            </ListBox.ContextMenu>
+
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="data:CustomerRecord">
                 <StackPanel>
@@ -758,14 +777,42 @@
            ⭐ So the pair scrolls inside a ceiling and the grid keeps its height. ⛔ NOT solved by shortening
            the recipient list: §14.1 requires the FULL list, and a bulk send behind a truncated list of who
            receives it is the one thing this design may not do. -->
-      <ScrollViewer DockPanel.Dock="Top" Name="LicenceOperations" MaxHeight="340"
+      <ScrollViewer DockPanel.Dock="Top" Name="LicenceOperations" MaxHeight="420"
                     HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
       <StackPanel>
 
       <Border Classes="card" Name="BatchRenewalCard"
               Margin="{DynamicResource Margin.SectionGap}">
-        <StackPanel Spacing="{DynamicResource Space.Sm}">
-          <TextBlock Classes="section" Text="{lm:Loc Main.ExtendSelectedLicences}" />
+        <DockPanel>
+          <Button DockPanel.Dock="Top" Classes="disclosure" Name="BatchDisclosure"
+                  Command="{Binding BatchRenewal.ToggleExpandedCommand}">
+            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="{DynamicResource Space.Sm}">
+              <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center"
+                       IsVisible="{Binding !BatchRenewal.IsExpanded}">
+                <Canvas Width="24" Height="24">
+                  <Path Data="{DynamicResource Icon.ChevronRight}" />
+                </Canvas>
+              </Viewbox>
+              <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center"
+                       IsVisible="{Binding BatchRenewal.IsExpanded}">
+                <Canvas Width="24" Height="24">
+                  <Path Data="{DynamicResource Icon.ChevronDown}" />
+                </Canvas>
+              </Viewbox>
+
+              <TextBlock Grid.Column="1" Classes="section" VerticalAlignment="Center"
+                         Text="{lm:Loc Main.ExtendSelectedLicences}" />
+
+              <!-- ⭐ What a FOLDED panel still reports. ⚠ Empty while it is open — the body says it
+                   better, and a header repeating what is two centimetres below it is noise. -->
+              <TextBlock Grid.Column="2" Classes="hint" VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis"
+                         Text="{Binding BatchRenewal.HeaderSummary}" />
+            </Grid>
+          </Button>
+
+        <StackPanel Spacing="{DynamicResource Space.Sm}" IsVisible="{Binding BatchRenewal.IsExpanded}"
+                    Margin="{DynamicResource Margin.SectionGap}">
 
           <!-- ⭐ `command-row` is what makes every control here stand at one height — see the style's
                own comment in LicenseManagerStyles.axaml for why this row is the ACTION ladder. -->
@@ -848,6 +895,7 @@
                      IsVisible="{Binding BatchRenewal.HasResult}"
                      Text="{Binding BatchRenewal.LastResult}" />
         </StackPanel>
+        </DockPanel>
       </Border>
 
       <!-- Send many licences by e-mail — L10 ──────────────────────────────────────────────────── -->
@@ -869,8 +917,36 @@
            ⛔ Not solved by shortening the recipient list: §14.1 requires the FULL list, and a bulk send
            behind a truncated list of who receives it is the one thing this design may not do. -->
       <Border Classes="card" Name="BulkSendCard" Margin="{DynamicResource Margin.SectionGap}">
-        <StackPanel Spacing="{DynamicResource Space.Sm}">
-          <TextBlock Classes="section" Text="{lm:Loc Main.SendSelectedLicences}" />
+        <DockPanel>
+          <Button DockPanel.Dock="Top" Classes="disclosure" Name="BulkDisclosure"
+                  Command="{Binding BulkSend.ToggleExpandedCommand}">
+            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="{DynamicResource Space.Sm}">
+              <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center"
+                       IsVisible="{Binding !BulkSend.IsExpanded}">
+                <Canvas Width="24" Height="24">
+                  <Path Data="{DynamicResource Icon.ChevronRight}" />
+                </Canvas>
+              </Viewbox>
+              <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center"
+                       IsVisible="{Binding BulkSend.IsExpanded}">
+                <Canvas Width="24" Height="24">
+                  <Path Data="{DynamicResource Icon.ChevronDown}" />
+                </Canvas>
+              </Viewbox>
+
+              <TextBlock Grid.Column="1" Classes="section" VerticalAlignment="Center"
+                         Text="{lm:Loc Main.SendSelectedLicences}" />
+
+              <!-- ⭐ What a FOLDED panel still reports. ⚠ Empty while it is open — the body says it
+                   better, and a header repeating what is two centimetres below it is noise. -->
+              <TextBlock Grid.Column="2" Classes="hint" VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis"
+                         Text="{Binding BulkSend.HeaderSummary}" />
+            </Grid>
+          </Button>
+
+        <StackPanel Spacing="{DynamicResource Space.Sm}" IsVisible="{Binding BulkSend.IsExpanded}"
+                    Margin="{DynamicResource Margin.SectionGap}">
 
           <!-- ⭐ The same ACTION LADDER the batch row stands on — see `Grid.command-row` in
                LicenseManagerStyles.axaml. -->
@@ -1090,6 +1166,7 @@
             </StackPanel>
           </Border>
         </StackPanel>
+        </DockPanel>
       </Border>
       </StackPanel>
       </ScrollViewer>
