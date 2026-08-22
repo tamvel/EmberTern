@@ -1,10 +1,19 @@
 ﻿# EmberTern Licensing System — design document
 
-**🔒 STATUS: V1 RATIFIED BY THE USER 2026-08-15 (decisions D1–D16, §0). ✅ L1 ACCEPTED. ✅ L2 ACCEPTED.
-✅ L3 ACCEPTED (2026-08-15, after a two-round UI review — §36.5). ✅ L4a ACCEPTED. ✅ **L4b ACCEPTED**
-(2026-08-15, after a UI review that produced the status-bar correction — §38.5). ⏭ **Next: L5.** Branch
-`feat/licensing-system`, cut from `master` at `2c3da45`.
-As built: **§34** (L1), **§35** (L2), **§36** (L3), **§37** (L4a), **§38** (L4b).
+**🔒 STATUS: V1 RATIFIED BY THE USER 2026-08-15 (decisions D1–D16, §0). ⭐⭐ THE MODULE IS CLOSED
+(2026-08-22).** L1–L10 delivered and accepted; the production key `R1` exists and ships its public half; a
+real licence has been seen `Valid` in a `Release` build. Built on `feat/licensing-system` (cut from
+`master` at `2c3da45`) and merged to `master` at the module's closure.
+
+⭐ **Read for the CURRENT state: §0** (ratified D1–D16), **§60** (the ratified bulk-send specification) and
+**§61** (the as-built closure — removal semantics, the final schema, and what was deliberately left open).
+⚠ Everything between §34 and §59 is **as-built per stage, in the order it was written**: read it for the
+detail of one stage, ⛔ never as the current state of the whole.
+
+As built, stage by stage: **§34** (L1) · **§35** (L2) · **§36** (L3) · **§37** (L4a) · **§38** (L4b) ·
+**§39–§47** (L5) · **§48–§52** (L6) · **§53–§59** (L8) · **§59a** (L9) · **§60–§61** (L10 + closure).
+L7's ceremony register is **§35.4**; the reusable procedure lives in
+[`licensing-key-ceremony-runbook.md`](licensing-key-ceremony-runbook.md).
 
 **This document has two parts and they have different authority:**
 
@@ -5619,10 +5628,158 @@ też powód, dla którego K1 jest znośne.
 | **L10.1** ✅ **wykonane 2026-08-22** | `SmtpSettings` v3 · `GetLastSentAt` · sekcja w Ustawieniach | v2 czyta się czysto · zakresy **odmawiane, nie przycinane** (korekta §60.7) · **jedno** zapytanie audytu (zmierzone na 500 licencjach) · `Limit=200` nie obcina |
 | **L10.2** ✅ **wykonane 2026-08-22** | `BulkSend.cs` — PLAN | 4 warunki osobno · `blocked` wstrzymany · wygasły artefakt wstrzymany · **`NotYetValid` przechodzi** · „już wysłane" liczone wobec `IssuedAt` (⭐ odnowienie **nie** jest pominięte) · duplikaty adresów · limit serii · `Matches` czuły na kolejność/adres/verdykt |
 | **L10.3** ✅ **wykonane 2026-08-22** | `BulkSendRun.cs` — PROGRESS + RESULT | ⭐ **niezmiennik `Planned == Sent+Failed+Skipped+NotAttempted`** · `Completed` rośnie co próbę, ⛔ nigdy przy odczekaniu · **K1**: po błędzie reszta to `NotAttempted`, wynik `StoppedAfterError` · przerwanie **dokańcza** bieżącą próbę · `StoppedByOperator` ≠ `StoppedAfterError` · `licence.sent`/`licence.send-failed` po KAŻDEJ próbie · `licence.batch-sent` raz · `Elapsed` z wstrzykniętego zegara |
-| **L10.4** | `BulkSendViewModel` + katalog + EN/PL | brak `Confirm` → **odmowa** (reguła „Forget settings") · plan zmieniony → **odmowa** · porażka kompozycji → nic nie wyszło, licencja nazwana · raport **przeżywa zmianę języka** (⭐ sprawdzone na ZREALIZOWANYM wyjściu, nie na XAML-u — #370) · ticki: zdjęte tylko wysłane · TSV zawiera podsumowanie **i** szczegóły |
-| **L10.5** | Karta + styl paska i wierszy | pasek **nigdy** `IsIndeterminate` · `Maximum == Sendable` · 4 ikony i 4 tokeny · ⚠⚠ **każdy test headless ZWRACA swój `Task`** (#374/#391) · Extend zablokowany w trakcie serii |
-| **L10.6** | QA + zamknięcie | Dark **i** Light · 1366×768 i 150 % DPI · build **Debug i Release** · pełna suita LM · narracja → `history/`, status → jedna linia w `current-state.md` z **przemierzoną** liczbą testów |
+| **L10.4** ✅ **wykonane 2026-08-22** | `BulkSendViewModel` + katalog + EN/PL | brak `Confirm` → **odmowa** (reguła „Forget settings") · plan zmieniony → **odmowa** · porażka kompozycji → nic nie wyszło, licencja nazwana · raport **przeżywa zmianę języka** (⭐ sprawdzone na ZREALIZOWANYM wyjściu, nie na XAML-u — #370) · ticki: zdjęte tylko wysłane · TSV zawiera podsumowanie **i** szczegóły |
+| **L10.5** ✅ **wykonane 2026-08-22** | Karta + styl paska i wierszy | pasek **nigdy** `IsIndeterminate` · `Maximum == Sendable` · 4 ikony i 4 tokeny · ⚠⚠ **każdy test headless ZWRACA swój `Task`** (#374/#391) · Extend zablokowany w trakcie serii |
+| **L10.6** ✅ **wykonane 2026-08-22 — §61** | QA + zamknięcie | Dark **i** Light · 1366×768 i 150 % DPI · build **Debug i Release** · pełna suita LM · narracja → `history/`, status → jedna linia w `current-state.md` z **przemierzoną** liczbą testów |
 
 ⛔ Po drodze: żadnej zmiany w kryptografii, `TrustedKeys`, kluczu R1 ani w semantyce pojedynczej
 wysyłki. Jedyny plik produktu, którego L10 może dotknąć, to `FluentBridge.axaml` — i **tylko** jeśli
 QA paska postępu tego wymaga (ryzyko 5).
+
+---
+
+## 61. ⭐⭐ L10 — grupowa wysyłka i ZAMKNIĘCIE MODUŁU: STAN AS-BUILT (2026-08-22)
+
+> 🔒 **Moduł License Manager jest ZAMKNIĘTY.** Ta sekcja jest **stanem obowiązującym** po zamknięciu —
+> ⛔ nie jest sprawozdaniem z etapu i ⛔ nie powtarza listy commitów. Kto wraca do tego modułu, czyta
+> **§0** (ratyfikowane D1–D16), **§60** (ratyfikowana specyfikacja wysyłki) i **tę sekcję**.
+>
+> ⭐ Narracja — co pomiar obalił, skąd wzięły się defekty i dlaczego „usuń" znaczy tu dwie różne rzeczy —
+> jest w [`../history/35-licensing-l10-bulk-send-and-module-closure.md`](../history/35-licensing-l10-bulk-send-and-module-closure.md).
+> ⛔ Ten dokument jej nie duplikuje.
+
+### 61.1 Co moduł robi na dzień zamknięcia
+
+L1–L10 dostarczone. Klucz produkcyjny **`R1`** istnieje, jego publiczna połowa jedzie w
+`TrustedKeys.Production`, a prawdziwa licencja była widziana jako **`Valid` w buildzie `Release`**.
+Rejestr, wystawianie, ponowne wystawianie, grupowe przedłużanie, kopia zapasowa z odtwarzaniem,
+pojedyncza wysyłka e-mail, **grupowa wysyłka** oraz **administracyjne usuwanie** klientów i licencji
+działają i zostały potwierdzone przez użytkownika na jego własnym rejestrze.
+
+Interfejs jest w pełni zlokalizowany (EN + PL, przełączany na żywo) — §54–§59.
+
+### 61.2 Grupowa wysyłka — stan wykonany wobec §60
+
+⭐ **§60 wykonano w całości i bez renegocjacji kształtu.** Poniżej wyłącznie to, czego §60 nie zawiera
+albo co wykonanie doprecyzowało; wszystko inne obowiązuje **dokładnie tak, jak napisano w §60**.
+
+| Rzecz | Stan as-built |
+|---|---|
+| Trzy modele | `BulkSendPlan` · `BulkSendProgress` · `BulkSendResult` w `Services/BulkSend.cs` i `Services/BulkSendRun.cs`, ⛔ zero typów Avalonia |
+| Niezmiennik | `Planned == Sent + Failed + Skipped + NotAttempted`, pilnowany automatycznie we **wszystkich czterech** stanach końcowych. ⭐ Liczniki **odczytywane z listy `Attempts`**, nigdy akumulowane — dlatego niezmiennik trzyma się także na EKRANIE |
+| Konkluzje | ✅ **CZTERY**: `NothingToSend` · `Completed` · `StoppedAfterError` · `StoppedByOperator`. ⛔ `CompletedWithErrors` **nie istnieje** — przy K1 nie ma producenta; wraca wyłącznie razem z ewentualnym K2 |
+| K1 | Stop na pierwszej porażce. Bieżąca próba **dokańcza się**, jej wynik idzie do audytu i raportu, reszta to `NotAttempted` |
+| Przerwanie | ⛔ Token anulowania **nie wchodzi do `SendAsync`** — przerwana rozmowa SMTP mogła już dostarczyć wiadomość, więc linia audytu byłaby kłamstwem. Klik w trakcie odczekania przerywa odczekanie; klik w trakcie próby pozwala jej się dokończyć |
+| Piąty warunek wstrzymania | ⭐ **Licencja wskazująca nieistniejącego klienta** — dopełnienie §60.3, nie zmiana: czwarty warunek deleguje do `LicenseMessageComposer.Problems`, który **wymaga** klienta, więc bez niego nie da się go ocenić |
+| `GetLastSentAt` | JEDNO zapytanie `GROUP BY` do `audit_log`, ⛔ nigdy `GetAudit` (jego `Limit = 200` obciąłby odpowiedź PO CICHU). „Już wysłane" liczone wobec `IssuedAt` **aktualnego artefaktu**, więc odnowienie **nie** jest pomijane |
+| Throttling | 🔒 **15 s** odstępu, **50** na serię, oba w `SmtpSettings` v3 (pola nullable → v2 czyta się czysto, zero migracji). ⛔ Przekroczenie limitu **wyłącza akcję**, nie ostrzega. Wartość poza zakresem jest **ODMAWIANA, nigdy naprawiana**, i zostaje w polu |
+| Trwałość raportu | Raport **zostaje w karcie** do rozpoczęcia następnej serii i przeżywa zmianę języka (klucze + argumenty, przebudowa na `Loc.LanguageChanged`). ⛔ Słowa serwera zostają w języku serwera. Po restarcie odpowiedź jest w rejestrze: `licence.sent` / `licence.send-failed` per licencja + jedna linia `licence.batch-sent` na serię |
+| Po serii | ⭐ Ticki zdejmowane **wyłącznie** z pozycji zakończonych sukcesem (`Untick(result.SentIds)`) — „wznowienie" to popraw → klik, i ⛔ nikt nie dostaje dubla |
+| ⛔ Czego nie ma | Retry · jitter · klasyfikacja błędów SMTP · CC/BCC · łączenie licencji w jedną wiadomość · osobny widok historii serii · obchodzenie limitu. **§60.0 obowiązuje dalej** |
+
+⚠ **Dwie właściwości, których nie wolno „naprawić":** `Progress<T>` dostarcza **asynchronicznie** (interfejs
+zostaje, testy używają synchronicznego `IProgress` — #417), a snapshot `Waiting` słusznie niesie licznik
+o jeden **wyższy** od poprzedniego `Sending`, bo odczekanie jest PO zakończonej próbie.
+
+⭐ **Dwie karty widoku Licencje są zwijane, domyślnie zamknięte.** Trzecia karta nie mieściła się:
+zmierzone — siatka wyników spadała do dwóch wierszy na oknie 720 px. Idiom to **chevron + tytuł**,
+⛔ nie `Expander` (nowy typ kontrolki to nowa powierzchnia motywu, po nic).
+
+### 61.3 ⭐⭐ Co znaczy „usuń" w tym rejestrze — obowiązująca semantyka
+
+`audit_log` i `issued_artifacts` są **append-only na poziomie bazy** (trigger odrzuca każdy UPDATE
+i DELETE). Cała poniższa tabela z tego wynika i **nie jest polityką** — każda gałąź została zmierzona
+na żywej bazie.
+
+| Wiersz | Zmierzone | Wynik |
+|---|---|---|
+| licencja **nigdy nie wystawiona** | `DELETE` przechodzi | **usunięta** |
+| licencja **kiedykolwiek wystawiona** | `SQLITE_CONSTRAINT_FOREIGNKEY` 19/787 z `issued_artifacts` | **wycofana** |
+| klient **bez wierszy licencji** | `DELETE` przechodzi | **usunięty** |
+| klient **tylko z wycofanymi licencjami** | `SQLITE_CONSTRAINT_FOREIGNKEY` 19/787 z `licenses` | **wycofany** |
+| klient z **≥ 1 aktywną licencją** | — | **odmowa**, z podaniem liczby |
+
+⭐⭐ **Wycofanie to KOLUMNA `retired_at`, nigdy status.** `LicenseStatuses` opisuje UMOWĘ
+(`active` / `blocked`; §26.2 zapisuje, że `blocked` to księgowość — licencja w terenie działa dalej),
+a wycofanie jest faktem administracyjnym o REJESTRZE, ortogonalnym do niej. Wycofana licencja **była**
+aktywna albo zablokowana w chwili wycofania i to zostaje prawdą. ⛔ Zlanie ich w jedno wstawiłoby
+wycofany wiersz do filtra „Zablokowane" i kazałoby każdemu czytelnikowi `Status` poznać wartość
+odpowiadającą na inne pytanie. Rekord klienta nie ma żadnego słownika statusów, więc wymyślenie go tam
+byłoby tą samą pułapką złej roli o jedną tabelę dalej.
+
+⭐⭐ **DWA liczniki, bo są DWA pytania** — i ⛔ nie wolno ich zwinąć w jeden:
+
+- **`CountActiveLicenses`** — czy operacja jest **DOZWOLONA**. To jest to, co operator **widzi**,
+  więc **jedyna** liczba, o której wolno mówić w odmowie.
+- **`CountLicenses`** (wszystkie wiersze, wycofane włącznie) — **KTÓRA** to operacja. Widok samego
+  klucza obcego, i jedyna liczba, która może autoryzować `DELETE`.
+
+⛔ **Kuszące uproszczenie — „niech `CountLicenses` ignoruje wycofane" — jest błędne**: licznik pokazałby
+zero, aplikacja spróbowałaby `DELETE`, a SQLite odmówiłby na wierszu, którego nikomu nie pokazano.
+Kontrola wstępna oddająca porażkę bazie jest gorsza niż jej brak. Gałąź `DELETE` jest brana **tylko gdy
+liczba wierszy wynosi zero**, co czyni „licznik mówił 0, baza odmówiła" **nieosiągalnym**, a nie
+nieprawdopodobnym.
+
+**Co jeszcze musiało nauczyć się o wycofaniu** (i jedno z tego jest sprawą reguły #11):
+
+- `GetLicenses` / `QueryLicenses` / `GetCustomers` wykluczają wycofane wiersze **zawsze** — ⛔ żadnej
+  flagi `IncludeRetired`, bo każdy ich wywołujący jest operacją, a wycofany wiersz musi być dla nich
+  wszystkich nieosiągalny. To **jedno miejsce** trzyma wycofaną licencję poza grupowym przedłużaniem
+  i poza grupową wysyłką.
+- `GetAllLicenses` / `GetAllCustomers` to odczyty niefiltrowane i istnieją dla **dokładnie dwóch**
+  konsumentów: furtki JSONL i liczników kopii zapasowej. ⚠ **Eksport zapisuje `retiredAt`** — wiersz
+  wracający z tego pliku bez niego po cichu wróciłby do aktywnego rejestru.
+- `SaveCustomer` i `SaveLicense` odmawiają na wycofanym wierszu, a `SaveLicense` **osobno** odmawia
+  nowej licencji dla wycofanego KLIENTA: zapis licencji nie przechodzi przez `SaveCustomer`, a klucz
+  obcy chętnie by na to pozwolił, bo wiersz klienta wciąż tam jest.
+- Obie operacje dopisują linię audytu z **całym wierszem** w `before_json` (i `after_json` przy
+  wycofaniu) — reguła #11 zastosowana do porządków operatora.
+
+### 61.4 Schemat rejestru — stan końcowy
+
+**`CurrentSchemaVersion = 4`.** Migracje są przyrostowe, każda uruchamiana raz, w transakcji:
+
+| Wersja | Zmiana | Uwaga |
+|---|---|---|
+| 1 | schemat pierwotny (L3) | — |
+| 2 | głębia L5 — wskaźnik na aktualny artefakt, historia po podmiocie | §39 |
+| **3** | `ALTER TABLE licenses ADD COLUMN retired_at TEXT;` | ⭐ nullable, **bez backfillu** |
+| **4** | `ALTER TABLE customers ADD COLUMN retired_at TEXT;` | ⭐ nullable, **bez backfillu** |
+
+⭐ Obie nowe kolumny są nullable i bez wartości domyślnej, więc migracja nie dotyka ani jednego
+istniejącego wiersza — istniejący rejestr po prostu nie ma nic wycofanego. ⛔ Rejestr o wersji wyższej
+niż rozumie build jest **odrzucany z komunikatem**, nigdy otwierany.
+
+### 61.5 Pozostałe ustalenia obowiązujące po zamknięciu
+
+| Rzecz | Stan |
+|---|---|
+| **Timeout SMTP** | ⚠⚠ `SmtpClient.Timeout` **nie ogranicza** `SendMailAsync` — zmierzone 21 078 ms przy `Timeout = 3 000`. Termin trzyma **`CancellationTokenSource`**, **połączony** (`CreateLinkedTokenSource`) z tokenem wywołującego, więc anulowanie operatora nadal działa. Gotcha **#414** |
+| **Ikona License Managera** | ⭐ **Własny plik `Assets/Branding/EmberTernLicenseManager.ico`**. ⛔ Nie wolno wrócić do współdzielenia `EmberTern.ico`: dwie identyczne ikony to dwie aplikacje nie do odróżnienia, a jedna z nich trzyma klucz podpisujący. `LicenseManagerThemeTests` psuje build, jeśli pliki znów staną się identyczne. ⚠ Tolerancja flood-fill jest **mierzona per źródło** (tu 4, nie 12 z produktu) i wymaga usunięcia szumu **spójnym komponentem**, ⛔ nigdy progiem gęstości wiersza/kolumny — szczegóły w `Assets/Branding/BRANDING.md` |
+| **Zapamiętanie maksymalizacji** | `ManagerPreferences.WindowMaximized` (bool, `windowMaximized` w JSON). ⭐ Zapis idzie przez **`Update(Func<…>)`** — czytaj-modyfikuj-zapisz w jednym miejscu, bo dwie niezależne migawki tego rekordu nadpisują się nawzajem (dokładnie defekt, który EmberTern zapisał o swoim `PreferencesService`). ⛔ **Rozmiar i pozycja okna NIE są zapamiętywane** — tylko maksymalizacja; §61.6 mówi, że to decyzja, nie niedokończona funkcja |
+| **Panele w widoku Licencje** | Dwa niezależne panele ujawniające, **domyślnie zamknięte** |
+| **`LicenceIdText`** | ⭐ JEDEN właściciel skracania `lid`-u; dwie wcześniejsze kopie (`LicenseListItem`, `BatchRenewalCandidate`) zmigrowane |
+
+### 61.6 ⏭ Co zostało świadomie otwarte — wszystko ratyfikowane
+
+⛔ **Żadna z tych pozycji nie jest defektem i żadnej nie wolno „przy okazji" zamknąć.**
+
+| Pozycja | Stan |
+|---|---|
+| Ostrzeżenie o cofnięciu zegara | **Egzekwowanie działa** (`EffectiveNow` jest żywe); brakuje wyłącznie POWIERZCHNI ostrzeżenia — decyzja C2, backlog |
+| Przenośność klucza | Obie kopie ceremonii zweryfikowane na **jednej** maszynie; przenośność potwierdza się przy pierwszej prawdziwej migracji (§35.4) |
+| Skrzynka firmowa | ⚠ Wciąż **niezmierzona** (§48.1). Tenant odmawiający basic auth to **NOWA KLASA** za `ILicenseEmailSender`, ⛔ nie defekt |
+| Rozmiar/pozycja okna | ⛔ Świadomie niezapamiętywane — zapamiętano to, o co poproszono |
+| `CompletedWithErrors` | Wraca **razem ze swoim producentem**, czyli tylko przy ewentualnej ratyfikacji K2 |
+| V2 — aktywacja online | ⛔ Planowany osobny etap; V1 nie niesie ani jednej linii, której używałoby dopiero V2 |
+
+### 61.7 Stan zweryfikowany przy zamknięciu
+
+| | |
+|---|---|
+| Suita License Managera | **929 / 929** |
+| Build License Managera | **0 ostrzeżeń / 0 błędów** w `Debug` **i** `Release` |
+| Potwierdzenie użytkownika | ✅ Grupowa wysyłka, usuwanie licencji i usuwanie klientów — na własnym rejestrze użytkownika |
+
+⚠ **Mierz, nie cytuj.** Liczba testów rosła w tym module przy każdym etapie i każdy zapisany wcześniej
+licznik zdążył się zestarzeć.

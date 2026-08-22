@@ -9,120 +9,84 @@
 > to paste a multi-paragraph "shipped" report here, you are recreating the defect that produced a
 > 6 849-line `CLAUDE.md` twice — see `docs/history/30-claude-md-current-state-archive.md`.
 
-**Last verified: 2026-08-22** (L9 CLOSED — L10 is the active stage, specified in §60).
+**Last verified: 2026-08-22** (the licensing module is CLOSED and merged to `master`).
 
 ---
 
 ## 0. ⏭ HANDOFF — read this first
 
-> ⭐⭐ **L7 IS CLOSED — the licensing system is complete.** 🔒 The production key ceremony ran on
-> **2026-08-22**: `R1` (ECDSA P-256) exists, its public half ships in `TrustedKeys.Production`, and a real
-> licence was seen **`Valid` in a `Release` build** — the one line of §32's L4 criterion that §38.6 had to
-> defer, because it could not be true until a real key existed. Register: **§35.4**. The procedure, written
-> to be reused for a rotation: [`design/licensing-key-ceremony-runbook.md`](design/licensing-key-ceremony-runbook.md).
+> ⭐⭐ **THE LICENSING MODULE IS CLOSED (2026-08-22).** L1–L10 delivered, accepted and merged to
+> `master`. The production key `R1` exists and ships its public half in `TrustedKeys.Production`; a real
+> licence has been seen **`Valid` in a `Release` build**; a licence reaches a customer by e-mail, one at a
+> time or in a throttled batch; and customers and licences can be removed administratively.
 >
-> ## ⏭ START HERE: **L10.4** — `BulkSendViewModel` + catalog + EN/PL (§60.12).
+> ## ⏭ **NO STAGE IS IN PROGRESS. The next topic is a user decision.**
 >
-> ⭐⭐ **L10 is RATIFIED IN FULL and needs no further approval: `design/licensing-system.md` §60.**
-> ⛔ Do not re-open the design, do not re-derive it from §14.1 (which §60 supersedes), and ⛔ do not add
-> anything §60.0 forbids — no retry, no jitter, no SMTP error classification, no CC/BCC, no merging
-> licences into one message, no run-history view, no way around the run limit.
+> ⛔ **Do not start anything from the licensing module.** It is finished, and §61 of its design document
+> lists the six things left open **on purpose** — each one ratified, none of them a defect.
+> ⛔ Do not close any of them "while we're here".
 >
-> ✅ **L10.1–L10.3 DONE and committed:** `65ea50c` (settings v3 + `GetLastSentAt`), `96120e9` (the PLAN),
-> `1e73897` (the run: PROGRESS + RESULT). Suite **862 / 862** at `1e73897`, build 0/0 for the License
-> Manager. ⛔ The EmberTern suite was not run for L10.2/L10.3 and did not need to be — no product file.
+> ⭐ **Where the licensing knowledge now lives, so no next session has to read the whole history:**
 >
-> ⚠⚠ **`96120e9` and `1e73897` are NOT PUSHED** — both remotes stand at `65ea50c`, by the user's
-> decision. ⭐ **First action next session: push both, then verify all three refs match.**
+> | You need | Read |
+> |---|---|
+> | The current state of the module — removal semantics, the final schema, what is open | `design/licensing-system.md` **§61** |
+> | Why the bulk send is shaped the way it is | `design/licensing-system.md` **§60** (ratified specification) |
+> | The ratified product decisions D1–D16 | `design/licensing-system.md` **§0** |
+> | What L10 discovered, and the defects a real operator found | `history/35` |
+> | The key ceremony, and how to repeat it for a rotation | `design/licensing-key-ceremony-runbook.md`; register in **§35.4** |
 >
-> ⚠ **Three things not to re-derive** (recorded in §60.7 / §60.8): ✅ the run conclusions are **FOUR** —
-> ⛔ never add `CompletedWithErrors`, K1 gives it no producer · `Progress<T>` delivers ASYNCHRONOUSLY, so
-> the interface keeps it while TESTS use a synchronous `IProgress` · a `Waiting` snapshot legitimately
-> carries a count one HIGHER than the `Sending` before it — not a defect.
+> ⚠ **Two suites live here** — `dotnet test EmberTern.slnx` (the product) and
+> `dotnet test EmberTern.LicenseManager.slnx` (the issuer). The License Manager suite runs **serially**
+> (`DisableTestParallelization`) because `Loc` is global static state — §57.9.
 >
-> ⏭ **Backlog, not blocking:** a python `open(path, "w")` truncates on OPEN, so an encoding error during
-> the write DESTROYS the file — it emptied `RegisterRecords.cs`, recovered exactly from the commit. Writes
-> now go encode-to-bytes → temp file → `os.replace`. Owed a gotcha entry at L10's closure.
+> ⚠ **Two RED tests in `EmberTern.Tests` are PRE-EXISTING and are NOT licensing defects** — §49.9:
+> `CharsetGuardSeamTests.TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver` (matches the word
+> `Firebird` in a COMMENT in the License Manager csproj — gotchas #396 / #412) and
+> `DatePresentationTests.NoUserFacingSurface_FormatsADateInvariantly` (`RestoreWorkflow.cs`,
+> `StorageViewModel.cs`). Both are named in `docs/gotchas.md`; ⛔ neither was introduced by L9 or L10.
 >
-> ⚠ **Two things L7 left open ON PURPOSE, both ratified:** the clock-rollback **warning** has no surface
-> (the *enforcement* does — `EffectiveNow` is live; decision C2, backlog), and the ceremony's two backups
-> were verified on ONE machine, so key portability is confirmed at the first real migration (§35.4).
+> ⚠ **Findings from this module a next session should not rediscover** — all in `docs/gotchas.md`:
+> **#394** an option's identity must not contain a label · **#396** every text-scanning guard reads
+> `CodeOf(file)` · **#401** a template bound to a non-notifying item's property renders once and freezes ·
+> **#403** `Loc` is global static state, so the suite runs SERIALLY · **#410** a function whose result
+> nobody receives does not exist · **#412** a guard that reads the comment quoting the value it replaced ·
+> **#414** `SmtpClient.Timeout` does not bound `SendMailAsync` · **#415** `open(path, "w")` truncates on
+> OPEN · **#416** a programmatic restore keeps the backup's mtime, so the incremental build skips it ·
+> **#417** `Progress<T>` delivers asynchronously · **#418** comparing by `ToString()` on a type that does
+> not override it is a vacuous assertion.
 >
-> ✅ **L8 CLOSED** — sub-stage by sub-stage in §53–§59; ⛔ the detail lives there, not here. ⭐ The two
-> properties it rests on: L8.1–L8.4 changed **not one user-visible word** and proved it mechanically every
-> time, and the hard part of localizing is knowing, per surface, **by what mechanism it learns the
-> language changed** (§57.4).
+> ### ⛔ Standing constraints the module leaves behind
 >
-> ⚠ **Findings a next session should not rediscover:** **#394** an option's identity must not contain a
-> label · **#395** a BOM made `System.Text.Json` throw into a forgiving `catch` · **#396** every
-> text-scanning guard reads `CodeOf(file)` · **#399** XML normalises the line ending before an attribute
-> value · **#401** a template bound to a non-notifying item's property renders once and freezes · **#403**
-> `Loc` is global static state, so the suite runs SERIALLY · **#406** a plural pivot and the printed value
-> are not always the same argument · **#408** a sweep keyed on a member NAME misses the next instance of
-> the same SHAPE.
->
-> ⏭ **Two things L8 deliberately left:** `Licences.DetailIssuedOnce` reads telegraphically in Polish
-> (🔒 wording deferred), and eight of L8.4's twelve planned injections were never run — green
-> but unproven-on-demand, 🔒 stopped by the user as disproportionate.
->
-> ### ⛔ Standing constraints the localization leaves behind
->
-> - ⛔ **A language is applied in ONE place** — `ApplicationLanguageService`. Two callers is how a stored
->   preference and a rendered window start disagreeing; `TheLanguage_IsAppliedInExactlyOnePlace` says so.
-> - ⛔ **`ApplicationLanguages` and `MessageLanguages` are INDEPENDENT catalogs** and must never be merged.
->   The interface language is a fact about the OPERATOR; the message language a fact about the CUSTOMER.
->   Defaults differ on purpose: **English** for the interface (D‑3), **Polish** for the message (D‑9).
+> - ⛔ **A language is applied in ONE place** — `ApplicationLanguageService`.
+>   `TheLanguage_IsAppliedInExactlyOnePlace` says so.
+> - ⛔ **`ApplicationLanguages` and `MessageLanguages` are INDEPENDENT catalogs** and must never be
+>   merged: the interface language is a fact about the OPERATOR, the message language about the CUSTOMER.
+>   Defaults differ on purpose — **English** for the interface (D‑3), **Polish** for the message (D‑9).
 > - ⛔ **Nothing is localized that is a technical contract**: persisted values, audit actions AND audit
 >   notes, file names, ISO dates, branding. `design/terminology.md` §4.4 is the list.
-> - ⛔ **Nothing in `EmberTern.App` or the product** — no product file touched, so its suite is not run here.
->
-> ---
->
-> ### Earlier milestones — closed, and their detail lives in the design doc
->
-> ⭐ **L6 CLOSED (2026-08-19)** — a licence reaches a customer by e-mail, proved end to end against a real
-> Gmail account in both languages (§48–§52; **§52.2** holds the four properties L6 must not lose).
-> ⚠⚠ **The company mailbox is still UNMEASURED** — a tenant refusing basic auth is a NEW CLASS behind
-> `ILicenseEmailSender` (§48.1), ⛔ not a defect. **L1–L4b** §34–§38 · **L5 CLOSED** §39–§47.
->
-> ⚠ **Two RED tests in `EmberTern.Tests` are PRE-EXISTING** — §49.9: `CharsetGuardSeamTests.
-> TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver` (matches a COMMENT in the License Manager
-> csproj — gotchas #396/#412) and `DatePresentationTests.NoUserFacingSurface_FormatsADateInvariantly`
-> (`RestoreWorkflow.cs`, `StorageViewModel.cs`). **Standing facts:** §42.4, §46.11, §47.6, §48.1, §49.4.
->
-
-> ⭐ **`TrustedKeys.Production` carries `R1` since 2026-08-22.** It was empty by design through L2–L6 so no
-> production private key travelled with five stages of development; that is history now, and §35.4 keeps
-> both the record and the reasoning.
->
-> **Work lives on the branch `feat/licensing-system`**, cut from `master` at `2c3da45`.
-> ⭐⭐ **The remotes are back to the CLAUDE.md table, and BOTH are kept on the same SHA** (user's decision,
-> 2026-08-21, on returning to the work laptop): `origin` → the company Gitea, `private` → the personal
-> GitHub. The flow is **commit → push `origin` → push `private`**.
-> ⚠ **This reverses the 2026-08-15 note**, which said this clone had ONE remote pointing at the personal
-> GitHub — that was true of the OTHER machine, where L4b…L8.1 were written and pushed to GitHub only. Those
-> eleven commits were fast-forwarded onto the company Gitea on 2026-08-21; ⛔ nothing was reset or forced.
->
-> Authority for every licensing decision: [`design/licensing-system.md`](design/licensing-system.md) — §0
-> (ratified D1–D16), §32 (the L1–L7 plan), §34–§52 (as built; §52 closes L6).
+> - ⛔ **`BrandEmberBrush` is identity, never a signal** — it may not paint a control state or a severity,
+>   and a guard fails the build on a second consumer (`design/color-language.md` §1.3).
+> - ⛔ **Never a version literal in either application** — `AppInfo` and `ManagerInfo` both read the build,
+>   from the one `Directory.Build.props`.
 
 ---
 
 ## 1. Entry state
 
-**Verified 2026-08-22 at L9's closure, by running the commands rather than by recall.**
+**Verified 2026-08-22 at the licensing module's closure, by running the commands rather than by recall.**
 
 | | |
 |---|---|
-| Branch | **`feat/licensing-system`** (cut from `master` at `2c3da45`) |
-| HEAD | *docs(licensing): L9 CLOSED…* — beneath it **`681ac95`** *L9.2 wordmark*, **`b0ab75c`** *L9.1 okno "O programie"*, **`d553157`** *L10 — ratyfikowana specyfikacja §60*, **`0c4a1ae`** *L7 CLOSED*. ⛔ A commit cannot name its own hash, so this row names the newest by SUBJECT; `git log -1` gives the SHA |
-| Sync | ⭐ **HEAD == `origin/feat/licensing-system` == `private/feat/licensing-system`** — pushed to BOTH at L9's closure, 2026-08-22 |
+| Branch | ⭐ **`master`** — `feat/licensing-system` was merged back with `--no-ff` at the module's closure and is **kept**, locally and on both remotes, as the historical reference for L1–L10 |
+| HEAD | the merge commit *Merge branch 'feat/licensing-system'*, over *docs(licensing): close License Manager module*. ⛔ A commit cannot name its own hash; `git log -1` gives the SHA |
+| Sync | ⭐ **`master` == `origin/master` == `private/master`**, pushed to both at the closure |
 | Working tree | ✅ **CLEAN** |
-| Build | **0 warnings / 0 errors** — License Manager **Debug and Release** AND EmberTern **Debug and Release**. ⚠ The product is in scope since L9.2: it edits `Colors.axaml`, which the License Manager LINKS rather than copies |
-| Tests | ⭐ **License Manager: 798 / 798**, measured 2026-08-22 at L9's closure (777 at L9's entry → 790 after L9.1 → 798 after L9.2). ⭐ **EmberTern: 9 090 / 9 092** — ⚠ both reds are **PRE-EXISTING** (§49.9 / §57.8) and neither is L9's: `CharsetGuardSeamTests` matches a COMMENT in the License Manager csproj (gotcha #396 / #412 — byte-identical to before L9, only its line number moved) and `DatePresentationTests` names `RestoreWorkflow.cs` + `StorageViewModel.cs`. ⚠ The LM suite runs **serially** (`DisableTestParallelization`) because `Loc` is global static state — §57.9. ⚠ **Measure, do not quote** — this row has gone stale at every stage so far |
+| Build | **0 warnings / 0 errors** — License Manager **Debug and Release**. ⚠ Measured before the closing documentation commit; ⛔ that commit changes no code |
+| Tests | ⭐ **License Manager: 929 / 929**, measured 2026-08-22 at the closure. ⚠ **Measure, do not quote** — this row has gone stale at every stage of this module |
 | Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ Separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
-| Remotes | ⭐ **TWO, and both are kept on the same SHA** (user's decision, 2026-08-21): `origin` → the company Gitea, `private` → the personal GitHub. ⚠ This REVERSES the one-remote note L8.0–L8.1 carried — that described the *other* machine. See §0 |
+| Remotes | ⭐ **TWO, and both are kept on the same SHA**: `origin` → the company Gitea, `private` → the personal GitHub. The flow is **commit → push `origin` → push `private`** |
 
 ⚠⚠ **Build BOTH configurations before asking for a visual check.** `CLAUDE.md` runs the app from
 `bin\Debug\`, and an etap built only in `Release` left the user verifying a binary that predated the
@@ -174,14 +138,7 @@ reasoning lives.
 | **Audit follow-up — Phase 5: charset guard** ✅ user-verified | 2026-08-15 | gotchas #372/#373, `tools/probes/CharsetProbe`, rule 12 in `CLAUDE.md` |
 | **Audit follow-up — Phase 6: NuGet to latest stable** | 2026-08-15 | §3 below — 8 packages raised, 2 held for a stated reason |
 | **Audit follow-up — Phase 7: `ARCHITECTURE.md` as-built** | 2026-08-15 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) |
-| ⭐ **Licensing L9 — CLOSED.** The License Manager's identity: a typographic wordmark in the title strip (`Ember`|`Tern` in two tones on the new `BrandEmberBrush`, ⛔ identity never a signal) and the About window, with `ManagerInfo` reading the build so no version literal exists in either project ✅ user-verified in Dark and Light | 2026-08-22 | `history/34`; `design/color-language.md` §1.3; gotchas #412/#413 |
-| **Licensing L5.4** — bulk selection + batch renewal, licences list as EmberTern's grid ✅ user-verified | 2026-08-18 | `design/licensing-system.md` §46; gotchas #381–#383 |
-| **Licensing L5 — CLOSED.** L5.5: encrypted verified backup, two restore modes, JSONL escape hatch, Storage window ✅ user-verified | 2026-08-18 | `design/licensing-system.md` §47; gotchas #384–#387 |
-| **Licensing L8.0 / prep** — option identity taken back from labels (7 records), independent interface/message language catalogs, ratified EN → PL terminology. ⛔ Not one user-visible word changed | 2026-08-20 | `design/licensing-system.md` §53; `design/terminology.md` §4; gotcha #394 |
-| ⭐⭐ **Licensing L8 — CLOSED.** The License Manager's interface in English and Polish, switchable live: the mechanism (§54), `StatusMessage` as key + arguments (§55), 147 XAML values (§56), 85 C# keys plus the refresh path for every built surface (§57), the Polish catalog and the real language picker (§58), and visual QA (§59) ✅ user-verified | 2026-08-21 | `design/licensing-system.md` §53–§59; `design/terminology.md` §4; gotchas #394–#408 |
-| **Licensing L8.5** — the Polish interface: `Strings.pl.resx` complete (392 entries), plural families with three arms, the Application-language picker made real (D‑8 discharged), and the inherited dictionary verified against the product | 2026-08-21 | `design/licensing-system.md` §58; `design/terminology.md` §4 |
-| **Licensing L8.1–L8.4** — the localization mechanism (`Loc`, `{lm:Loc}`, `PluralRules`, `ui.json`), `StatusMessage` as key + arguments, 147 XAML values and 85 C# keys migrated, and the refresh path for every surface whose words are BUILT. ⛔ Not one user-visible word changed, proved mechanically each time | 2026-08-21 | `design/licensing-system.md` §54–§57; gotchas #395/#396/#399 |
-| **Licensing L6 — CLOSED.** E-mail delivery end to end: **L6.1** SMTP settings + own-entropy DPAPI `smtp.dat` with four load states · **L6.1a** hamburger, Settings Center, PL/EN message language, template resolver, Customer/Licences split · **L6.2** `LicenseMessage` + a pure composer, the attachment byte-identical to `SaveArtifact` · **L6.3** `ILicenseEmailSender` with the SMTP and `.eml` senders, the Send licence window, `licence.sent` / `licence.send-failed`, and **Send test email…** · **L6.3a** the message the customer actually reads. ✅ **Proved against a real Gmail account**, PL and EN | 2026-08-19 | `design/licensing-system.md` §48–§52 |
+| ⭐⭐ **LICENSING SYSTEM V1 — THE WHOLE MODULE, CLOSED.** Offline licensing end to end: the signed `.etlic` artifact and its verifier, the License Manager (register, customers, licences, issuing, re-issuing, batch renewal, encrypted backup and restore), the product's activation surfaces, e-mail delivery one at a time **and** as a throttled batch, administrative removal of licences and customers, the production key `R1`, and a fully bilingual (EN + PL, live-switching) interface. ✅ user-verified against the user's own register | 2026-08-22 | `design/licensing-system.md` — **§61** is the as-built state, **§60** the ratified bulk-send specification, **§0** the ratified decisions; per stage §34–§59. Narrative: `history/33`, `history/34`, `history/35` |
 
 ---
 
@@ -195,29 +152,18 @@ file went over its 300-line budget. ⛔ Nothing was deleted.
 
 ## 3. Open work
 
-### Licensing system V1 — ⭐ THE ACTIVE ETAP
+### Licensing system V1 — ✅ CLOSED, merged to `master`
 
-Offline licensing (D1): a signed `EmberTern.etlic` artifact, ECDSA P-256, no backend and no mandatory
-internet. ⛔ V2 (online activation) is a **planned next stage**, and ⛔ V1 carries no code only V2 would
-use. Plan and acceptance criteria per stage: `design/licensing-system.md` §32.
+⛔ **Nothing here is open.** The module shipped L1–L10 and its whole state lives in
+`design/licensing-system.md` **§61**; the six items it left open are ratified and listed there
+(§61.6) — the clock-rollback warning surface, key portability at the first real migration, the
+unmeasured company mailbox, window size/position, `CompletedWithErrors`, and V2.
 
-| Stage | State |
-|---|---|
-| **L1** — `EmberTern.Licensing`: the ETL1 format and the verifier | ✅ accepted (`83d05a8`) — §34 |
-| **L2** — `EmberTern.Licensing.Issuing`: keystore, issuer, key ceremony | ✅ accepted (`644f644`) — §35 |
-| **L3** — License Manager: skeleton, SQLite register, customers, licences, issue, save | ✅ **accepted** — §36; ⚠ read §36.5 before any UI work here |
-| **L4a** — mechanism: policy, location, store, service, text, clock, freshness, 4 gate guards | ⭐ **delivered, no UI** — §37 |
-| **L4b** — surfaces: activation window, Settings ▸ Licence, About, banner, the connection SEAM, EN + PL | ✅ **accepted** — §38; ⚠ read §38.5 before touching a licence message |
-| **L5** — Manager depth: search, filters, group extend, re-issue, preview, history, backup | ✅ **CLOSED 2026-08-18**, all six sub-stages accepted and pushed. **L5.0** data layer — schema v2, cross-customer query, history by subject, integrity check, atomic issuing batch (§39). **L5.1 + two QA rounds** — Licences view, search, three filters, own AppBar and title bar, the licence re-parenting defect, spacing and uniform control heights (§40–§43). **L5.2** — issuing history and artifact preview, current marked from the register's POINTER never from the ordering (§44). **L5.3** — re-issue with an operator-chosen reason, validated against a measured diff of the SIGNED payload (§45). **L5.4** — bulk selection and batch renewal, and the licences list rebuilt as EmberTern's own grid, LINKED rather than reproduced (§46). **L5.5** — encrypted verified backup with its own passphrase, two explicit restore modes with the previous register always preserved, the five-type JSONL escape hatch, and the Storage window (§47). ⚠ Read §47.6 before quoting L5.5's verification: it is deliberately narrower than earlier stages' |
-| **L6** — e-mail | ✅ **CLOSED 2026-08-19**, all five sub-stages accepted. Delivery end to end: the SMTP settings and their own-entropy DPAPI secret with four load states (§48); the Settings Center, message language and Customer/Licences split (§49); a pure composer whose attachment is byte-identical to `SaveArtifact` (§50); `ILicenseEmailSender` with an SMTP and an `.eml` sender, the Send licence window whose preview IS the message, `licence.sent` / `licence.send-failed`, and **Send test email…** (§51); and the message the customer reads (§51.9). ⭐ **Proved against a real Gmail account** — §32's exit criterion satisfied. ⚠ The COMPANY mailbox is still unmeasured (§48.1) — a NEW CLASS behind the sender contract if it refuses basic auth, not a rebuild. ⛔ Bulk sending was deliberately NOT built; it is its own stage below. Closure: §52 |
-| ⭐⭐ **L7** — **hardening and closing the licensing system** | ✅ **CLOSED 2026-08-22.** Clock high-water, `%PROGRAMDATA%` fallback and the `maint` gate turned out to be already built in L4a; what L7 actually carried was the ceremony and its executor. **L7.1** the Signing-key task in the Storage window — `kid`, fingerprint, public key, paste-ready entry and `VerifyRestore`, none of which had a caller before (gotcha #410). **L7.2** the 14-step runbook. **L7.3** the ceremony: `R1`, two offline backups, `VerifyRestore` on each, fingerprints compared. **L7.4** the public key in `TrustedKeys.Production`, the emptiness guard retired WITH the decision it served (#407), and a real licence `Valid` in `Release`. Narrative: `history/33`. Register: §35.4 |
+⭐ **V2 — online activation** remains a **planned next stage**, not a hypothesis, and ⛔ V1 deliberately
+carries no code that only V2 would use (§3). It starts when the user decides it does.
 
-⭐ **A `Release` build now accepts a real licence** — proven by hand on 2026-08-22 and pinned by
-`TheShippedTrustedKeyTableCarriesTheCeremonyKey`, which asserts both the table's shape and the recorded
-fingerprint, so a mistyped key fails the build rather than a customer.
-
-⛔ **Two licensing decisions inherited from the audit follow-up's Phase 6**, both test-only, both held
-back for THIS etap to decide: **NPOI** stays 2.7.2 (2.8.0 is `OSMFEULA.txt` and demands
+⛔ **Two dependency decisions inherited from the audit follow-up's Phase 6**, both test-only, both held
+back for this etap and both resolved as *stay*: **NPOI** stays 2.7.2 (2.8.0 is `OSMFEULA.txt` and demands
 `<AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>` — accepting terms on the owner's behalf), and
 **SixLabors.ImageSharp** stays on the 2.x line NPOI supports (3.0+ moved to the Six Labors Split Licence).
 
@@ -234,7 +180,6 @@ whether `NONE` should stay in `CharsetCatalog.Supported` (lossy and machine-depe
 
 | Item | Scope / why it waits | Reference |
 |---|---|---|
-| ⭐⭐ **L10 — bulk sending of licences** | 🔒 **SPECIFIED AND RATIFIED IN FULL (2026-08-22) — needs no further approval, only implementation.** Three separate models (PLAN / PROGRESS / RESULT) with `Planned == Sent + Failed + Skipped + NotAttempted` as a tested invariant; a real progress bar (⛔ never `IsIndeterminate`); a report that STAYS in the card, structured, with a per-recipient verdict; stop on the first failure (no SMTP error classification); 15 s / 50 defaults; "skip already sent" judged against the current artifact's `IssuedAt`. ⛔ §60.0 lists what may not be added. Runs after L9. | `design/licensing-system.md` **§60** |
 | **Spacing stage** | 969 local `Spacing`/`Padding`/`Margin` values app-wide; `Padding` reads a role **zero** times. Ratified as its own stage; a guard already prevents growth. | `design/product-polish-m5-next-session.md` |
 | **App-wide UX sprint** | Global control density (base controls sit on Fluent's 32 px) **+** monospace font consolidation — re-measured at **7 strings / 95 occurrences / 33 files**, so it decides `Cascadia Code` vs `Cascadia Mono` for every code surface at once. | `design/settings-center.md` §2.7, §7.1 |
 | **`KindLabel` / `SymbolKind`** | ~8 Quick Info fact *values* that are our own words. A **contract** decision on `QuickInfoFact` (Core should hand up `SymbolKind` as data), not cleanup. ⛔ Do not declare kind keys in Core — App already owns that vocabulary. Cost today: a Polish reader sees *"Rodzaj: Table"* while the tree says *"Tabela"*. | `history/28` (C2) |
