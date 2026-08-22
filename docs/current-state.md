@@ -21,41 +21,49 @@
 > defer, because it could not be true until a real key existed. Register: **§35.4**. The procedure, written
 > to be reused for a rotation: [`design/licensing-key-ceremony-runbook.md`](design/licensing-key-ceremony-runbook.md).
 >
-> ## ⏭ START HERE: **L10 — bulk sending of licences.** Implement §60; nothing else is open.
+> ## ⏭ START HERE: **L10.4** — `BulkSendViewModel` + catalog + EN/PL (§60.12).
 >
-> ⭐⭐ **RATIFIED IN FULL, needs NO further approval: `design/licensing-system.md` §60.**
-> 🔒 The user accepted the specification on 2026-08-22 and ordered L9 first; **L9 is now CLOSED**, so
-> implementation starts at §60.12 step **L10.1**. ⛔ Do not re-open the design,
-> do not re-derive it from §14.1 (which §60 supersedes), and ⛔ do not add anything §60.0 forbids —
-> no retry, no jitter, no SMTP error classification, no CC/BCC, no merging licences into one message,
-> no run-history view, no way around the run limit. Its 6 sub-stages are §60.12.
+> ⭐⭐ **L10 is RATIFIED IN FULL and needs no further approval: `design/licensing-system.md` §60.**
+> ⛔ Do not re-open the design, do not re-derive it from §14.1 (which §60 supersedes), and ⛔ do not add
+> anything §60.0 forbids — no retry, no jitter, no SMTP error classification, no CC/BCC, no merging
+> licences into one message, no run-history view, no way around the run limit.
+>
+> ✅ **L10.1–L10.3 DONE and committed:** `65ea50c` (settings v3 + `GetLastSentAt`), `96120e9` (the PLAN),
+> `1e73897` (the run: PROGRESS + RESULT). Suite **862 / 862** at `1e73897`, build 0/0 for the License
+> Manager. ⛔ The EmberTern suite was not run for L10.2/L10.3 and did not need to be — no product file.
+>
+> ⚠⚠ **`96120e9` and `1e73897` are NOT PUSHED** — both remotes stand at `65ea50c`, by the user's
+> decision. ⭐ **First action next session: push both, then verify all three refs match.**
+>
+> ⚠ **Three things not to re-derive** (recorded in §60.7 / §60.8): ✅ the run conclusions are **FOUR** —
+> ⛔ never add `CompletedWithErrors`, K1 gives it no producer · `Progress<T>` delivers ASYNCHRONOUSLY, so
+> the interface keeps it while TESTS use a synchronous `IProgress` · a `Waiting` snapshot legitimately
+> carries a count one HIGHER than the `Sending` before it — not a defect.
+>
+> ⏭ **Backlog, not blocking:** a python `open(path, "w")` truncates on OPEN, so an encoding error during
+> the write DESTROYS the file — it emptied `RegisterRecords.cs`, recovered exactly from the commit. Writes
+> now go encode-to-bytes → temp file → `os.replace`. Owed a gotcha entry at L10's closure.
 >
 > ⚠ **Two things L7 left open ON PURPOSE, both ratified:** the clock-rollback **warning** has no surface
 > (the *enforcement* does — `EffectiveNow` is live; decision C2, backlog), and the ceremony's two backups
 > were verified on ONE machine, so key portability is confirmed at the first real migration (§35.4).
 >
-> ✅ **L8, sub-stage by sub-stage: §53** prep (option identity, #394) · **§54** the mechanism · **§55**
-> `StatusMessage` as key + arguments · **§56** 147 XAML values · **§57** 85 C# keys and the refresh path ·
-> **§58** the Polish catalog and the real picker · **§59** visual QA. Each proved mechanically at its own
-> checkpoint; ⛔ the detail lives there, not here.
+> ✅ **L8 CLOSED** — sub-stage by sub-stage in §53–§59; ⛔ the detail lives there, not here. ⭐ The two
+> properties it rests on: L8.1–L8.4 changed **not one user-visible word** and proved it mechanically every
+> time, and the hard part of localizing is knowing, per surface, **by what mechanism it learns the
+> language changed** (§57.4).
 >
-> ⚠ **Findings a next session should not rediscover:** **#394** an option's identity must not contain a label ·
-> **#395** a BOM made `System.Text.Json` throw into a forgiving `catch` · **#396** every text-scanning guard
-> reads `CodeOf(file)` · **#399** XML normalises the line ending before an attribute value · **#401** a
-> template bound to a non-notifying item's property renders once and freezes · **#403** `Loc` is global static
-> state, so the suite runs SERIALLY (`DisableTestParallelization`, ~65 s → ~120 s) · **#406** a plural pivot
-> and the printed value are not always the same argument · **#408** a sweep keyed on a member NAME misses the
-> next instance of the same SHAPE — which is how L8.6's first defect reached the operator.
+> ⚠ **Findings a next session should not rediscover:** **#394** an option's identity must not contain a
+> label · **#395** a BOM made `System.Text.Json` throw into a forgiving `catch` · **#396** every
+> text-scanning guard reads `CodeOf(file)` · **#399** XML normalises the line ending before an attribute
+> value · **#401** a template bound to a non-notifying item's property renders once and freezes · **#403**
+> `Loc` is global static state, so the suite runs SERIALLY · **#406** a plural pivot and the printed value
+> are not always the same argument · **#408** a sweep keyed on a member NAME misses the next instance of
+> the same SHAPE.
 >
-> ⏭ **Two things L8 deliberately left:** `Licences.DetailIssuedOnce` reads telegraphically in Polish (🔒 the
-> user deferred the wording), and eight of L8.4's twelve planned injections were never run — those guards are
-> green but unproven-on-demand, 🔒 stopped by the user as disproportionate.
->
-> ⭐⭐ **THE TWO PROPERTIES L8 RESTS ON.** (1) L8.1–L8.4 changed **not one user-visible word**, proved
-> mechanically every time — by generation rather than transcription, by classification against the
-> pre-migration tree, and by pinning the rendered output (§57.2); L8.5 then changed them all, on purpose.
-> (2) ⭐ The hard part of localizing an application is not the translation — it is knowing, for every
-> surface, **by what mechanism it learns that the language changed** (§57.4, and L8.6's two defects).
+> ⏭ **Two things L8 deliberately left:** `Licences.DetailIssuedOnce` reads telegraphically in Polish
+> (🔒 wording deferred), and eight of L8.4's twelve planned injections were never run — green
+> but unproven-on-demand, 🔒 stopped by the user as disproportionate.
 >
 > ### ⛔ Standing constraints the localization leaves behind
 >
@@ -73,19 +81,14 @@
 > ### Earlier milestones — closed, and their detail lives in the design doc
 >
 > ⭐ **L6 CLOSED (2026-08-19)** — a licence reaches a customer by e-mail, proved end to end against a real
-> Gmail account in both languages. §48–§52; **§52.2 holds the four properties L6 must not lose.**
-> ⚠⚠ **The company mailbox is still UNMEASURED** — proved on Gmail with an app password (§48.1); a tenant
-> refusing basic auth is a NEW CLASS behind `ILicenseEmailSender`, ⛔ not a defect. ⏭ **Bulk sending is its
-> OWN stage** (§14.1). **L1–L4b**: the offline loop end to end (§34–§38). **L5 CLOSED 2026-08-18**
-> (§39–§47).
+> Gmail account in both languages (§48–§52; **§52.2** holds the four properties L6 must not lose).
+> ⚠⚠ **The company mailbox is still UNMEASURED** — a tenant refusing basic auth is a NEW CLASS behind
+> `ILicenseEmailSender` (§48.1), ⛔ not a defect. **L1–L4b** §34–§38 · **L5 CLOSED** §39–§47.
 >
-> ⚠ **Two RED tests in `EmberTern.Tests` are PRE-EXISTING and are not L8's** (nor L6's) — §49.9.
-> `CharsetGuardSeamTests.TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver` (matches a COMMENT in
-> the License Manager csproj — see gotcha #396) and
-> `DatePresentationTests.NoUserFacingSurface_FormatsADateInvariantly` (`RestoreWorkflow.cs:352`).
->
-> **Standing facts a next session must not rediscover:** §42.4, §46.11, §47.6, and now §48.1 (the Gmail /
-> company distinction), §49.4 (`WithCulture="false"`) and §49.9 (the two reds).
+> ⚠ **Two RED tests in `EmberTern.Tests` are PRE-EXISTING** — §49.9: `CharsetGuardSeamTests.
+> TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver` (matches a COMMENT in the License Manager
+> csproj — gotchas #396/#412) and `DatePresentationTests.NoUserFacingSurface_FormatsADateInvariantly`
+> (`RestoreWorkflow.cs`, `StorageViewModel.cs`). **Standing facts:** §42.4, §46.11, §47.6, §48.1, §49.4.
 >
 
 > ⭐ **`TrustedKeys.Production` carries `R1` since 2026-08-22.** It was empty by design through L2–L6 so no

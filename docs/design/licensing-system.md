@@ -5354,7 +5354,7 @@ sealed record BulkSendAttempt
 }
 
 enum BulkSendConclusion
-{ Completed, CompletedWithErrors, StoppedByOperator, StoppedAfterError, NothingToSend }
+{ NothingToSend, Completed, StoppedAfterError, StoppedByOperator }   // ✅ CZTERY, nie piec
 
 sealed record BulkSendResult
 {
@@ -5469,6 +5469,36 @@ zakresem” musi być nieosiągalne. Przypięte przez `BulkSendSettingsTests`
 `LicenceDelivery` · `LicenseMessageComposer` · `SendLicenceViewModel` · kryptografii · `TrustedKeys`
 (potwierdzenia 15 i 16).
 
+⚠⚠ **KOREKTA WYKONANA W L10.3, ratyfikowana przez uzytkownika 2026-08-22.** Pierwsza redakcja
+wymieniala **piec** konkluzji, w tym `CompletedWithErrors`. ⛔ **Przy ratyfikowanym K1 ta wartosc nie ma
+producenta**: pierwsza porazka zatrzymuje serie, wiec seria, ktora miala porazke, konczy sie jako
+`StoppedAfterError`, i nie istnieje sciezka prowadzaca do „ukonczone, z bledami”. Wartosc enuma, ktorej
+nic nie potrafi wyprodukowac, to pulapka #233 dokladnie tam, gdzie czytelnik najbardziej musi ufac
+liscie. ⭐ **Obowiazuja CZTERY:** `NothingToSend` · `Completed` · `StoppedAfterError` ·
+`StoppedByOperator`. ⏭ Przy ewentualnej ratyfikacji **K2** piata wraca **RAZEM ze swoim producentem** —
+to jedyna uczciwa kolejnosc. ⛔ Nie dodawac jej „na zapas”.
+
+⭐ **Cztery rzeczy, ktorych plan nie przewidzial, dodane w L10.2 i L10.3:**
+
+- **Piaty warunek wstrzymania: licencja wskazujaca nieistniejacego klienta.** §60.3 ma cztery warunki, a
+  czwarty deleguje do `LicenseMessageComposer.Problems`, ktory **wymaga** klienta — wiec bez niego nie da
+  sie go ocenic. To dopelnienie spec, nie zmiana: blad REJESTRU, nazwany osobnym zdaniem.
+- **`Services/LicenceIdText.cs`** — jeden wlasciciel skracania `lid`-u. L10.2 bylby jego TRZECIA kopia
+  (`LicenseListItem` z L5.1, `BatchRenewalCandidate` z L5.4). Oba istniejace miejsca zmigrowane w tym
+  samym kroku; zmiana mechaniczna, bez roznicy w zachowaniu.
+- **`AuditActions.LicenceBatchSent` + `AuditTargets.Batch`** — slownik dla linii serii (decyzja I).
+- **`TestArtifacts`** (suita) — mennica PRAWDZIWIE podpisanych tokenow. ⚠ Konieczna, bo planer czyta
+  `exp` z TOKENU: atrapa nie oslabilaby testu wygasniecia, ale go **odwrocila** (payload sie nie parsuje,
+  kandydat wstrzymany jako „nieczytelny”, test przechodzi z innego powodu).
+
+⚠ **Dwa ustalenia z L10.3, ktore L10.4 musi znac:**
+
+- **`Progress<T>` dostarcza ASYNCHRONICZNIE** — raport moze dotrzec PO zakonczeniu awaitowanego runa.
+  ⭐ Interfejs zostaje przy `Progress<T>` (marshalling na watek UI jest tam calym sensem), ale **testy
+  uzywaja synchronicznego `IProgress`**, bo tylko wtedy kolejnosc raportow jest deterministyczna.
+- **Pasek: `Completed` liczy ZAKONCZONE proby.** Snapshot `Sending` dla k-tej wiadomosci raportuje
+  **k−1**, a snapshot `Waiting` slusznie niesie licznik o jeden WYZSZY od poprzedniego `Sending` —
+  odczekanie jest PO zakonczonej probie. ⛔ Nie „naprawiac” tego w L10.4.
 ### 60.8 UI — jedna karta, trzy stany
 
 **A · Podgląd.** `Classes="card"` pod kartą przedłużania, gramatyka `Grid Classes="command-row"`,
@@ -5587,8 +5617,8 @@ też powód, dla którego K1 jest znośne.
 | Krok | Zakres | Testy |
 |---|---|---|
 | **L10.1** ✅ **wykonane 2026-08-22** | `SmtpSettings` v3 · `GetLastSentAt` · sekcja w Ustawieniach | v2 czyta się czysto · zakresy **odmawiane, nie przycinane** (korekta §60.7) · **jedno** zapytanie audytu (zmierzone na 500 licencjach) · `Limit=200` nie obcina |
-| **L10.2** | `BulkSend.cs` — PLAN | 4 warunki osobno · `blocked` wstrzymany · wygasły artefakt wstrzymany · **`NotYetValid` przechodzi** · „już wysłane" liczone wobec `IssuedAt` (⭐ odnowienie **nie** jest pominięte) · duplikaty adresów · limit serii · `Matches` czuły na kolejność/adres/verdykt |
-| **L10.3** | `BulkSendRun.cs` — PROGRESS + RESULT | ⭐ **niezmiennik `Planned == Sent+Failed+Skipped+NotAttempted`** · `Completed` rośnie co próbę, ⛔ nigdy przy odczekaniu · **K1**: po błędzie reszta to `NotAttempted`, wynik `StoppedAfterError` · przerwanie **dokańcza** bieżącą próbę · `StoppedByOperator` ≠ `StoppedAfterError` · `licence.sent`/`licence.send-failed` po KAŻDEJ próbie · `licence.batch-sent` raz · `Elapsed` z wstrzykniętego zegara |
+| **L10.2** ✅ **wykonane 2026-08-22** | `BulkSend.cs` — PLAN | 4 warunki osobno · `blocked` wstrzymany · wygasły artefakt wstrzymany · **`NotYetValid` przechodzi** · „już wysłane" liczone wobec `IssuedAt` (⭐ odnowienie **nie** jest pominięte) · duplikaty adresów · limit serii · `Matches` czuły na kolejność/adres/verdykt |
+| **L10.3** ✅ **wykonane 2026-08-22** | `BulkSendRun.cs` — PROGRESS + RESULT | ⭐ **niezmiennik `Planned == Sent+Failed+Skipped+NotAttempted`** · `Completed` rośnie co próbę, ⛔ nigdy przy odczekaniu · **K1**: po błędzie reszta to `NotAttempted`, wynik `StoppedAfterError` · przerwanie **dokańcza** bieżącą próbę · `StoppedByOperator` ≠ `StoppedAfterError` · `licence.sent`/`licence.send-failed` po KAŻDEJ próbie · `licence.batch-sent` raz · `Elapsed` z wstrzykniętego zegara |
 | **L10.4** | `BulkSendViewModel` + katalog + EN/PL | brak `Confirm` → **odmowa** (reguła „Forget settings") · plan zmieniony → **odmowa** · porażka kompozycji → nic nie wyszło, licencja nazwana · raport **przeżywa zmianę języka** (⭐ sprawdzone na ZREALIZOWANYM wyjściu, nie na XAML-u — #370) · ticki: zdjęte tylko wysłane · TSV zawiera podsumowanie **i** szczegóły |
 | **L10.5** | Karta + styl paska i wierszy | pasek **nigdy** `IsIndeterminate` · `Maximum == Sendable` · 4 ikony i 4 tokeny · ⚠⚠ **każdy test headless ZWRACA swój `Task`** (#374/#391) · Extend zablokowany w trakcie serii |
 | **L10.6** | QA + zamknięcie | Dark **i** Light · 1366×768 i 150 % DPI · build **Debug i Release** · pełna suita LM · narracja → `history/`, status → jedna linia w `current-state.md` z **przemierzoną** liczbą testów |
