@@ -276,8 +276,13 @@ public sealed partial class MainWindow : Window
     ///
     /// <para>⚠ Does nothing when the view model has no settings, which happens only off Windows. ⛔ Not a
     /// disabled row: the PLATFORM decides whether the feature exists at all, and a control that is
-    /// present but permanently dead teaches the operator nothing. ⚠ Deliberately unlike the `About` row,
-    /// which IS a disabled placeholder — that one is disabled because nothing is behind it YET.</para>
+    /// present but permanently dead teaches the operator nothing.</para>
+    ///
+    /// <para>⚠⚠ This comment used to end with a contrast — "deliberately unlike the `About` row, which IS a
+    /// disabled placeholder" — and L9 made that false by building the window. It is corrected rather than
+    /// deleted, because the distinction it drew is still the live rule: a row disabled by the PLATFORM
+    /// (this one, off Windows) and a row disabled because nothing is behind it YET are two different
+    /// things, and only the second is ever temporary.</para>
     /// </summary>
     private void OnAppMenuSettingsClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
@@ -298,6 +303,33 @@ public sealed partial class MainWindow : Window
     }
 
     private SettingsWindow? _settings;
+
+    /// <summary>
+    /// Opens the About window.
+    ///
+    /// <para>⭐ The simplest of the four: it needs no view model from the shell and no platform delegate,
+    /// because everything it shows is a projection of the built assembly (<c>ManagerInfo</c>). ⚠ So the
+    /// view model is built HERE rather than held by <c>ShellViewModel</c> — the shell owns state that
+    /// windows read, and this window reads none of it.</para>
+    ///
+    /// <para>⚠ Only one at a time, for the same reason as Storage and Settings — though here the cost of a
+    /// second would be merely silly rather than dangerous. ⭐ Consistency is the point: a window that opens
+    /// twice teaches the operator that some of them do.</para>
+    /// </summary>
+    private void OnAppMenuAboutClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_about is { } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        _about = new AboutWindow { DataContext = new ViewModels.AboutViewModel() };
+        _about.Closed += (_, _) => _about = null;
+        _about.Show(this);
+    }
+
+    private AboutWindow? _about;
 
     private void OnToggleTheme(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {

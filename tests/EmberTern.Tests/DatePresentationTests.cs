@@ -244,6 +244,14 @@ public class DatePresentationTests
                 "The licences list and its detail line. ISO is the License Manager's ratified date form "
                 + "(§36.2) and matches what its own register stores, so an operator can correlate a row "
                 + "with the .db by eye.",
+            ["src/EmberTern.LicenseManager/ViewModels/AboutViewModel.cs"] =
+                "The About window's release date (L9). ⭐ The PRODUCT renders this one date in the "
+                + "reader's long-date pattern, arguing that a single prominent date is exactly the case "
+                + "for it; the License Manager does not, because ISO is its ratified date form for EVERY "
+                + "date (§36.2, terminology.md §4.4) and one exception would be the only non-ISO "
+                + "date in the application. ⚠ The value comes from <ReleaseDate> in "
+                + "Directory.Build.props, which is stored ISO as a build contract, so this is also the "
+                + "form it was written in.",
         };
 
     // Matches a date/time custom format string being built: ToString("…yyyy…") and friends.

@@ -1,0 +1,128 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
+        x:Class="EmberTern.LicenseManager.Views.AboutWindow"
+        x:DataType="vm:AboutViewModel"
+        Title="{Binding Title}"
+        Width="400"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- ══ THE SAME ABOUT WINDOW EMBERTERN HAS, in this application's own layer ═══════════════════════
+       ⭐⭐ ONE flat surface, centred, logo-dominant — and deliberately NOT the dialog skeleton
+       (`dialog-header` / `dialog-body` / `dialog-footer`) that `ConfirmDialog`, `UnlockWindow` and
+       `StorageWindow` use. Those bands are right for a window that ASKS something; here they would
+       produce exactly the classic Win32 "About" look — banded chrome around a two-column
+       Author: / Copyright: form — that this window exists not to be. So: no bands, no label column, no
+       environment block. The mark, the name, and a quiet line of authorship.
+
+       ⭐ Width 400 and `SizeToContent="Height"` are the product's numbers for this window, taken rather
+       than chosen. Height SHOULD follow content here: there is no navigation whose page could change
+       underneath it, and one line (Released) legitimately disappears.
+
+       ⭐⭐ FOUR BLOCKS, AND THE GAPS BELONG TO THEM (gotcha #375). `Margin.SectionGap` is `0,0,0,16`, i.e.
+       owned by the element ABOVE the gap — so it sits on the mark, on the identity block, on the hairline
+       and on the authorship block, never on the thing after the gap. ⚠ It is on the BLOCKS rather than on
+       their lines for a reason that is easy to miss: `ReleasedLine` collapses when the build declared no
+       date, and a bottom margin hung on it would collapse with it, closing the gap before the hairline.
+
+       ⛔ NO third-party-notices button, and that is a decision rather than an omission (user, 2026-08-22).
+       `THIRD-PARTY-NOTICES.txt` is the PRODUCT's file: it lists AvaloniaEdit and the Firebird client,
+       which this application does not carry, and does NOT list `Microsoft.Data.Sqlite` / `SQLitePCLRaw`,
+       which it does. A button here would show a truthful-looking list that is wrong in both directions.
+       ⏭ If the License Manager is ever distributed outside this company, it needs a notices file of its
+       OWN — that is the trigger, not a rebuild of this window.
+
+       ⛔ No "Licensed to" line and no Debug-gate marker either: both are facts about a LICENSED product,
+       and this is the tool that issues the licences. ══════════════════════════════════════════════ -->
+
+  <Border Padding="{DynamicResource Pad.Dialog}">
+    <StackPanel HorizontalAlignment="Center">
+
+      <!-- ⭐⭐ THE BRAND MARK IS THE SUBJECT OF THE WINDOW, so it gets the size and the air — and it is
+           EmberTern's OWN mark, LINKED from `EmberTern.App/Assets/Branding/` rather than copied (see the
+           csproj). The License Manager is the same product's admin side, not a second brand, and nothing
+           here designs an alternative one.
+           ⚠ This mark and the OS icon are DIFFERENT artwork from DIFFERENT masters, on purpose — an icon
+           is judged at 16-32 px in dense chrome and this at 128 px on a quiet window. Read
+           `EmberTern.App/Assets/Branding/BRANDING.md` before changing either.
+           ⚠ 128 is LOCAL and stays local: the size of the subject of a window is not a token role, and
+           writing `Size.Icon` here would be a WRONG role, which is worse than the local value it replaced
+           (product-polish R12). It is the product's own figure for the same mark. -->
+      <Image Source="avares://EmberTern.LicenseManager/Assets/Branding/EmberTern_logo.png"
+             Width="128" Height="128"
+             Stretch="Uniform"
+             RenderOptions.BitmapInterpolationMode="HighQuality"
+             HorizontalAlignment="Center"
+             Margin="{DynamicResource Margin.SectionGap}" />
+
+      <!-- Identity: what this is, which version, and when it was released. -->
+      <StackPanel HorizontalAlignment="Center"
+                  Spacing="{DynamicResource Space.Xs}"
+                  Margin="{DynamicResource Margin.SectionGap}">
+
+        <!-- ⭐ `display` is `Text.Display` (23) — the role Typography.axaml reserves for exactly this line
+             ("WYŁĄCZNIE OKNO ABOUT"), so nobody reaches for that scale merely to make something stand out.
+             This is its one consumer in this application. -->
+        <TextBlock Name="ProductName" Classes="display"
+                   Text="{Binding Product}"
+                   TextAlignment="Center"
+                   HorizontalAlignment="Center" />
+
+        <TextBlock Name="VersionLine"
+                   Text="{Binding VersionText}"
+                   TextAlignment="Center"
+                   HorizontalAlignment="Center" />
+
+        <!-- ⚠ Collapses ENTIRELY when the build declared no release date, so the window never shows a
+             label with nothing after it. ⭐ ISO on purpose — the License Manager's ratified date form; the
+             reason is on `AboutViewModel.ReleasedText`. -->
+        <TextBlock Name="ReleasedLine" Classes="hint"
+                   Text="{Binding ReleasedText}"
+                   IsVisible="{Binding HasReleaseDate}"
+                   TextAlignment="Center"
+                   HorizontalAlignment="Center" />
+      </StackPanel>
+
+      <!-- ⭐ A short hairline rather than a full-width rule: it separates authorship from identity without
+           drawing a band across the window — which is what would put the Win32 look back.
+           ⚠ Width 40 / Height 1 are LOCAL and deliberate: a hairline's own thickness is not a spacing, and
+           `Space.Hair` (2) would be a wrong role AND twice as thick (R12). The product's own figures. -->
+      <Border Width="40" Height="1"
+              Background="{DynamicResource BorderBrush}"
+              HorizontalAlignment="Center"
+              Margin="{DynamicResource Margin.SectionGap}" />
+
+      <!-- Authorship. -->
+      <StackPanel HorizontalAlignment="Center"
+                  Spacing="{DynamicResource Space.Xs}"
+                  Margin="{DynamicResource Margin.SectionGap}">
+        <TextBlock Name="AuthorLine"
+                   Text="{Binding AuthorText}"
+                   TextAlignment="Center"
+                   HorizontalAlignment="Center" />
+
+        <TextBlock Name="CopyrightLine" Classes="hint"
+                   Text="{Binding Copyright}"
+                   TextAlignment="Center"
+                   HorizontalAlignment="Center"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+
+      <!-- ⭐ Centred to match the composition, and `flat` because closing is not what the operator opened
+           this window to do. `IsDefault` + `IsCancel` so BOTH Enter and Escape close it — the pairing every
+           dialog in this application carries. -->
+      <Button Name="CloseButton" Classes="flat"
+              Content="{Binding CloseText}"
+              HorizontalAlignment="Center"
+              IsDefault="True"
+              IsCancel="True"
+              Click="OnClose" />
+
+    </StackPanel>
+  </Border>
+</Window>

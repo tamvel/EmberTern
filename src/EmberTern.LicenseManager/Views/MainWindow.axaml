@@ -101,17 +101,18 @@
                         Icon="{lm:MenuIcon Icon.Settings}"
                         Click="OnAppMenuSettingsClick" />
               <Separator />
-              <!-- ⭐ A DELIBERATE DISABLED PLACEHOLDER, ratified with D‑8's sibling decision. It is here so
-                   the menu's shape is the shape it will keep, and it is DISABLED rather than absent
-                   because there is nothing behind it yet. EmberTern shipped its own `Settings…` row in
-                   exactly this state for exactly this reason (§4 A), and the readable-disabled styling in
-                   MenuStyles.axaml is what keeps it legible rather than a ghost.
-                   ⛔ No About window is built in this stage. -->
+              <!-- ⭐⭐ LIVE SINCE L9. It stood here DISABLED from L6.1a on — a deliberate placeholder, so
+                   the menu's shape would be the shape it keeps, exactly as EmberTern shipped its own
+                   `Settings…` row before there was a window behind it (§4 A).
+                   ⭐ The row is enabled and wired the ordinary way; ⛔ it was never "unblocked" by a
+                   workaround, and its `Main.NotAvailableYet` tooltip is GONE rather than left behind — the
+                   L8.5 rule for `ApplicationLanguageUnavailable`: a stale explanation on screen is worse
+                   than none. ⭐ The ellipsis is new too: the row opens a window now, which is how the
+                   product spells the same two rows ("About EmberTern…", "Settings…"). -->
               <MenuItem Name="AppMenuAbout"
                         Header="{lm:Loc Main.About}"
                         Icon="{lm:MenuIcon Icon.Info}"
-                        IsEnabled="False"
-                        ToolTip.Tip="{lm:Loc Main.NotAvailableYet}" />
+                        Click="OnAppMenuAboutClick" />
             </ContextMenu>
           </Button.ContextMenu>
         </Button>

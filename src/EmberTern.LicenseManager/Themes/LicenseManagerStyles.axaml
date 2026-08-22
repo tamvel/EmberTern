@@ -55,6 +55,18 @@
     <Setter Property="LineHeight" Value="{DynamicResource Text.DialogHeader.LineHeight}" />
   </Style>
 
+  <!-- ⭐⭐ `Text.Display` (23) — and Typography.axaml states its whole contract in its own comment:
+       "WYŁĄCZNIE OKNO ABOUT… rola istnieje po to, żeby nikt nie sięgnął po tę skalę »bo trzeba coś
+       wyróżnić«". So this class exists to have exactly ONE consumer, the product name on the About
+       window, and ⛔ a second consumer means the rule was broken rather than the catalog extended.
+       ⚠ It is not a second use of the product's own single use: that comment is about EmberTern.App, and
+       this is an About window too — which is precisely the sanctioned use of the role. -->
+  <Style Selector="TextBlock.display">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Display.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.Display.Weight}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Display.LineHeight}" />
+  </Style>
+
   <Style Selector="TextBlock.section">
     <Setter Property="FontSize" Value="{DynamicResource Text.SectionHeader.Size}" />
     <Setter Property="FontWeight" Value="{DynamicResource Text.SectionHeader.Weight}" />

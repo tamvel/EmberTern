@@ -232,7 +232,7 @@
     <value>one-few-many</value>
   </data>
   <data name="Main.About" xml:space="preserve">
-    <value>O programie</value>
+    <value>O programie…</value>
   </data>
   <data name="Main.Address" xml:space="preserve">
     <value>Adres</value>
@@ -347,9 +347,6 @@
   </data>
   <data name="Main.NewLicence" xml:space="preserve">
     <value>Nowa licencja</value>
-  </data>
-  <data name="Main.NotAvailableYet" xml:space="preserve">
-    <value>Jeszcze niedostępne</value>
   </data>
   <data name="Main.NoteOptional" xml:space="preserve">
     <value>Notatka (opcjonalna)</value>
@@ -1274,5 +1271,20 @@
   </data>
   <data name="Status.CopiedTheTrustedKeyEntry" xml:space="preserve">
     <value>Skopiowano wpis zaufanego klucza do schowka.</value>
+  </data>
+  <data name="About.WindowTitle" xml:space="preserve">
+    <value>O programie {0}</value>
+  </data>
+  <data name="About.Version" xml:space="preserve">
+    <value>Wersja {0}</value>
+  </data>
+  <data name="About.Released" xml:space="preserve">
+    <value>Wydanie: {0}</value>
+  </data>
+  <data name="About.Author" xml:space="preserve">
+    <value>Autor: {0}</value>
+  </data>
+  <data name="About.Close" xml:space="preserve">
+    <value>Zamknij</value>
   </data>
 </root>

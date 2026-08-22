@@ -659,9 +659,6 @@
   <data name="Main.ApplicationMenu" xml:space="preserve">
     <value>Application menu</value>
   </data>
-  <data name="Main.NotAvailableYet" xml:space="preserve">
-    <value>Not available yet</value>
-  </data>
   <data name="Main.StorageBackupRestoreJsonlExportData" xml:space="preserve">
     <value>Storage — backup, restore, JSONL export and the data folder</value>
   </data>
@@ -699,7 +696,7 @@
     <value>Settings…</value>
   </data>
   <data name="Main.About" xml:space="preserve">
-    <value>About</value>
+    <value>About…</value>
   </data>
   <data name="Main.Contact" xml:space="preserve">
     <value>Contact</value>
@@ -1240,5 +1237,20 @@
   </data>
   <data name="Status.CopiedTheTrustedKeyEntry" xml:space="preserve">
     <value>Copied the trusted-key entry to the clipboard.</value>
+  </data>
+  <data name="About.WindowTitle" xml:space="preserve">
+    <value>About {0}</value>
+  </data>
+  <data name="About.Version" xml:space="preserve">
+    <value>Version {0}</value>
+  </data>
+  <data name="About.Released" xml:space="preserve">
+    <value>Released {0}</value>
+  </data>
+  <data name="About.Author" xml:space="preserve">
+    <value>Created by {0}</value>
+  </data>
+  <data name="About.Close" xml:space="preserve">
+    <value>Close</value>
   </data>
 </root>

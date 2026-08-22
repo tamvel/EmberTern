@@ -5,6 +5,16 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <RootNamespace>EmberTern.LicenseManager</RootNamespace>
     <AssemblyName>EmberTern.LicenseManager</AssemblyName>
+    <!-- ⭐⭐ THE ONE IDENTITY VALUE THIS PROJECT OVERRIDES, and the reason is that the inherited one was
+         simply wrong: `Directory.Build.props` declares `<Product>EmberTern</Product>`, so until L9 this
+         executable claimed its product was EmberTern — in the Windows file properties, in the EXE's
+         resources, and in anything reading the assembly back. It is not EmberTern; it is the tool that
+         issues EmberTern's licences.
+
+         ⛔ Nothing ELSE is overridden here. Version, ReleaseDate, Company and Copyright stay inherited
+         from that one PropertyGroup, which is what makes `ManagerInfo` and `AppInfo` structurally unable
+         to disagree about which release this is. ⛔ And still never a version number in code. -->
+    <Product>EmberTern License Manager</Product>
     <!-- ⭐ The OS icon of the executable — EmberTern's own .ico, referenced across the project
          boundary rather than copied. Same file, same brand, one master. This is what puts the icon
          in Explorer, in the EXE properties and on the taskbar button. -->
@@ -70,6 +80,16 @@
          title bar and hands to Alt+Tab. Both are needed; neither replaces the other. -->
     <AvaloniaResource Include="..\EmberTern.App\Assets\Branding\EmberTern.ico"
                       Link="Assets\Branding\EmberTern.ico" />
+
+    <!-- ⭐ THE UI MARK for the About window (L9) — the 256×256 transparent PNG, LINKED for exactly the
+         same reason the .ico above is: one master, two applications. ⛔ Not copied.
+         ⚠⚠ It is DIFFERENT artwork from the .ico, from a different master, ON PURPOSE — an icon is judged
+         at 16-32 px in dense chrome and this at 128 px on a quiet window. Replacing one does not replace
+         the other; `EmberTern.App/Assets/Branding/BRANDING.md` is the authority and lists its consumers.
+         ⭐ This reference is the only thing that makes `avares://EmberTern.LicenseManager/Assets/Branding/
+         EmberTern_logo.png` resolvable here — the product's own avares path is a different assembly. -->
+    <AvaloniaResource Include="..\EmberTern.App\Assets\Branding\EmberTern_logo.png"
+                      Link="Assets\Branding\EmberTern_logo.png" />
   </ItemGroup>
 
   <ItemGroup>

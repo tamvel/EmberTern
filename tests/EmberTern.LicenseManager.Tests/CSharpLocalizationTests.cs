@@ -45,6 +45,7 @@ public sealed class CSharpLocalizationTests
     /// </remarks>
     private static readonly string[] OperatorFacingFiles =
     [
+        "ViewModels/AboutViewModel.cs",
         "ViewModels/ArtifactHistoryViewModel.cs",
         "ViewModels/BatchRenewalViewModel.cs",
         "ViewModels/LicenseBrowserViewModel.cs",
@@ -53,6 +54,7 @@ public sealed class CSharpLocalizationTests
         "ViewModels/ShellViewModel.cs",
         "ViewModels/StorageViewModel.cs",
         "ViewModels/UnlockViewModel.cs",
+        "Views/AboutWindow.axaml.cs",
         "Views/MainWindow.axaml.cs",
         "Views/SendLicenceWindow.axaml.cs",
         "Views/SettingsWindow.axaml.cs",
