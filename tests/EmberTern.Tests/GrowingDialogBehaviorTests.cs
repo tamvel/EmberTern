@@ -191,6 +191,7 @@ public sealed class GrowingDialogBehaviorTests
         ("ExportDialog",              true,  "M4.4: wybór CSV odsłania opcje, baner błędu, podmiana paneli"),
         ("NewConnectionDialog",       true,  "M4.4: komunikat testu połączenia rośnie poza ScrollViewerem"),
         ("DatabasePropertiesDialog",  true,  "punkt 6: baner wyniku Apply pojawia się POD treścią, więc rośnie w dół"),
+        ("LicenseActivationWindow",   true,  "L4b: baner komunikatu i przycisk Zastąp pojawiają się POD treścią"),
         ("RecompileDependentsDialog", false, "M4.4 ZMIERZONE: zero wiązań IsVisible, lista gotowa przed otwarciem"),
         ("AboutWindow",               false, "treść statyczna"),
         ("CheckConstraintDialog",     false, "formularz o stałej liczbie pól"),

@@ -31,6 +31,7 @@
          accept a change and persist nothing without saying so. Shared MessageBanner, docked — the host sets
          only Severity / Message / IsVisible / Classes, never its own chrome. -->
     <controls:MessageBanner Grid.Row="0"
+                            x:Name="SaveRefusalBanner"
                             Classes="docked"
                             Severity="Warning"
                             Message="{Binding SaveRefusalMessage}"
@@ -497,6 +498,101 @@
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+
+            <!-- Licence (L4b, design §17.2). ⭐ This page is reachable in EVERY licence state, including the
+                 blocked ones — it is the way out of Expired and Unlicensed, and a gate that also hid the
+                 screen for fixing the licence would be a trap (design §7).
+
+                 ⚠ Two ACTION rows, not preferences: nothing here is a value the user picks and nothing
+                 applies on change. They are catalog rows so SEARCH finds them (typing "licence", "renew" or
+                 "expiry" lands here). -->
+            <StackPanel Spacing="{DynamicResource Space.Lg}" IsVisible="{Binding IsLicensePageVisible}">
+
+              <TextBlock Classes="h1" Text="{app:Loc SettingsCategoryLicense}" />
+
+              <!-- The state, in the IDE's ONE message surface, with the tone §7 assigns it. The host sets only
+                   Severity / Message — never its own chrome. -->
+              <Border Classes="settings-group" IsVisible="{Binding LicenseStatus.IsVisible}">
+                <StackPanel Spacing="{DynamicResource Space.Md}">
+                  <TextBlock Classes="group-header" Text="{Binding LicensePage.StatusHeadline}" />
+                  <controls:MessageBanner x:Name="LicenseStatusBanner"
+                                          Severity="{Binding LicensePage.StatusSeverity}"
+                                          Message="{Binding LicensePage.StatusExplanation}" />
+
+                  <!-- The licence's own facts. Hidden as a BLOCK when there is no payload, so the page never
+                       shows a column of labels with nothing after them.
+                       ⚠ Gaps come from RowSpacing / ColumnSpacing, so no cell carries a margin of its own. -->
+                  <Grid ColumnDefinitions="Auto,*"
+                        RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto"
+                        RowSpacing="{DynamicResource Space.Xs}"
+                        ColumnSpacing="{DynamicResource Space.Lg}"
+                        IsVisible="{Binding LicensePage.HasDetails}">
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label"
+                               Text="{app:Loc SettingsLicenseLicenseeLabel}" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding LicensePage.Licensee}"
+                               TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label"
+                               Text="{app:Loc SettingsLicenseValidFromLabel}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding LicensePage.ValidFrom}" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label"
+                               Text="{app:Loc SettingsLicenseValidUntilLabel}" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding LicensePage.ValidUntil}" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label"
+                               Text="{app:Loc SettingsLicenseSeatsLabel}" />
+                    <StackPanel Grid.Row="3" Grid.Column="1">
+                      <TextBlock Text="{Binding LicensePage.Seats}" />
+                      <!-- ⚠ Says out loud that seats are contractual (D2). The number alone would imply a
+                           technical control that V1 deliberately does not have. -->
+                      <TextBlock Classes="field-label"
+                                 Text="{app:Loc SettingsLicenseSeatsNote}"
+                                 TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Classes="field-label"
+                               Text="{app:Loc SettingsLicenseIdLabel}" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding LicensePage.LicenseId}"
+                               FontFamily="{DynamicResource Font.Code}"
+                               TextWrapping="Wrap" />
+
+                    <TextBlock Grid.Row="5" Grid.Column="0" Classes="field-label"
+                               Text="{app:Loc SettingsLicenseFileLabel}"
+                               IsVisible="{Binding LicensePage.HasFilePath}" />
+                    <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding LicensePage.FilePath}"
+                               IsVisible="{Binding LicensePage.HasFilePath}"
+                               TextWrapping="Wrap" />
+                  </Grid>
+                </StackPanel>
+              </Border>
+
+              <Border Classes="settings-group" IsVisible="{Binding LicenseActions.IsVisible}">
+                <StackPanel Spacing="{DynamicResource Space.Md}">
+                  <TextBlock Classes="group-header" Text="{Binding LicenseActions.Label}" />
+                  <TextBlock Classes="field-label"
+                             Text="{Binding LicenseActions.Description}"
+                             TextWrapping="Wrap" />
+                  <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Md}">
+                    <Button x:Name="UpdateLicenseButton"
+                            Classes="flat"
+                            Content="{app:Loc SettingsLicenseUpdateButton}"
+                            Command="{Binding LicensePage.UpdateLicenseCommand}" />
+                    <Button x:Name="CopyLicenseIdButton"
+                            Classes="flat"
+                            Content="{app:Loc SettingsLicenseCopyIdButton}"
+                            IsVisible="{Binding LicensePage.HasDetails}"
+                            Command="{Binding LicensePage.CopyLicenseIdCommand}" />
+                    <Button x:Name="CopyLicenseDetailsButton"
+                            Classes="flat"
+                            Content="{app:Loc SettingsLicenseCopyDetailsButton}"
+                            Command="{Binding LicensePage.CopyDetailsCommand}" />
+                  </StackPanel>
                 </StackPanel>
               </Border>
 

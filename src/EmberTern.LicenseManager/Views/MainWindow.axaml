@@ -1,0 +1,1309 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
+        xmlns:data="using:EmberTern.LicenseManager.Data"
+        xmlns:lm="using:EmberTern.LicenseManager"
+        x:Class="EmberTern.LicenseManager.Views.MainWindow"
+        Name="RootWindow"
+        x:DataType="vm:ShellViewModel"
+        Title="EmberTern License Manager"
+        Width="1080" Height="720" MinWidth="880" MinHeight="560"
+        WindowStartupLocation="CenterScreen"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="-1"
+        WindowDecorations="BorderOnly"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- ══ P1-a · THE HORIZONTAL RHYTHM, AND WHO OWNS IT ═══════════════════════════════════════════
+       ⭐⭐ A GAP BELONGS TO THE CONTAINER THAT CREATES IT, never to one of the two things it separates.
+       In this window that means `ColumnSpacing` / `RowSpacing` on the Grid, and it is the shape
+       `SettingsWindow.axaml` already uses in the product ("Gaps come from RowSpacing / ColumnSpacing, so
+       no cell carries a margin of its own").
+
+       Three spacings, and each says something different — the value is read from the existing scale, so
+       no token was added and `Tokens.axaml` (shared with the product) was not touched:
+
+         `Space.Md` (8)  two INDEPENDENT things side by side — field ↔ field, caption ↔ action,
+                         column ↔ column. The default; reach for it unless one of the two below applies.
+         `Space.Sm` (6)  parts of ONE compound element — the severity glyph and its message.
+         `Space.Xs` (4)  a value and an affordance that acts on THAT value — an id and its Copy button.
+                         They are one object, and 8 would read as two.
+
+       ⚠⚠ WHAT THIS REPLACED, because the failure is worth recognising rather than just fixing:
+       every row here used to hang `Margin.InlineGap` on its SECOND column. That token is `0,0,8,0` and
+       Tokens.axaml states its contract in its own comment — "jej właścicielem jest element PO LEWEJ".
+       Hung on the element to the RIGHT of the gap, it puts the 8 px after the pair instead of between
+       it. Measured before the fix: Name│Identifier 0, First│Last 0, Seats│Valid-from 0, value│Copy 0,
+       Search│Status 0 — and then 8 between the NEXT pair, in every one of them. ⛔ So the defect was
+       never "a missing margin somewhere"; it was one rule applied to the wrong owner, five times. -->
+
+  <Window.Resources>
+    <!-- ⭐ ONE template for all three filter dropdowns, keyed on the shared FilterOption base record.
+         Three copies of the same one-line template is how three dropdowns start looking slightly
+         different from each other.
+         ⚠⚠ It binds Caption.Value, never the option's Label: an option record raises no PropertyChanged,
+         so a template bound straight to the label renders correctly and then freezes in that language.
+         Measured — see PickerLabelLivenessTests. -->
+    <DataTemplate x:Key="FilterOptionTemplate" x:DataType="vm:FilterOption">
+      <TextBlock Text="{Binding Caption.Value}" />
+    </DataTemplate>
+  </Window.Resources>
+
+  <DockPanel>
+
+    <!-- Title strip ──────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⭐⭐ THE APPLICATION'S OWN TITLE BAR — the same pattern EmberTern uses. Windows no longer draws
+         one of its own, so the duplicated "EmberTern License Manager" is gone; dragging, double-tap to
+         maximise and the three caption buttons are ours. -->
+    <Border Classes="chrome" DockPanel.Dock="Top" Height="{DynamicResource Size.TitleBar}"
+            Padding="0"
+            PointerPressed="OnTitleBarPointerPressed" DoubleTapped="OnTitleBarDoubleTapped">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+        <!-- ⭐⭐ THE WORDMARK (L9). It replaced a plain `Classes="section"` label carrying the whole name
+             as one string. The full recipe, and why it is one `TextBlock` with three `Run`s rather than
+             two blocks, is on `TextBlock.wordmark` in LicenseManagerStyles.axaml.
+
+             ⚠ The three literals stay literals: branding is a technical contract, not a word
+             (`terminology.md` §4.4) — the application is called `EmberTern License Manager` in every
+             language, and a translated product name would be a different product. ⛔ They are therefore
+             recorded in `XamlLocalizationTests.BrandingLiterals`, whose own guard checks that every
+             exemption is actually present, so a stale one cannot read as coverage.
+
+             ⚠ The two per-`Run` values are CONSUMPTION of tokens, never definitions: rule 2 forbids
+             declaring a brush in a view, and rule 4 requires `{DynamicResource}` so the mark recolours
+             live on a theme toggle. They sit inline rather than in the style file because a `Run` cannot
+             carry a class the way a control can, and this mark has exactly one instance. -->
+        <TextBlock Grid.Column="0" Classes="wordmark" Name="Wordmark" VerticalAlignment="Center"
+                   Margin="{DynamicResource Pad.Panel}"><Run Text="Ember" /><Run
+                     Name="WordmarkAccent" Text="Tern"
+                     Foreground="{DynamicResource BrandEmberBrush}" /><Run
+                     Name="WordmarkDescriptor" Text=" License Manager"
+                     FontSize="{DynamicResource Text.Compact.Size}"
+                     FontWeight="Normal"
+                     Foreground="{DynamicResource SubtleForegroundBrush}" /></TextBlock>
+        <!-- ⭐ The signing key is PROVENANCE, not an action: it tells the operator which key is about to
+             sign, and it is the one thing here that must never be mistaken for a control. `hint` is the
+             smallest grade in the catalogue, which is exactly its standing. -->
+        <TextBlock Grid.Column="2" Classes="hint" VerticalAlignment="Center"
+                   Text="{Binding SigningKeyId, StringFormat='Signing key: {0}'}" />
+        <!-- ⭐⭐ THE SAME THEME TOGGLE EMBERTERN HAS: an icon showing the ACTION — Sun while Dark is
+             active (click goes to Light), Moon while Light is. The glyphs are EmberTern's own, linked
+             rather than copied; only the twenty-line converter is mirrored, because it lives in an
+             assembly this solution must not reference. -->
+        <!-- ☰ APPLICATION MENU — the FIRST button of the action zone, and deliberately NOT fenced off
+             with a separator of its own: EmberTern's own titlebar makes the same call, and design §6
+             records the reason (ChatGPT and its peers do not fence it either, and it reads better).
+
+             ⭐⭐ It hosts a plain `ContextMenu`, opened from code-behind on left-click, because that
+             inherits the ONE menu appearance this application has (Themes/MenuStyles.axaml). ⛔ NOT a
+             `MenuFlyout`: that would need a second chrome variant for `MenuFlyoutPresenter` — the exact
+             trap that grew EmberTern's MessageBanner six per-host variants. See hamburger-navigation §2.2.
+
+             ⚠ Storage and the theme toggle deliberately STAY where they are. Storage is not a preference,
+             and the theme is a one-click always-visible control whose duplicate in a menu would add a
+             second owner of one action — EmberTern cut exactly that row for exactly that reason (§4 B). -->
+        <Button Grid.Column="3" Classes="icon" Name="AppMenuButton" Click="OnAppMenuClick"
+                VerticalAlignment="Center"
+                ToolTip.Tip="{lm:Loc Main.ApplicationMenu}">
+          <Viewbox Classes="icon">
+            <Canvas Width="24" Height="24">
+              <Path Data="{DynamicResource Icon.Menu}" />
+            </Canvas>
+          </Viewbox>
+          <Button.ContextMenu>
+            <!-- Under the button, left edges aligned — a menu button's menu belongs below it, not at the
+                 pointer where a right-click menu belongs. -->
+            <ContextMenu Name="AppMenu" Placement="BottomEdgeAlignedLeft">
+              <MenuItem Name="AppMenuSettings"
+                        Header="{lm:Loc Main.Settings}"
+                        Icon="{lm:MenuIcon Icon.Settings}"
+                        Click="OnAppMenuSettingsClick" />
+              <Separator />
+              <!-- ⭐⭐ LIVE SINCE L9. It stood here DISABLED from L6.1a on — a deliberate placeholder, so
+                   the menu's shape would be the shape it keeps, exactly as EmberTern shipped its own
+                   `Settings…` row before there was a window behind it (§4 A).
+                   ⭐ The row is enabled and wired the ordinary way; ⛔ it was never "unblocked" by a
+                   workaround, and its `Main.NotAvailableYet` tooltip is GONE rather than left behind — the
+                   L8.5 rule for `ApplicationLanguageUnavailable`: a stale explanation on screen is worse
+                   than none. ⭐ The ellipsis is new too: the row opens a window now, which is how the
+                   product spells the same two rows ("About EmberTern…", "Settings…"). -->
+              <MenuItem Name="AppMenuAbout"
+                        Header="{lm:Loc Main.About}"
+                        Icon="{lm:MenuIcon Icon.Info}"
+                        Click="OnAppMenuAboutClick" />
+            </ContextMenu>
+          </Button.ContextMenu>
+        </Button>
+
+        <!-- ⭐⭐ STORAGE — backup, restore, the JSONL escape hatch and the data folder, in a window of
+             their own (D‑4). ⛔ Deliberately NOT a third view tab: the two tabs answer two questions
+             about LICENCES, and where the files live is not a third one of those. ⚠ The separation is
+             also a safety property — restore is the most consequential action this application has, and
+             it should take a deliberate step to reach rather than sit beside the daily work. -->
+        <Button Grid.Column="4" Classes="icon" Name="StorageButton" Click="OnOpenStorage"
+                VerticalAlignment="Center"
+                ToolTip.Tip="{lm:Loc Main.StorageBackupRestoreJsonlExportData}">
+          <Viewbox Classes="icon">
+            <Canvas Width="24" Height="24">
+              <Path Data="{DynamicResource Icon.Folder}" />
+            </Canvas>
+          </Viewbox>
+        </Button>
+
+        <Button Grid.Column="5" Classes="icon" Name="ThemeToggle" Click="OnToggleTheme"
+                VerticalAlignment="Center" ToolTip.Tip="{lm:Loc Main.SwitchBetweenLightDarkTheme}">
+          <Viewbox Classes="icon">
+            <Canvas Width="24" Height="24">
+              <Path Data="{Binding ActualThemeVariant, ElementName=RootWindow,
+                           Converter={x:Static lm:ThemeToggleIconConverter.Instance}}" />
+            </Canvas>
+          </Viewbox>
+        </Button>
+
+        <!-- Window controls -->
+        <StackPanel Grid.Column="6" Orientation="Horizontal" VerticalAlignment="Stretch"
+>
+          <Button Classes="caption" Name="MinimizeButton" Click="OnMinimizeClick"
+                  ToolTip.Tip="{lm:Loc Main.Minimise}">
+            <Viewbox Classes="icon">
+              <Canvas Width="24" Height="24">
+                <Path Data="{DynamicResource Icon.WindowMinimize}" />
+              </Canvas>
+            </Viewbox>
+          </Button>
+          <Button Classes="caption" Name="MaxRestoreButton" Click="OnMaxRestoreClick"
+                  ToolTip.Tip="{lm:Loc Main.MaximiseRestore}">
+            <Viewbox Classes="icon">
+              <Canvas Width="24" Height="24">
+                <Path Name="MaxRestoreGlyph" Data="{DynamicResource Icon.WindowMaximize}" />
+              </Canvas>
+            </Viewbox>
+          </Button>
+          <Button Classes="caption close" Name="CloseButton" Click="OnCloseClick" ToolTip.Tip="{lm:Loc Common.Close}">
+            <Viewbox Classes="icon">
+              <Canvas Width="24" Height="24">
+                <Path Data="{DynamicResource Icon.WindowClose}" />
+              </Canvas>
+            </Viewbox>
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- View switch ──────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⭐ Two views, because they answer two different questions: "what does THIS customer have?" and
+         "who lapses next month?". The second one has no customer to start from. -->
+    <Border Classes="view-switch" DockPanel.Dock="Top">
+      <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
+        <Button Classes="view-tab" Name="CustomersTab" Content="{lm:Loc Main.Customers}"
+                Classes.active="{Binding IsCustomersView}"
+                Command="{Binding ShowCustomersCommand}" />
+        <Button Classes="view-tab" Name="LicensesTab" Content="{lm:Loc Main.Licences}"
+                Classes.active="{Binding IsLicensesView}"
+                Command="{Binding ShowLicensesCommand}" />
+      </StackPanel>
+    </Border>
+
+    <!-- Message strip ────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⚠⚠ NO MARGIN. It used to carry `Margin.SectionGap`, which is `0,0,0,16` — a BOTTOM margin. On a
+         strip docked to the bottom edge that put 16 px of window background UNDER the message, which is
+         the empty band the user reported. The token means "the gap below a section that has something
+         beneath it"; here there is nothing beneath it. -->
+    <Border DockPanel.Dock="Bottom" Classes="message"
+            Classes.info="{Binding IsInfo}" Classes.success="{Binding IsSuccess}"
+            Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}"
+            IsVisible="{Binding HasMessage}">
+      <!-- ⭐⭐ EMBERTERN'S OWN MESSAGE RECIPE: a thin severity STRIPE plus a severity ICON, on a calm
+           panel background — `MessageBanner` is built exactly this way (`ColumnDefinitions="3,Auto,*,…"`).
+           ⚠ The License Manager previously signalled severity with the BORDER COLOUR alone, and in Light
+           that is nearly invisible: `PanelBrush` sits very close to `BackgroundBrush` there, so all that
+           remained of a warning was a hairline. ⛔ The fix is deliberately not a loud tinted fill — the
+           stripe and the glyph carry the state, and the strip stays quiet. -->
+      <Grid ColumnDefinitions="3,*">
+        <Border Grid.Column="0" Classes="severity-stripe" />
+        <!-- P1-a. The stripe has to reach three edges, so the strip's Padding stays 0 - which means the
+             CONTENT needs its own inset, and it is ONE inset owned by ONE container rather than a margin
+             on the glyph plus another on the text. That was the measured defect: the glyph sat flush
+             against the stripe (0 px) while glyph-to-text came to 16, because two owners each gave 8.
+             `Pad.Cell` is the inset, `Space.Sm` is the gap - the same 8 / 6 rhythm EmberTern's own
+             MessageBanner spells out by hand. -->
+        <Grid Grid.Column="1" ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Space.Sm}"
+              Margin="{DynamicResource Pad.Cell}">
+          <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center">
+            <Canvas Width="24" Height="24">
+              <Path Data="{Binding MessageIconKey,
+                           Converter={x:Static lm:IconGeometryConverter.Instance}}" />
+            </Canvas>
+          </Viewbox>
+          <TextBlock Grid.Column="1" VerticalAlignment="Center" Text="{Binding MessageText}" />
+        </Grid>
+      </Grid>
+    </Border>
+
+    <!-- ⚠ The two views overlap in ONE cell and take turns being visible, rather than docking beside
+         each other. A DockPanel gives its fill slot to the last child only, and two fill children is
+         how a layout silently loses one of them. -->
+    <Grid>
+
+    <Grid IsVisible="{Binding IsCustomersView}">
+      <!-- QA-3. A resizable rail — the same shape EmberTern uses in Global Search, the debugger and its
+           own main window: an explicit splitter column, Width 4, painted BorderBrush so the handle IS
+           the separator rather than an extra line beside one.
+           MinWidth/MaxWidth are not decoration: below ~200 a customer name stops fitting beside its
+           identifier, and above ~480 the detail form starts wrapping its three-column contact row. -->
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="280" MinWidth="200" MaxWidth="480" />
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <!-- Customers rail ─────────────────────────────────────────────────────────────────────── -->
+      <Border Grid.Column="0" Classes="rail">
+        <DockPanel Margin="{DynamicResource Pad.Panel}">
+          <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}"
+                Margin="{DynamicResource Margin.PanelCaption}">
+            <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center" Text="{lm:Loc Main.Customers}" />
+            <Button Grid.Column="1" Classes="flat" Content="{lm:Loc Main.New}"
+                    Command="{Binding NewCustomerCommand}" />
+          </Grid>
+
+          <!-- ⚠⚠ `PointerPressed` SELECTS THE ROW UNDER A RIGHT-CLICK, and without it the menu below acts
+               on whatever was selected before. Avalonia's `ListBox` does not select on right-click — the
+               same trap EmberTern records as gotcha #16 / #99 and answers the same way in its own result
+               grid. ⭐ The handler leaves the event unhandled, so the click still bubbles and opens the
+               menu. -->
+          <ListBox Name="CustomerList" ItemsSource="{Binding Customers}"
+                   SelectedItem="{Binding SelectedCustomer}"
+                   PointerPressed="OnCustomerListPointerPressed">
+            <ListBox.ContextMenu>
+              <!-- ⛔ ONE row, and it is the destructive one, so it says exactly what it removes. The
+                   register refuses a customer who still has licences and the view model says so BEFORE
+                   any confirmation appears — see ShellViewModel.RemoveCustomerAsync. -->
+              <ContextMenu Name="CustomerMenu">
+                <MenuItem Name="CustomerMenuRemove"
+                          Header="{lm:Loc Main.RemoveCustomer}"
+                          Icon="{lm:MenuIcon Icon.Trash}"
+                          Command="{Binding RemoveCustomerCommand}" />
+              </ContextMenu>
+            </ListBox.ContextMenu>
+
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="data:CustomerRecord">
+                <StackPanel>
+                  <TextBlock Text="{Binding Name}" />
+                  <TextBlock Classes="hint" Text="{Binding CustomerId}" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Border>
+
+      <!-- Detail ─────────────────────────────────────────────────────────────────────────────── -->
+      <GridSplitter Grid.Column="1" ResizeDirection="Columns"
+                    Background="{DynamicResource BorderBrush}" Width="4" />
+
+      <!-- ══ THE SELECTED CUSTOMER'S TWO PAGES ══════════════════════════════════════════════════
+           ⭐⭐ TWO QUESTIONS, TWO PAGES: "who is this customer?" and "what licences do they have, and
+           what happened to them?". They used to share one scrolling column, so contact details ran into
+           licence terms and then into the issuing history with no boundary the eye could use.
+           ⛔ That is not a spacing problem — no amount of gutter makes "which of these belongs to what I
+           am looking at" answerable.
+
+           ⭐ The switch sits ABOVE the whole detail pane (user decision), so it plainly says "this
+           switches the main view of the selected customer" rather than looking like a divider between
+           two cards of one form.
+
+           ⭐ `Border.view-switch` + `Button.view-tab` — the SAME markup the main Customers/Licences
+           switch and Storage's Backup/Restore switch use. ⛔ Not a `TabControl`: §40.2 records why a
+           templated tab control is not available here.
+
+           ⚠ ONE `ScrollViewer` around both pages rather than one each: the scrolled surface is "the
+           detail pane", and two viewers would be two scroll positions for one column. -->
+      <Grid Grid.Column="2" RowDefinitions="Auto,*">
+
+        <Border Grid.Row="0" Classes="view-switch">
+          <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
+            <Button Classes="view-tab" Name="CustomerTab" Content="{lm:Loc Main.Customer}"
+                    Classes.active="{Binding IsCustomerTab}"
+                    Command="{Binding ShowCustomerTabCommand}" />
+            <Button Classes="view-tab" Name="LicencesTab" Content="{lm:Loc Main.Licences}"
+                    Classes.active="{Binding IsLicencesTab}"
+                    Command="{Binding ShowLicencesTabCommand}" />
+          </StackPanel>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" Name="CustomerDetailScroll"
+                      Padding="{DynamicResource Pad.Panel}">
+          <Panel>
+
+        <!-- ══ CUSTOMER ═══════════════════════════════════════════════════════════════════════ -->
+        <!-- ⚠ `VerticalAlignment="Top"`: a Panel centres its children, and the shorter page would
+             otherwise float in the middle of the taller one's height. -->
+        <StackPanel Name="CustomerPage" VerticalAlignment="Top"
+                    IsVisible="{Binding IsCustomerTab}"
+                    Spacing="{DynamicResource Space.Lg}">
+
+          <!-- Customer ───────────────────────────────────────────────────────────────────────── -->
+          <Border Classes="card">
+            <StackPanel Spacing="{DynamicResource Space.Sm}">
+              <TextBlock Classes="section" Text="{lm:Loc Main.Customer}" />
+
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.NameRequiredWhatGetsSigned}" />
+                  <TextBox Text="{Binding CustomerName}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.Identifier}" />
+                  <!-- ⛔ Read-only, exactly like the licence id below, and for a stronger reason: the
+                       identifier is the PRIMARY KEY the save writes against. Editing it and saving
+                       would not rename this customer, it would silently create a second one and leave
+                       the licences attached to the first. Generated, never chosen. -->
+                  <!-- QA-2. It used to be a read-only TextBox — which is a field with its editing
+                       quietly disabled: the box, the border and the caret target all say "type here"
+                       while the control refuses. A VALUE with a copy action says what it is. -->
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Xs}">
+                    <SelectableTextBlock Grid.Column="0" Classes="mono value"
+                                         Text="{Binding CustomerId}" />
+                    <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
+                            Tag="{Binding CustomerId}" ToolTip.Tip="{lm:Loc Main.CopyIdentifier}">
+                      <Viewbox Classes="icon">
+                        <Canvas Width="24" Height="24">
+                          <Path Data="{DynamicResource Icon.Copy}" />
+                        </Canvas>
+                      </Viewbox>
+                    </Button>
+                  </Grid>
+                </StackPanel>
+              </Grid>
+
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.Address}" />
+              <TextBox Classes="multiline" Text="{Binding CustomerAddress}" />
+
+              <Grid ColumnDefinitions="*,*,*" ColumnSpacing="{DynamicResource Space.Md}">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.FirstName}" />
+                  <TextBox Text="{Binding CustomerFirstName}" />
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.LastName}" />
+                  <TextBox Text="{Binding CustomerLastName}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.EMail}" />
+                  <TextBox Text="{Binding CustomerEmail}" />
+                </StackPanel>
+              </Grid>
+
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.NotesAdministrativeOnlyNeverTravelLicence}" />
+              <TextBox Classes="multiline" Text="{Binding CustomerNotes}" />
+
+              <Button Classes="primary" Content="{lm:Loc Main.SaveCustomer}" HorizontalAlignment="Right"
+                      Command="{Binding SaveCustomerCommand}" />
+            </StackPanel>
+          </Border>
+
+        </StackPanel>
+
+        <!-- ══ LICENCES ═══════════════════════════════════════════════════════════════════════ -->
+        <!-- ⭐ The WHOLE licence domain, issuing history included. The history is not a third page: it
+             describes what was issued for the licence selected right here, so separating them would put
+             a question and its own answer on two different screens.
+             ⚠ The two cards keep their existing `IsVisible` gating on SelectedCustomer / SelectedLicense
+             — the "no customer selected" semantics are unchanged by this split, deliberately. -->
+        <StackPanel Name="LicencesPage" VerticalAlignment="Top"
+                    IsVisible="{Binding IsLicencesTab}"
+                    Spacing="{DynamicResource Space.Lg}">
+
+          <!-- Licences ───────────────────────────────────────────────────────────────────────── -->
+          <Border Classes="card" IsVisible="{Binding SelectedCustomer, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Spacing="{DynamicResource Space.Sm}">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center" Text="{lm:Loc Main.Licences}" />
+                <Button Grid.Column="1" Classes="flat" Content="{lm:Loc Main.NewLicence}"
+                        Command="{Binding NewLicenseCommand}" />
+              </Grid>
+
+              <!-- P1-c. Double-click a row to preview its newest artifact. ⭐ The gesture runs the very
+                   same `InspectLatestCommand` the button below runs — the work here is the GESTURE, not a
+                   second way of inspecting; ⛔ a parallel implementation is what makes "never issued"
+                   explain itself on one path and fall silent on the other. -->
+              <!-- ⚠⚠ The same `PointerPressed` the customers rail carries, for the same reason: Avalonia's
+                   `ListBox` does not select on right-click (gotcha #16 / #99), so without it the menu would
+                   act on whatever was selected before — and its one action removes a licence. -->
+              <ListBox MaxHeight="180" ItemsSource="{Binding Licenses}"
+                       Name="CustomerLicenses"
+                       DoubleTapped="OnLicenseDoubleTapped"
+                       PointerPressed="OnCustomerListPointerPressed"
+                       SelectedItem="{Binding SelectedLicense}">
+                <ListBox.ContextMenu>
+                  <!-- ⛔ ONE row, and it is the administrative one. What it DOES depends on the licence and
+                       the register says which: a licence that was never issued is deleted outright, one
+                       that was is retired and keeps every artifact it ever produced. The confirmation
+                       states which of the two before anything happens. -->
+                  <ContextMenu Name="LicenceMenu">
+                    <MenuItem Name="LicenceMenuRemove"
+                              Header="{lm:Loc Main.RemoveLicence}"
+                              Icon="{lm:MenuIcon Icon.Trash}"
+                              Command="{Binding RemoveLicenceCommand}" />
+                  </ContextMenu>
+                </ListBox.ContextMenu>
+
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="data:LicenseRecord">
+                    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                      <TextBlock Grid.Column="0" Classes="mono"
+                                 Text="{Binding LicenseId, StringFormat='{}{0}'}" Width="150"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="1"
+                                 Text="{Binding Seats, StringFormat='{}{0} seat(s)'}" />
+                      <TextBlock Grid.Column="2"
+                                 Text="{Binding ExpiresAt, StringFormat='until {0:yyyy-MM-dd}'}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <!-- ⭐ D-8. The three fields are equal columns and each control stretches into its own.
+                   The literal Width="80" that used to sit on Seats is gone: a control's size comes from
+                   its CONTEXT, never from the control (CLAUDE.md UI rule 10), and Tokens.axaml has no
+                   width role for a small numeric input — inventing one for a single field is exactly the
+                   growth the token catalogue is meant to prevent. The Auto column went with it, because
+                   an Auto column plus a stretching child is a control with no width at all. -->
+              <Grid ColumnDefinitions="*,*,*" ColumnSpacing="{DynamicResource Space.Md}">
+                <StackPanel Grid.Column="0">
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.Seats}" />
+                  <TextBox Text="{Binding LicenseSeats}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                  <!-- QA-6. Pick from the calendar or type — the caption no longer spends half its
+                       words teaching a format. CustomDateFormatString keeps the DISPLAY unambiguous
+                       (yyyy-MM-dd reads the same in every locale) while the control still accepts what
+                       the operator's own culture types.
+                       Known and accepted: the calendar FLYOUT is not repinned to our palette, because
+                       FluentBridge carries no Calendar* keys — EmberTern's own two date pickers have
+                       the same gap. Recorded as its own design-system item; not fixed here. -->
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.ValidFrom}" />
+                  <CalendarDatePicker Name="LicenseNotBefore" SelectedDate="{Binding LicenseNotBefore}"
+                                      SelectedDateFormat="Custom" CustomDateFormatString="yyyy-MM-dd"
+                                      HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                  <TextBlock Classes="field-label" Text="{lm:Loc Main.ValidUntilInclusive}" />
+                  <CalendarDatePicker Name="LicenseExpiresAt" SelectedDate="{Binding LicenseExpiresAt}"
+                                      SelectedDateFormat="Custom" CustomDateFormatString="yyyy-MM-dd"
+                                      HorizontalAlignment="Stretch" />
+                </StackPanel>
+              </Grid>
+
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.LicenceId}" />
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Xs}">
+                <SelectableTextBlock Grid.Column="0" Classes="mono value" Text="{Binding LicenseId}" />
+                <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
+                        Tag="{Binding LicenseId}" ToolTip.Tip="{lm:Loc Main.CopyLicenceId}">
+                  <Viewbox Classes="icon">
+                    <Canvas Width="24" Height="24">
+                      <Path Data="{DynamicResource Icon.Copy}" />
+                    </Canvas>
+                  </Viewbox>
+                </Button>
+              </Grid>
+
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.NotesAdministrativeOnly}" />
+              <TextBox Classes="multiline" Text="{Binding LicenseNotes}" />
+
+              <!-- ⭐⭐ L5.3. WHY THIS ARTIFACT IS BEING ISSUED — chosen, never inferred.
+                   Until this stage the reason was computed from the artifact count, which recorded every
+                   re-issue as a "renewal" whether or not an expiry had moved, in a column that is
+                   append-only and therefore uncorrectable. The four values are fixed (D-3) and the picker
+                   offers only the ones that could be TRUE right now: before the first issue there is
+                   exactly one, so the field states it instead of asking. -->
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.ReasonIssue}" />
+              <ComboBox Name="IssueReason" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding IssueReasonChoices}"
+                        SelectedItem="{Binding SelectedIssueReason}"
+                        IsEnabled="{Binding CanChooseIssueReason}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:IssueReasonOption">
+                    <TextBlock Text="{Binding Caption.Value}" />
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+              <TextBlock Classes="hint" TextWrapping="Wrap"
+                         Text="{Binding IssueReasonExplanation}" />
+
+              <!-- ⭐ D-6. The one reason whose right answer is usually NOT to issue.
+                   A new artifact carries a new `iat`, which EmberTern installs as a replacement (§16.4) —
+                   so re-sending the stored file is both cheaper and more faithful to what the customer
+                   already bought. ⛔ Advice, not a block: an operator who has read this and still chooses
+                   it is making a decision, and the application does not overrule it. -->
+              <Border Name="ReissueLostAdvice" Classes="card"
+                      IsVisible="{Binding IsReissueLostSelected}">
+                <TextBlock Classes="hint" TextWrapping="Wrap"
+                           Text="{lm:Loc Main.TheCustomerAlreadyHasExactFile}" />
+              </Border>
+
+              <!-- ⭐ D-4. Optional, and it rides on the audit line that is written for every issue
+                   anyway — no new column, no new model, nothing extra to back up or migrate. -->
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.IssueNoteOptionalRecordedAuditLog}" />
+              <TextBox Text="{Binding IssueNote}" />
+
+              <!-- WrapPanel, not StackPanel, since L6.3 added a fifth action: at 1080 DIP the five
+                   buttons measured 1251 wide and the last one was CLIPPED - present, named, bound and
+                   simply laid out past the edge, which is the failure `NothingIsClippedOnEitherPage`
+                   exists to catch. The repair is never to shrink a control or truncate a label, so the
+                   row WRAPS to a second right-aligned line instead. Same answer, same panel and the same
+                   per-button gap EmberTern's own `ChoiceDialog` footer uses for the identical problem.
+                   The gap is `Margin.InlineGap` rather than the StackPanel `Spacing` it replaces:
+                   WrapPanel has no Spacing, and a literal here would fail this application's stricter
+                   metric guard. -->
+              <WrapPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <WrapPanel.Styles>
+                  <Style Selector="Button">
+                    <Setter Property="Margin" Value="{DynamicResource Margin.InlineGap}" />
+                  </Style>
+                </WrapPanel.Styles>
+                <Button Classes="flat" Content="{lm:Loc Main.InspectLatest}"
+                        Command="{Binding InspectLatestCommand}" />
+                <Button Classes="flat" Content="{lm:Loc Main.ExportLatest}"
+                        Command="{Binding ExportLatestCommand}" />
+                <!-- L6.3. A WINDOW, not an inline action: what is about to leave for a customer is shown
+                     in full before it goes, and the send is confirmed there (14.1). One licence, one
+                     customer, one send - there is deliberately no bulk path. -->
+                <Button Classes="flat" Name="SendLicenceButton" Content="{lm:Loc Main.SendLicence}"
+                        ToolTip.Tip="{lm:Loc Main.ShowsMessageWillSentStoredLicence}"
+                        Click="OnSendLicence" />
+                <Button Classes="flat" Content="{lm:Loc Main.SaveTerms}" Command="{Binding SaveLicenseCommand}" />
+                <Button Classes="primary" Content="{lm:Loc Main.IssueSave}"
+                        Command="{Binding IssueAndSaveCommand}" />
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+
+          <!-- Issuing history ────────────────────────────────────────────────────────────────── -->
+          <!-- ⭐⭐ L5.2. A THIRD CARD, not a section inside the licence card, and the split follows the
+               question rather than the screen: the card above is a FORM over terms that can be edited,
+               this is a LEDGER of artifacts that cannot. ⛔ There is deliberately no delete and no edit
+               here — `issued_artifacts` aborts UPDATE and DELETE by trigger (§39.2), so an action offering
+               either would be an invitation to a stack trace, and the append-only guarantee is the whole
+               reason this panel can be trusted.
+               ⚠ Visible whenever a licence is selected, INCLUDING when it has never been issued: a panel
+               that disappears cannot say "nothing was ever sent", and that is the state an operator most
+               needs told. -->
+          <Border Classes="card"
+                  IsVisible="{Binding SelectedLicense, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <StackPanel Spacing="{DynamicResource Space.Sm}">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                <TextBlock Grid.Column="0" Classes="section" VerticalAlignment="Center"
+                           Text="{lm:Loc Main.IssuingHistory}" />
+                <Button Grid.Column="1" Classes="flat" Content="{lm:Loc Main.ExportIssue}"
+                        Command="{Binding ExportSelectedArtifactCommand}" />
+              </Grid>
+
+              <!-- ⭐ The summary states the append-only guarantee in words. The operator's real question
+                   is "did this overwrite what I sent before?", and that is a property of the schema — so
+                   it is said, not left to be inferred from a list of rows. -->
+              <TextBlock Classes="hint" Text="{Binding History.Summary}" />
+
+              <ListBox MaxHeight="180" Name="ArtifactHistory"
+                       IsVisible="{Binding History.HasArtifacts}"
+                       ItemsSource="{Binding History.Artifacts}"
+                       SelectedItem="{Binding History.SelectedArtifact}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:ArtifactListItem">
+                    <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto"
+                          ColumnSpacing="{DynamicResource Space.Md}">
+                      <TextBlock Grid.Column="0" Classes="mono" Text="{Binding Ordinal}" Width="50" />
+                      <TextBlock Grid.Column="1" Classes="mono" Text="{Binding IssuedAt}" />
+                      <TextBlock Grid.Column="2" Text="{Binding Reason}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="3" Classes="mono hint" VerticalAlignment="Center"
+                                 Text="{Binding KeyId}" />
+                      <!-- ⛔⛔ ADDITIVE, never subtractive. The current issue GAINS a chip; a superseded
+                           one keeps its content at full strength and simply says so. Dimming or striking
+                           an earlier issue would tell the operator it was replaced or removed, which is
+                           the one thing this register guarantees did NOT happen. -->
+                      <Border Grid.Column="4" Classes="current-chip"
+                              IsVisible="{Binding IsCurrent}">
+                        <TextBlock Text="{Binding Standing}" />
+                      </Border>
+                      <TextBlock Grid.Column="4" Classes="hint" VerticalAlignment="Center"
+                                 Text="{Binding Standing}" IsVisible="{Binding !IsCurrent}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <!-- The selected issue, in detail ─────────────────────────────────────────────── -->
+              <StackPanel IsVisible="{Binding History.HasSelection}"
+                          Spacing="{DynamicResource Space.Sm}">
+
+                <!-- ⭐⭐ THE PRODUCT'S OWN OPINION, not ours. This sentence comes from the real
+                     `LicenseVerifier` through `IssuingWorkflow.Inspect`, via the ONE description mapping
+                     `VerdictText` — the same one the message strip uses when "Inspect latest" runs, so
+                     the strip and this panel can never describe one artifact two different ways.
+                     ⛔ Nothing here recomputes a verdict from the dates below (§41.4). -->
+                <TextBlock Classes="field-label" Text="{lm:Loc Main.WhatEmberternWouldSayAboutToday}" />
+                <TextBlock Text="{Binding History.Verdict}" />
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="{DynamicResource Space.Md}">
+                  <StackPanel Grid.Column="0">
+                    <!-- ⭐ The name SIGNED into this artifact, which is not necessarily the customer's
+                         name today — that difference is exactly what a support call is about. -->
+                    <TextBlock Classes="field-label" Text="{lm:Loc Main.LicensedTo}" />
+                    <SelectableTextBlock Classes="value" Text="{Binding History.Licensee}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="field-label" Text="{lm:Loc Main.Seats}" />
+                    <SelectableTextBlock Classes="value" Text="{Binding History.Seats}" />
+                  </StackPanel>
+                </Grid>
+
+                <Grid ColumnDefinitions="*,*" ColumnSpacing="{DynamicResource Space.Md}">
+                  <StackPanel Grid.Column="0">
+                    <TextBlock Classes="field-label" Text="{lm:Loc Main.Valid}" />
+                    <SelectableTextBlock Classes="mono value" Text="{Binding History.Validity}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="field-label" Text="{lm:Loc Main.Product}" />
+                    <SelectableTextBlock Classes="value" Text="{Binding History.Product}" />
+                  </StackPanel>
+                </Grid>
+
+                <TextBlock Classes="field-label" Text="{lm:Loc Main.SignedWith}" />
+                <SelectableTextBlock Classes="mono value" Text="{Binding History.SignedWith}" />
+
+                <!-- ⚠ The token is the licence itself and is long. Shown as ONE trimmed line plus its
+                     delivered size, with the whole of it on the copy action — a 700-character blob
+                     rendered in full is not "readable", it is just present. -->
+                <TextBlock Classes="field-label" Text="{lm:Loc Main.Token}" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Xs}">
+                  <SelectableTextBlock Grid.Column="0" Classes="mono value"
+                                       Text="{Binding History.Token}"
+                                       TextTrimming="CharacterEllipsis" />
+                  <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
+                          Tag="{Binding History.Token}" ToolTip.Tip="{lm:Loc Main.CopyWholeToken}">
+                    <Viewbox Classes="icon">
+                      <Canvas Width="24" Height="24">
+                        <Path Data="{DynamicResource Icon.Copy}" />
+                      </Canvas>
+                    </Viewbox>
+                  </Button>
+                </Grid>
+                <TextBlock Classes="hint" Text="{Binding History.TokenSize}" />
+
+                <!-- ⭐ The exact JSON that was signed, as stored. The labelled fields above are the
+                     readable form; this is the authoritative one, and support asks for it verbatim. -->
+                <TextBlock Classes="field-label" Text="{lm:Loc Main.SignedPayload}" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Xs}">
+                  <SelectableTextBlock Grid.Column="0" Classes="mono value"
+                                       Text="{Binding History.PayloadJson}"
+                                       TextWrapping="Wrap" />
+                  <Button Grid.Column="1" Classes="icon" Click="OnCopyValueClick"
+                          VerticalAlignment="Top"
+                          Tag="{Binding History.PayloadJson}" ToolTip.Tip="{lm:Loc Main.CopySignedPayload}">
+                    <Viewbox Classes="icon">
+                      <Canvas Width="24" Height="24">
+                        <Path Data="{DynamicResource Icon.Copy}" />
+                      </Canvas>
+                    </Viewbox>
+                  </Button>
+                </Grid>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+        </StackPanel>
+
+          </Panel>
+        </ScrollViewer>
+      </Grid>
+    </Grid>
+
+    <!-- Licences — every licence in the register, across every customer ─────────────────────── -->
+    <DockPanel IsVisible="{Binding IsLicensesView}" Margin="{DynamicResource Pad.Panel}">
+
+      <!-- Filters ────────────────────────────────────────────────────────────────────────────── -->
+      <!-- ⚠ The bottom gap belongs to THIS card, the element above the gap (gotcha #375). It was not
+           needed while the filters were followed directly by the results list; the batch card now sits
+           between them. -->
+      <Border DockPanel.Dock="Top" Classes="card" Margin="{DynamicResource Margin.SectionGap}">
+        <StackPanel Spacing="{DynamicResource Space.Sm}">
+          <TextBlock Classes="section" Text="{lm:Loc Main.FindLicence}" />
+
+          <Grid ColumnDefinitions="2*,*,*,*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+            <StackPanel Grid.Column="0">
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.Search}" />
+              <TextBox Text="{Binding Browser.SearchText}"
+                       PlaceholderText="{lm:Loc Main.CustomerEMailIdentifierLicenceId}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1">
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.Status}" />
+              <ComboBox Name="StatusFilter" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Browser.StatusFilters}"
+                        SelectedItem="{Binding Browser.SelectedStatus}"
+                        ItemTemplate="{StaticResource FilterOptionTemplate}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.Expiry}" />
+              <ComboBox Name="ExpiryFilter" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Browser.ExpiryFilters}"
+                        SelectedItem="{Binding Browser.SelectedExpiry}"
+                        ItemTemplate="{StaticResource FilterOptionTemplate}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="3">
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.Issuing}" />
+              <!-- ⚠ A dropdown rather than a checkbox, and the reason has CHANGED — the surviving half is
+                   the one that was always the stronger. It used to read "a checkbox here would fall back
+                   to Fluent's own, because ControlThemes.axaml is not linkable"; that is no longer true
+                   (the licences grid needed a small checkbox, so this application now has its own template
+                   in `Themes/LicenseManagerControlThemes.axaml`). What stands on its own: three uniform
+                   dropdowns let this filter say "issued at least once" as well as "never issued", and a
+                   checkbox has no third state to say it with. -->
+              <ComboBox Name="IssuingFilter" HorizontalAlignment="Stretch"
+                        ItemsSource="{Binding Browser.IssuingFilters}"
+                        SelectedItem="{Binding Browser.SelectedIssuing}"
+                        ItemTemplate="{StaticResource FilterOptionTemplate}" />
+            </StackPanel>
+
+            <Button Grid.Column="4" Classes="flat" Content="{lm:Loc Main.Clear}" VerticalAlignment="Bottom"
+                    Command="{Binding Browser.ClearFiltersCommand}" />
+          </Grid>
+
+          <TextBlock Classes="hint" Text="{Binding Browser.ResultSummary}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Extend many licences to one date — L5.4 ────────────────────────────────────────────── -->
+      <!-- ⭐⭐ The preview is not a courtesy, it is the CONTRACT: what it lists as qualifying is exactly
+           what runs. The action re-plans and refuses if anything moved since this was drawn, so there is
+           no reading of the screen from which "20 selected, 19 done" follows.
+           ⛔ No file is written here (D‑4). A batch ends at a committed register; delivery stays the
+           existing export action, from the stored token. -->
+      <!-- ⚠⚠ THE TWO BULK OPERATIONS SHARE ONE BOUNDED REGION, and that is a 1366×768 decision rather
+           than a taste one (§60.11 risk 8). This view stacks its cards ABOVE the results grid — the thing
+           licences are ticked IN — and a `DockPanel` gives the fill child whatever is left, which can be
+           nothing. The batch card already grows by 180 px the moment anything is ticked; a second card that
+           also grows took the grid to two rows on a 720 px window, which `BatchRenewalViewTests` measured
+           the moment L10.5 landed.
+           ⭐ So the pair scrolls inside a ceiling and the grid keeps its height. ⛔ NOT solved by shortening
+           the recipient list: §14.1 requires the FULL list, and a bulk send behind a truncated list of who
+           receives it is the one thing this design may not do. -->
+      <ScrollViewer DockPanel.Dock="Top" Name="LicenceOperations" MaxHeight="420"
+                    HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <StackPanel>
+
+      <Border Classes="card" Name="BatchRenewalCard"
+              Margin="{DynamicResource Margin.SectionGap}">
+        <DockPanel>
+          <Button DockPanel.Dock="Top" Classes="disclosure" Name="BatchDisclosure"
+                  Command="{Binding BatchRenewal.ToggleExpandedCommand}">
+            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="{DynamicResource Space.Sm}">
+              <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center"
+                       IsVisible="{Binding !BatchRenewal.IsExpanded}">
+                <Canvas Width="24" Height="24">
+                  <Path Data="{DynamicResource Icon.ChevronRight}" />
+                </Canvas>
+              </Viewbox>
+              <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center"
+                       IsVisible="{Binding BatchRenewal.IsExpanded}">
+                <Canvas Width="24" Height="24">
+                  <Path Data="{DynamicResource Icon.ChevronDown}" />
+                </Canvas>
+              </Viewbox>
+
+              <TextBlock Grid.Column="1" Classes="section" VerticalAlignment="Center"
+                         Text="{lm:Loc Main.ExtendSelectedLicences}" />
+
+              <!-- ⭐ What a FOLDED panel still reports. ⚠ Empty while it is open — the body says it
+                   better, and a header repeating what is two centimetres below it is noise. -->
+              <TextBlock Grid.Column="2" Classes="hint" VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis"
+                         Text="{Binding BatchRenewal.HeaderSummary}" />
+            </Grid>
+          </Button>
+
+        <StackPanel Spacing="{DynamicResource Space.Sm}" IsVisible="{Binding BatchRenewal.IsExpanded}"
+                    Margin="{DynamicResource Margin.SectionGap}">
+
+          <!-- ⭐ `command-row` is what makes every control here stand at one height — see the style's
+               own comment in LicenseManagerStyles.axaml for why this row is the ACTION ladder. -->
+          <Grid Classes="command-row" ColumnDefinitions="Auto,Auto,Auto,*,Auto"
+                ColumnSpacing="{DynamicResource Space.Md}">
+            <StackPanel Grid.Column="0">
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.ExtendInclusive}" />
+              <!-- ⚠ Read as a UTC calendar day running to the END of it, through the same LicenseDay
+                   owner the licence form uses — so the two surfaces cannot differ by a day. -->
+              <CalendarDatePicker Name="BatchTargetDate" Width="150"
+                                  SelectedDate="{Binding BatchRenewal.TargetDate}"
+                                  SelectedDateFormat="Custom" CustomDateFormatString="yyyy-MM-dd" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
+              <Button Classes="flat" Name="SelectAllShown" Content="{lm:Loc Main.SelectAllShown}"
+                      Command="{Binding Browser.CheckAllShownCommand}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" VerticalAlignment="Bottom">
+              <Button Classes="flat" Name="ClearSelection" Content="{lm:Loc Main.ClearSelection}"
+                      Command="{Binding Browser.ClearChecksCommand}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="3">
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.NoteOptional}" />
+              <TextBox Text="{Binding BatchRenewal.Note}"
+                       PlaceholderText="{lm:Loc Main.TicketWhoAskedWhyNowStored}" />
+            </StackPanel>
+
+            <!-- ⭐ D‑3: gated by the command's own CanExecute, which is false while ANY selected licence
+                 is blocked — including when the other nineteen are fine. -->
+            <Button Grid.Column="4" Classes="primary" Name="ExtendSelected" VerticalAlignment="Bottom"
+                    Content="{lm:Loc Main.ExtendIssue}"
+                    Command="{Binding BatchRenewal.ExtendCommand}" />
+          </Grid>
+
+          <!-- ⭐ D‑1: the reason is STATED, not picked. An extension has exactly one truthful reason for
+               a licence that has one before it, and `initial` is what the register proves about one that
+               does not — so a list of four here would invite an untruth, which is the trap L5.3 closed. -->
+          <TextBlock Classes="hint"
+                     Text="{lm:Loc Main.RecordedAsRenewalAsInitialIssue}" />
+
+          <TextBlock Classes="hint" Name="BatchSelectionSummary" Text="{Binding Browser.CheckSummary}" />
+          <TextBlock Name="BatchPreviewSummary" TextWrapping="Wrap"
+                     Text="{Binding BatchRenewal.PreviewSummary}" />
+
+          <!-- ⭐ D‑3 made visible: the blockers are named, and the operation is held rather than trimmed. -->
+          <Border Classes="card" Name="BatchBlockerBox" IsVisible="{Binding BatchRenewal.HasBlockers}">
+            <StackPanel Spacing="{DynamicResource Space.Xs}">
+              <TextBlock Classes="section" Text="{lm:Loc Main.Held}" />
+              <TextBlock Name="BatchBlockerSummary" TextWrapping="Wrap"
+                         Text="{Binding BatchRenewal.BlockerSummary}" />
+            </StackPanel>
+          </Border>
+
+          <ListBox MaxHeight="180" Name="BatchPreview"
+                   IsVisible="{Binding BatchRenewal.HasPreview}"
+                   ItemsSource="{Binding BatchRenewal.Rows}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:BatchRenewalRow">
+                <StackPanel Spacing="{DynamicResource Space.Xs}">
+                  <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                    <TextBlock Grid.Column="0" Text="{Binding CustomerName}"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Grid.Column="1" Classes="mono" Width="130" Text="{Binding ShortId}" />
+                    <TextBlock Grid.Column="2" Classes="mono" Width="200" Text="{Binding Change}" />
+                    <TextBlock Grid.Column="3" Width="90" Text="{Binding ReasonLabel}" />
+                  </Grid>
+                  <!-- ⚠ Never blank on a blocked row: it is the only thing telling the operator what to
+                       do about the nineteen licences they cannot issue. -->
+                  <TextBlock Classes="hint" TextWrapping="Wrap"
+                             IsVisible="{Binding IsBlocked}" Text="{Binding Blocker}" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <TextBlock Name="BatchLastResult" TextWrapping="Wrap"
+                     IsVisible="{Binding BatchRenewal.HasResult}"
+                     Text="{Binding BatchRenewal.LastResult}" />
+        </StackPanel>
+        </DockPanel>
+      </Border>
+
+      <!-- Send many licences by e-mail — L10 ──────────────────────────────────────────────────── -->
+      <!-- ⭐⭐ ONE CARD, THREE STATES (§60.8): the preview is always there, the progress appears over it
+           while a run is going out, and the report stays underneath afterwards. ⛔ The preview does NOT
+           disappear during a run — the operator has to be able to see what is still ahead of them.
+
+           ⭐⭐ The preview is the CONTRACT, exactly as it is one card up: the action re-plans and refuses
+           if anything moved, so no reading of this screen supports "38 shown, 36 attempted".
+
+           ⛔ §60.0, in force here and not negotiable in markup either: no retry, no jitter, no reading of
+           what an SMTP error "means", no CC, no BCC, no merging two licences into one message, no history
+           view, and no way around the run limit. -->
+      <!-- ⚠⚠ THE CARD IS BOUNDED, and that is a 1366×768 decision rather than a taste one (§60.11 risk 8).
+           This view already stacks a filter card and a batch card above the results grid, and the batch
+           card grows by 180 px the moment anything is ticked. A third card that also grows would take the
+           grid — the thing licences are TICKED in — to zero height on a 768 px screen. So the action
+           ladder is pinned at the top of the card and everything below it scrolls inside a ceiling.
+           ⛔ Not solved by shortening the recipient list: §14.1 requires the FULL list, and a bulk send
+           behind a truncated list of who receives it is the one thing this design may not do. -->
+      <Border Classes="card" Name="BulkSendCard" Margin="{DynamicResource Margin.SectionGap}">
+        <DockPanel>
+          <Button DockPanel.Dock="Top" Classes="disclosure" Name="BulkDisclosure"
+                  Command="{Binding BulkSend.ToggleExpandedCommand}">
+            <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="{DynamicResource Space.Sm}">
+              <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center"
+                       IsVisible="{Binding !BulkSend.IsExpanded}">
+                <Canvas Width="24" Height="24">
+                  <Path Data="{DynamicResource Icon.ChevronRight}" />
+                </Canvas>
+              </Viewbox>
+              <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center"
+                       IsVisible="{Binding BulkSend.IsExpanded}">
+                <Canvas Width="24" Height="24">
+                  <Path Data="{DynamicResource Icon.ChevronDown}" />
+                </Canvas>
+              </Viewbox>
+
+              <TextBlock Grid.Column="1" Classes="section" VerticalAlignment="Center"
+                         Text="{lm:Loc Main.SendSelectedLicences}" />
+
+              <!-- ⭐ What a FOLDED panel still reports. ⚠ Empty while it is open — the body says it
+                   better, and a header repeating what is two centimetres below it is noise. -->
+              <TextBlock Grid.Column="2" Classes="hint" VerticalAlignment="Center"
+                         TextTrimming="CharacterEllipsis"
+                         Text="{Binding BulkSend.HeaderSummary}" />
+            </Grid>
+          </Button>
+
+        <StackPanel Spacing="{DynamicResource Space.Sm}" IsVisible="{Binding BulkSend.IsExpanded}"
+                    Margin="{DynamicResource Margin.SectionGap}">
+
+          <!-- ⭐ The same ACTION LADDER the batch row stands on — see `Grid.command-row` in
+               LicenseManagerStyles.axaml. -->
+          <Grid Classes="command-row" ColumnDefinitions="Auto,Auto,*,Auto,Auto"
+                ColumnSpacing="{DynamicResource Space.Md}">
+            <StackPanel Grid.Column="0" VerticalAlignment="Bottom">
+              <Button Classes="flat" Name="BulkSelectAllShown" Content="{lm:Loc Main.SelectAllShown}"
+                      IsEnabled="{Binding !BulkSend.IsSending}"
+                      Command="{Binding Browser.CheckAllShownCommand}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
+              <Button Classes="flat" Name="BulkClearSelection" Content="{lm:Loc Main.ClearSelection}"
+                      IsEnabled="{Binding !BulkSend.IsSending}"
+                      Command="{Binding Browser.ClearChecksCommand}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+              <TextBlock Classes="field-label" Text="{lm:Loc Main.NoteOptional}" />
+              <TextBox Text="{Binding BulkSend.Note}" IsEnabled="{Binding !BulkSend.IsSending}"
+                       PlaceholderText="{lm:Loc Main.TicketWhoAskedWhyNowStored}" />
+            </StackPanel>
+
+            <!-- ⭐ 🔒 Default ON, and it is only safe as a default because "already sent" is measured
+                 against the CURRENT artifact's `iat` — so a RENEWAL is never skipped for a message the
+                 customer got a year ago (§60.7). -->
+            <CheckBox Grid.Column="3" Name="BulkSkipAlreadySent" VerticalAlignment="Bottom"
+                      IsEnabled="{Binding !BulkSend.IsSending}"
+                      IsChecked="{Binding BulkSend.SkipAlreadySent}"
+                      Content="{lm:Loc Main.SkipAlreadySent}" />
+
+            <!-- ⛔ Gated by the command's own CanExecute: nothing to attempt, or over the run limit, and
+                 the button is unavailable with the reason written underneath. -->
+            <Button Grid.Column="4" Classes="primary" Name="BulkSendAction" VerticalAlignment="Bottom"
+                    Content="{lm:Loc Main.SendByEmail}"
+                    Command="{Binding BulkSend.SendCommand}" />
+          </Grid>
+
+          <TextBlock Classes="hint" Name="BulkPacingNote" TextWrapping="Wrap"
+                     Text="{Binding BulkSend.PacingNote}" />
+
+          <TextBlock Classes="hint" Name="BulkSelectionSummary" Text="{Binding Browser.CheckSummary}" />
+
+          <TextBlock Name="BulkPreviewSummary" TextWrapping="Wrap"
+                     Text="{Binding BulkSend.PreviewSummary}" />
+
+          <!-- ⚠ Shown, never repaired: merging two licences into one message is forbidden (§60.0) and
+               could not work anyway — the attachment has a fixed file name, so two would collide. -->
+          <TextBlock Classes="hint" Name="BulkDuplicateWarning" TextWrapping="Wrap"
+                     IsVisible="{Binding BulkSend.DuplicateWarning, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                     Text="{Binding BulkSend.DuplicateWarning}" />
+
+          <TextBlock Classes="hint" Name="BulkSkippedSummary" TextWrapping="Wrap"
+                     IsVisible="{Binding BulkSend.SkippedSummary, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                     Text="{Binding BulkSend.SkippedSummary}" />
+
+          <!-- ⛔ Over the run limit the action is UNAVAILABLE and this says by how much and where to
+               change it. Raising the limit means going into Settings deliberately. -->
+          <TextBlock Name="BulkLimitWarning" TextWrapping="Wrap"
+                     IsVisible="{Binding BulkSend.ExceedsRunLimit}"
+                     Text="{Binding BulkSend.LimitWarning}" />
+
+          <!-- ⭐⭐ PERMANENT, in every state of the card: "sent" is the server ACCEPTING the message and
+               nothing more. With one recipient per message a provider commonly accepts mail for an address
+               that does not exist and bounces it later, which this application never sees (§60.1). -->
+          <TextBlock Classes="hint" Name="BulkAcceptanceNote" TextWrapping="Wrap"
+                     Text="{Binding BulkSend.AcceptanceNote}" />
+
+          <!-- ── B · while it runs ──────────────────────────────────────────────────────────────── -->
+          <Border Classes="card" Name="BulkProgressBox" IsVisible="{Binding BulkSend.IsSending}">
+            <StackPanel Spacing="{DynamicResource Space.Sm}">
+              <TextBlock Name="BulkProgressLine" TextWrapping="Wrap"
+                         Text="{Binding BulkSend.ProgressLine}" />
+
+              <!-- ⛔⛔ NO `IsIndeterminate`, here or anywhere. `Maximum` is the number of messages that
+                   will be attempted and `Value` is the number of attempts that have FINISHED, so the bar
+                   stands still while the run is pacing — and the line above explains that rather than
+                   letting an animation pretend otherwise. -->
+              <ProgressBar Classes="run" Name="BulkProgressBar"
+                           Minimum="0"
+                           Maximum="{Binding BulkSend.ProgressTotal}"
+                           Value="{Binding BulkSend.ProgressValue}" />
+
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                <TextBlock Grid.Column="0" Classes="hint" Name="BulkProgressCounts"
+                           VerticalAlignment="Center" Text="{Binding BulkSend.ProgressCounts}" />
+
+                <!-- ⭐ "Send no more", NOT "abort this one": the attempt in flight finishes and is
+                     recorded (§60.6). ⛔ No second "are you sure" — stopping is the safe direction. -->
+                <Button Grid.Column="1" Classes="flat" Name="BulkStop"
+                        Content="{lm:Loc Main.StopSending}"
+                        Command="{Binding BulkSend.StopCommand}" />
+              </Grid>
+            </StackPanel>
+          </Border>
+
+          <!-- ── Held: named, never silently dropped ────────────────────────────────────────────── -->
+          <Border Classes="card" Name="BulkHeldBox" IsVisible="{Binding BulkSend.HasHeld}">
+            <StackPanel Spacing="{DynamicResource Space.Xs}">
+              <TextBlock Classes="section" Name="BulkHeldHeading" Text="{Binding BulkSend.HeldHeading}" />
+
+              <ListBox MaxHeight="180" Name="BulkHeld" ItemsSource="{Binding BulkSend.Held}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:BulkSendRow">
+                    <StackPanel Spacing="{DynamicResource Space.Xs}">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                        <TextBlock Grid.Column="0" Text="{Binding CustomerName}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="1" Classes="mono" Width="130" Text="{Binding ShortId}" />
+                      </Grid>
+                      <!-- ⛔ Never blank on a held row: it is the only thing telling the operator what to
+                           do about a licence they ticked and did not get. -->
+                      <TextBlock Classes="hint" TextWrapping="Wrap" Text="{Binding Reason}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+          </Border>
+
+          <!-- ── The FULL recipient list (§14.1 — "the full recipient list", never a counter) ────── -->
+          <TextBlock Classes="section" Name="BulkSendableHeading"
+                     IsVisible="{Binding BulkSend.HasSendable}"
+                     Text="{Binding BulkSend.SendableHeading}" />
+
+          <ListBox MaxHeight="180" Name="BulkSendable"
+                   IsVisible="{Binding BulkSend.HasSendable}"
+                   ItemsSource="{Binding BulkSend.Sendable}">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:BulkSendRow">
+                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                  <TextBlock Grid.Column="0" Text="{Binding CustomerName}"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="1" Width="200" Text="{Binding Address}"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Grid.Column="2" Classes="mono" Width="130" Text="{Binding ShortId}" />
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <!-- ── C · the report, which STAYS on the card ─────────────────────────────────────────── -->
+          <!-- ⭐ It outlives the message strip on purpose (the strip fades, this does not) and is replaced
+               only when the next run starts. Every counter in it is read off the run's attempt list, so
+               `Planned == Sent + Failed + Skipped + NotAttempted` holds on screen as well as in the model. -->
+          <Border Classes="card" Name="BulkReportBox" IsVisible="{Binding BulkSend.HasResult}">
+            <StackPanel Spacing="{DynamicResource Space.Sm}">
+              <TextBlock Name="BulkResultHeadline" TextWrapping="Wrap"
+                         Text="{Binding BulkSend.ResultHeadline}" />
+
+              <TextBlock Classes="hint" Name="BulkResultCounts" TextWrapping="Wrap"
+                         IsVisible="{Binding BulkSend.ResultCounts, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                         Text="{Binding BulkSend.ResultCounts}" />
+
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+                <!-- ⭐ A whole sentence for each of the four conclusions — ⛔ never one vague line covering
+                     "finished", "stopped after an error" and "you stopped it". -->
+                <TextBlock Grid.Column="0" Name="BulkResultConclusion" VerticalAlignment="Center"
+                           TextWrapping="Wrap" Text="{Binding BulkSend.ResultConclusion}" />
+
+                <TextBlock Grid.Column="1" Classes="hint" Name="BulkResultElapsed"
+                           VerticalAlignment="Center" Text="{Binding BulkSend.ResultElapsed}" />
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                            Spacing="{DynamicResource Space.Md}">
+                  <!-- ⚠ A button toggling a bool, ⛔ not an `Expander`: a new control type is a new theming
+                       surface, and this needs none of what an Expander brings. -->
+                  <Button Classes="flat" Name="BulkToggleDetails"
+                          Content="{Binding BulkSend.DetailsLabel}"
+                          Command="{Binding BulkSend.ToggleDetailsCommand}" />
+
+                  <Button Classes="flat" Name="BulkCopyReport" Content="{lm:Loc Main.CopyReport}"
+                          Command="{Binding BulkSend.CopyReportCommand}" />
+                </StackPanel>
+              </Grid>
+
+              <ListBox MaxHeight="240" Classes="report" Name="BulkReport"
+                       IsVisible="{Binding BulkSend.ShowDetails}"
+                       ItemsSource="{Binding BulkSend.ReportRows}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:BulkSendReportRow">
+                    <!-- ⭐ The row says WHICH outcome it is; `LicenseManagerStyles.axaml` says what that
+                         looks like. ⛔ No colour decision travels through a view model. -->
+                    <StackPanel Spacing="{DynamicResource Space.Xs}"
+                                Classes.sent="{Binding IsSent}"
+                                Classes.failed="{Binding IsFailed}"
+                                Classes.skipped="{Binding IsSkipped}"
+                                Classes.stopped="{Binding IsNotAttempted}">
+                      <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto"
+                            ColumnSpacing="{DynamicResource Space.Md}">
+                        <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center">
+                          <Canvas Width="24" Height="24">
+                            <Path Data="{Binding IconKey,
+                                         Converter={x:Static lm:IconGeometryConverter.Instance}}" />
+                          </Canvas>
+                        </Viewbox>
+                        <TextBlock Grid.Column="1" Text="{Binding CustomerName}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="2" Width="200" Text="{Binding Address}"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="3" Classes="mono" Width="130" Text="{Binding ShortId}" />
+                        <TextBlock Grid.Column="4" Classes="mono" Width="70" Text="{Binding Time}" />
+                      </Grid>
+
+                      <TextBlock Classes="hint" TextWrapping="Wrap"
+                                 IsVisible="{Binding HasReason}" Text="{Binding Reason}" />
+
+                      <!-- ⛔ THE SERVER'S OWN WORDS, and the one line on this card that never follows the
+                           interface language. A wrong password and a blocked app password differ only in
+                           this text. -->
+                      <TextBlock Classes="hint mono" TextWrapping="Wrap"
+                                 IsVisible="{Binding HasServerMessage}" Text="{Binding ServerMessage}" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+        </DockPanel>
+      </Border>
+      </StackPanel>
+      </ScrollViewer>
+
+      <!-- The selection, and the way back to it ──────────────────────────────────────────────── -->
+      <Border DockPanel.Dock="Bottom" Classes="card" IsVisible="{Binding Browser.HasSelection}"
+              Margin="{DynamicResource Margin.SectionGap}">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+          <StackPanel Grid.Column="0">
+            <TextBlock Text="{Binding Browser.SelectedDetail}" />
+            <TextBlock Classes="mono" Text="{Binding Browser.SelectedLicenseId}" />
+          </StackPanel>
+          <!-- ⭐ Without this, search is a dead end: the operator finds the licence that lapses on
+               Friday and has nowhere to go with it. -->
+          <Button Grid.Column="1" Classes="primary" Content="{lm:Loc Main.OpenCustomers}"
+                  VerticalAlignment="Center"
+                  Command="{Binding OpenSelectedLicenseCommand}" />
+        </Grid>
+      </Border>
+
+      <!-- Results — the licence grid ────────────────────────────────────────────────────────────── -->
+      <!-- ⭐⭐ THIS IS EMBERTERN'S GRID, NOT A LOOKALIKE. Row height, header height, cell padding, zebra
+           striping, selection-over-zebra, hover, header chrome and the cell focus ring all come from
+           `Themes/DataGridStyles.axaml` — EmberTern.App's own file, LINKED (see the csproj) and shared by
+           both applications. ⛔ Nothing about the grid's appearance is set here; a local value would be
+           this window quietly leaving the standard, which is exactly the divergence the link prevents.
+           The closest sibling in EmberTern is the Session Manager's session grid: a flat, read-only,
+           sortable, resizable list of records, one row per entity.
+
+           ⭐⭐ THE BATCH TICK AND THE ROW SELECTION ARE TWO DIFFERENT THINGS, AND THEY STAY APART.
+           `SelectedItem` answers "which licence am I looking at?" — it drives the detail strip, and it
+           changes on every click. The CHECKBOX answers "which licences am I about to change?", and a bulk
+           operation cannot have a stray click on row four throw away nineteen decisions. So the grid keeps
+           `SelectionMode="Single"` and the tick lives on the row.
+           ⛔ Do not add `SelectionMode="Extended"` and read the selection as the batch: with the two
+           joined, an ordinary click IS "select only this one" and the batch selection collapses to it.
+
+           ⭐ SORTING IS A PROJECTION AND NOTHING MORE. The tick set is keyed by `LicenseId` in the view
+           model, so re-ordering the rows cannot touch it — and every sortable column sorts on the value it
+           MEANS rather than on the text it shows (`SeatsValue`, `LicenseId`, `ExpiresAtValue`). -->
+      <Border Classes="card" Margin="{DynamicResource Margin.SectionGap}">
+        <DataGrid Name="LicenceResults"
+                  ItemsSource="{Binding Browser.Results}"
+                  SelectedItem="{Binding Browser.SelectedLicense}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  SelectionMode="Single"
+                  HeadersVisibility="Column"
+                  CanUserResizeColumns="True"
+                  CanUserSortColumns="True"
+                  CanUserReorderColumns="True"
+                  GridLinesVisibility="Horizontal">
+          <DataGrid.Columns>
+
+            <!-- ⭐ The batch tick. Fixed, unsortable, unmovable — it is a control, not a value, and there
+                 is nothing about it to order a list by. ⚠ The header is deliberately BLANK rather than a
+                 select-all box: "Select all shown" and "Clear selection" are already the two actions this
+                 card offers, and a third mechanism saying almost the same thing is how a bulk surface
+                 becomes ambiguous about what it covers.
+                 ⚠ `ClickMode` is left alone deliberately: the checkbox handles its own click and the row
+                 beneath still takes the selection, so the two mechanisms coexist. -->
+            <DataGridTemplateColumn Header="" Width="34"
+                                    CanUserResize="False" CanUserReorder="False" CanUserSort="False">
+              <DataGridTemplateColumn.CellTemplate>
+                <DataTemplate x:DataType="vm:LicenseListItem">
+                  <CheckBox Name="RowTick" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            IsChecked="{Binding IsChecked, Mode=TwoWay}"
+                            ToolTip.Tip="{lm:Loc Main.IncludeLicenceBatchOperation}" />
+                </DataTemplate>
+              </DataGridTemplateColumn.CellTemplate>
+            </DataGridTemplateColumn>
+
+            <!-- ⚠ The two wide columns are the only STAR ones, and both are capped. A star column with no
+                 ceiling is a column that eats a wide window; a fixed one is a column that cannot use it.
+                 The floors keep a narrow window from squeezing a name down to two characters. -->
+            <DataGridTextColumn Header="{lm:Loc Main.Customer}" Binding="{Binding CustomerName}"
+                                SortMemberPath="CustomerName"
+                                Width="2*" MinWidth="140" MaxWidth="440" />
+
+            <!-- ⭐ QA-5. The contact person: an operator looking for "the licence Kowalski called about"
+                 has a person, not a company. Searchable too. -->
+            <DataGridTextColumn Header="{lm:Loc Main.Contact}" Binding="{Binding Contact}"
+                                SortMemberPath="Contact"
+                                Width="*" MinWidth="110" MaxWidth="300" />
+
+            <!-- ⚠ Sorts on the FULL id, shows the short one — see `LicenseListItem.LicenseId`. -->
+            <DataGridTextColumn Header="{lm:Loc Main.LicenceId}" Binding="{Binding ShortId}"
+                                SortMemberPath="LicenseId"
+                                FontFamily="{DynamicResource Font.Code}"
+                                Width="140" MinWidth="110" />
+
+            <!-- ⚠ Sorts on the COUNT, not on the sentence: as text, "10 seats" comes before "3 seats". -->
+            <DataGridTextColumn Header="{lm:Loc Main.Seats}" Binding="{Binding Seats}"
+                                SortMemberPath="SeatsValue"
+                                Width="80" MinWidth="64" />
+
+            <!-- ⛔ The REGISTER's status, presented — never a verdict this view computed. The client
+                 verdict (Valid / Grace / Expired …) comes from LicenseVerifier and stays on the selection,
+                 where Inspect latest runs it for real. -->
+            <DataGridTextColumn Header="{lm:Loc Main.Status}" Binding="{Binding Status}"
+                                SortMemberPath="Status"
+                                Width="90" MinWidth="72" />
+
+            <DataGridTextColumn Header="{lm:Loc Main.Expiry}" Binding="{Binding Expiry}"
+                                SortMemberPath="ExpiresAtValue"
+                                Width="110" MinWidth="92" />
+
+            <!-- ⛔ NOT SORTABLE, and that is a decision rather than an omission. `Standing` is a SENTENCE
+                 about the expiry date ("Expires in 12 days", "Never issued"): sorted as text it would
+                 order by the letter E, and sorted by date it would be a second Expiry column wearing a
+                 different name. The operator who wants that order has the Expiry column beside it. -->
+            <DataGridTextColumn Header="{lm:Loc Main.Standing}" Binding="{Binding Standing}"
+                                CanUserSort="False"
+                                Width="170" MinWidth="130" />
+          </DataGrid.Columns>
+        </DataGrid>
+      </Border>
+
+    </DockPanel>
+
+    </Grid>
+  </DockPanel>
+</Window>

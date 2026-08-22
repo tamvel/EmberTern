@@ -21,6 +21,18 @@
              `Color="{StaticResource …Color}"`, więc tokeny barw muszą być już wczytane. -->
         <ResourceInclude Source="avares://EmberTern/Themes/FluentBridge.axaml" />
         <ResourceInclude Source="avares://EmberTern/Themes/IconGeometries.axaml" />
+        <!-- ⭐⭐ IconControlThemes PO IconGeometries, i to jest ta sama reguła co niżej: motyw CreateIcon
+             sięga po `{StaticResource Icon.Play}`.
+
+             ⚠ DLACZEGO TE DWA PLIKI SĄ OSOBNE (2026-08-16). `IconGeometries.axaml` to 86 czystych
+             `StreamGeometry` — dane i nic więcej. Trzy `ControlTheme`, które stąd wyszły, były JEDYNYM
+             w tamtym pliku odwołaniem do TYPU (`controls:SvgIcon` / `DebuggerIcon` / `CreateIcon`), i to
+             ono czyniło cały słownik nielinkowalnym z drugiej aplikacji. EmberTern License Manager
+             potrzebuje ikon i ⛔ nie może nabyć kontrolek `EmberTern.App`
+             (`docs/design/licensing-system.md` §12.1) — po rozdzieleniu linkuje sobie samą połowę
+             danych. Jedno źródło każdej ikony dla dwóch aplikacji, zamiast kopii, która zdryfuje przy
+             pierwszej dołożonej ikonie. -->
+        <ResourceInclude Source="avares://EmberTern/Themes/IconControlThemes.axaml" />
         <!-- ⚠ ControlThemes PO IconGeometries: szablon CheckBoxa sięga po `{StaticResource Icon.Check}`,
              a `StaticResource` rozwiązuje się przy wczytywaniu — geometria musi już tu być. -->
         <ResourceInclude Source="avares://EmberTern/Themes/ControlThemes.axaml" />

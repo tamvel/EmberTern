@@ -6,12 +6,14 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Platform;
 using AvaloniaEdit.Highlighting;
 using AvaloniaEdit.Highlighting.Xshd;
+using EmberTern.App.Licensing;
 using EmberTern.App.Localization;
 using EmberTern.App.Security;
 using EmberTern.App.Settings;
 using EmberTern.App.ViewModels;
 using EmberTern.App.Views;
 using EmberTern.Core.Connections;
+using EmberTern.Core.Settings;
 using EmberTern.Firebird;
 
 namespace EmberTern.App;
@@ -27,6 +29,7 @@ public class App : Application
 
     private FirebirdConnectionService? _service;
     private TransactionService? _transactionService;
+    private LicenseService? _license;
 
     public override void Initialize()
     {
@@ -46,7 +49,25 @@ public class App : Application
             // enforces the ReadCommitted/NOWAIT TPB itself, so there is nothing to configure here.)
             _transactionService = new TransactionService(_service);
 
-            var viewModel = new MainWindowViewModel(store, _service, _transactionService);
+            // ⭐⭐ THE licence service — one instance, created here, exactly as PreferencesService is (ratified
+            // with the user 2026-08-15). One owner of the state, handed to whoever needs it; ⛔ a second
+            // instance would be a second answer to "is this copy licensed", and the two would drift the
+            // moment one of them installed a file.
+            //
+            // ⚠ It reads the SAME settings.dat facade every other section uses, for the clock high-water
+            // mark only (§16.3) — the licence itself deliberately lives outside settings.dat (§8), so it
+            // survives a settings reset and support can copy it.
+            _license = new LicenseService(
+                LicenseLocation.Default,
+                new ApplicationSettingsStore(
+                    System.IO.Path.GetDirectoryName(store.FilePath)!, store.Protector));
+
+            // ⚠ Verified BEFORE the window is built, because the verdict decides whether the activation
+            // window opens over it. Refresh never throws — a licence problem is a verdict, and startup must
+            // survive every one of them.
+            _license.Refresh();
+
+            var viewModel = new MainWindowViewModel(store, _service, _transactionService, license: _license);
 
             // ⭐ Settings Center etap 3 — the theme is read HERE, before the window exists, and applied through
             // the one mapping in ThemePreference. Until this landed the theme was never saved at all (design
@@ -94,6 +115,10 @@ public class App : Application
 
             desktop.ShutdownRequested += (_, _) =>
             {
+                // ⭐ The clock high-water mark is recorded on the way out, so a session that ran through
+                //   midnight is recorded and moving the clock back afterwards cannot revive an expired
+                //   licence (§16.3). ⛔ Advisory only — a failed write is not fatal and nothing blocks on it.
+                _license?.RecordClock();
                 _transactionService?.Dispose();
                 _service?.Dispose();
             };

@@ -1,0 +1,26 @@
+<Solution>
+  <!-- ⭐ The License Manager's solution — the ONLY one that contains signing-capable code.
+
+       EmberTern.Licensing appears in BOTH solutions on purpose: it is the shared licence format,
+       and sharing it by project rather than by a package is what stops the verifier and the issuer
+       from ever disagreeing about what an ETL1 artifact is.
+
+       ⛔ EmberTern.Licensing.Issuing appears ONLY here, and EmberTern.slnx must never gain it —
+       PrivateKeyNeverShipsTests asserts that directly against the solution file.
+
+       ⚠ There are therefore TWO test commands from L2 on, and that is inherent to shipping two
+       applications rather than a partitioning of one suite:
+           dotnet test EmberTern.slnx                  — EmberTern
+           dotnet test EmberTern.LicenseManager.slnx   — License Manager
+       CLAUDE.md's "the suite runs as ONE command" rule is about not splitting EmberTern's own
+       suite (which hid two defects for months); it is not about a second product. -->
+
+  <Folder Name="/src/">
+    <Project Path="src/EmberTern.Licensing/EmberTern.Licensing.csproj" />
+    <Project Path="src/EmberTern.Licensing.Issuing/EmberTern.Licensing.Issuing.csproj" />
+    <Project Path="src/EmberTern.LicenseManager/EmberTern.LicenseManager.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EmberTern.LicenseManager.Tests/EmberTern.LicenseManager.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -120,6 +120,79 @@ public class CharsetGuardSeamTests
 
     // ── helpers ───────────────────────────────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Projects outside this guard's domain: they cannot reach the Firebird driver, so a
+    /// <c>CreateCommand()</c> in them is a command on some other provider entirely.
+    ///
+    /// <para>⚠⚠ <b>An exclusion list is normally the wrong answer — and this one is only acceptable
+    /// because <see cref="TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver"/> proves its
+    /// precondition on every run.</b> The guard's domain was always "code that can create a Firebird
+    /// command"; before the License Manager existed, "everything under src/" happened to be the same set,
+    /// and the guard was written in those terms. It is not the same set any more: the License Manager
+    /// talks to SQLite, whose provider does not transliterate anything. Narrowing by DOMAIN, with the
+    /// domain re-checked mechanically, is the difference between a boundary and a loophole.</para>
+    /// </summary>
+    private static readonly string[] OutsideTheFirebirdDomain =
+    [
+        "EmberTern.Licensing",
+        "EmberTern.Licensing.Issuing",
+        "EmberTern.LicenseManager",
+    ];
+
+    [Fact]
+    public void TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver()
+    {
+        // ⭐ The test that turns the exclusion above from a promise into a fact. If any of those projects
+        //    ever gains a path to FirebirdSql, this fails — and the exclusion must be removed before the
+        //    project can build, rather than quietly covering a real charset bypass.
+        var root = RepoRoot();
+        var offenders = new List<string>();
+
+        foreach (var project in OutsideTheFirebirdDomain)
+        {
+            foreach (var reachable in ReachableProjects(Path.Combine(root, "src", project, project + ".csproj")))
+            {
+                var text = File.ReadAllText(reachable);
+                if (text.Contains("FirebirdSql", StringComparison.Ordinal) ||
+                    text.Contains("EmberTern.Firebird", StringComparison.Ordinal))
+                {
+                    offenders.Add($"{project} reaches Firebird through {Path.GetFileName(reachable)}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            "These projects are excluded from the charset seam guard but CAN now reach the Firebird "
+            + "driver. Remove them from OutsideTheFirebirdDomain — the exclusion is no longer true:\n  "
+            + string.Join("\n  ", offenders));
+    }
+
+    private static IEnumerable<string> ReachableProjects(string projectPath)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var pending = new Stack<string>();
+        pending.Push(Path.GetFullPath(projectPath));
+
+        while (pending.Count > 0)
+        {
+            var current = pending.Pop();
+            if (!seen.Add(current) || !File.Exists(current))
+            {
+                continue;
+            }
+
+            yield return current;
+
+            var folder = Path.GetDirectoryName(current)!;
+            foreach (Match match in Regex.Matches(
+                         File.ReadAllText(current), @"ProjectReference\s+Include\s*=\s*""([^""]+)"""))
+            {
+                pending.Push(Path.GetFullPath(Path.Combine(
+                    folder, match.Groups[1].Value.Replace('\\', Path.DirectorySeparatorChar))));
+            }
+        }
+    }
+
     private static IEnumerable<(string Path, string Text)> ProductSources()
     {
         var root = RepoRoot();
@@ -128,6 +201,13 @@ public class CharsetGuardSeamTests
             // Skip build output (bin/obj carry generated copies of the same sources).
             if (path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                 || path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // Outside the domain — see OutsideTheFirebirdDomain, and the test that keeps it honest.
+            if (OutsideTheFirebirdDomain.Any(project => path.Contains(
+                    $"{Path.DirectorySeparatorChar}{project}{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
             {
                 continue;
             }

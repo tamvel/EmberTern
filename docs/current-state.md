@@ -1,4 +1,4 @@
-# EmberTern — current state
+﻿# EmberTern — current state
 
 > **This is the ONE place that answers *"what is done, and what are we working on"*.**
 > `CLAUDE.md` holds the rules and the architecture; `docs/history/` holds the narrative of how we
@@ -9,35 +9,84 @@
 > to paste a multi-paragraph "shipped" report here, you are recreating the defect that produced a
 > 6 849-line `CLAUDE.md` twice — see `docs/history/30-claude-md-current-state-archive.md`.
 
-**Last verified: 2026-08-15.**
+**Last verified: 2026-08-22** (the licensing module is CLOSED and merged to `master`).
 
 ---
 
 ## 0. ⏭ HANDOFF — read this first
 
-> **Current milestone:** Audit follow-up — **Phase 7 (`ARCHITECTURE.md` as-built) ✅ DONE**, awaiting the
-> user's review. Phases 4, 5 and 6 are closed.
-> **Next task:** ⏭ **Final verification of the whole etap, then the push to both remotes. ⛔ NOT started.**
+> ⭐⭐ **THE LICENSING MODULE IS CLOSED (2026-08-22).** L1–L10 delivered, accepted and merged to
+> `master`. The production key `R1` exists and ships its public half in `TrustedKeys.Production`; a real
+> licence has been seen **`Valid` in a `Release` build**; a licence reaches a customer by e-mail, one at a
+> time or in a throttled batch; and customers and licences can be removed administratively.
 >
-> **Work lives on the branch `fix/audit-followup-2026-08`, NOT on `master`, and is NOT pushed.**
-> Nine commits. ⭐ The push (origin + private) is what closes the etap, and it happens only after the user
-> accepts it as a whole.
-
-⛔ Licensing, Firebase, License Manager and the installer remain **out of scope** — but Phase 6 put **two
-concrete licensing items** on that etap's desk (NPOI's OSMF EULA, ImageSharp's Split Licence), see §3.
+> ## ⏭ **NO STAGE IS IN PROGRESS. The next topic is a user decision.**
+>
+> ⛔ **Do not start anything from the licensing module.** It is finished, and §61 of its design document
+> lists the six things left open **on purpose** — each one ratified, none of them a defect.
+> ⛔ Do not close any of them "while we're here".
+>
+> ⭐ **Where the licensing knowledge now lives, so no next session has to read the whole history:**
+>
+> | You need | Read |
+> |---|---|
+> | The current state of the module — removal semantics, the final schema, what is open | `design/licensing-system.md` **§61** |
+> | Why the bulk send is shaped the way it is | `design/licensing-system.md` **§60** (ratified specification) |
+> | The ratified product decisions D1–D16 | `design/licensing-system.md` **§0** |
+> | What L10 discovered, and the defects a real operator found | `history/35` |
+> | The key ceremony, and how to repeat it for a rotation | `design/licensing-key-ceremony-runbook.md`; register in **§35.4** |
+>
+> ⚠ **Two suites live here** — `dotnet test EmberTern.slnx` (the product) and
+> `dotnet test EmberTern.LicenseManager.slnx` (the issuer). The License Manager suite runs **serially**
+> (`DisableTestParallelization`) because `Loc` is global static state — §57.9.
+>
+> ⚠ **Two RED tests in `EmberTern.Tests` are PRE-EXISTING and are NOT licensing defects** — §49.9:
+> `CharsetGuardSeamTests.TheExcludedProjectsGenuinelyCannotReachTheFirebirdDriver` (matches the word
+> `Firebird` in a COMMENT in the License Manager csproj — gotchas #396 / #412) and
+> `DatePresentationTests.NoUserFacingSurface_FormatsADateInvariantly` (`RestoreWorkflow.cs`,
+> `StorageViewModel.cs`). Both are named in `docs/gotchas.md`; ⛔ neither was introduced by L9 or L10.
+>
+> ⚠ **Findings from this module a next session should not rediscover** — all in `docs/gotchas.md`:
+> **#394** an option's identity must not contain a label · **#396** every text-scanning guard reads
+> `CodeOf(file)` · **#401** a template bound to a non-notifying item's property renders once and freezes ·
+> **#403** `Loc` is global static state, so the suite runs SERIALLY · **#410** a function whose result
+> nobody receives does not exist · **#412** a guard that reads the comment quoting the value it replaced ·
+> **#414** `SmtpClient.Timeout` does not bound `SendMailAsync` · **#415** `open(path, "w")` truncates on
+> OPEN · **#416** a programmatic restore keeps the backup's mtime, so the incremental build skips it ·
+> **#417** `Progress<T>` delivers asynchronously · **#418** comparing by `ToString()` on a type that does
+> not override it is a vacuous assertion.
+>
+> ### ⛔ Standing constraints the module leaves behind
+>
+> - ⛔ **A language is applied in ONE place** — `ApplicationLanguageService`.
+>   `TheLanguage_IsAppliedInExactlyOnePlace` says so.
+> - ⛔ **`ApplicationLanguages` and `MessageLanguages` are INDEPENDENT catalogs** and must never be
+>   merged: the interface language is a fact about the OPERATOR, the message language about the CUSTOMER.
+>   Defaults differ on purpose — **English** for the interface (D‑3), **Polish** for the message (D‑9).
+> - ⛔ **Nothing is localized that is a technical contract**: persisted values, audit actions AND audit
+>   notes, file names, ISO dates, branding. `design/terminology.md` §4.4 is the list.
+> - ⛔ **`BrandEmberBrush` is identity, never a signal** — it may not paint a control state or a severity,
+>   and a guard fails the build on a second consumer (`design/color-language.md` §1.3).
+> - ⛔ **Never a version literal in either application** — `AppInfo` and `ManagerInfo` both read the build,
+>   from the one `Directory.Build.props`.
 
 ---
 
 ## 1. Entry state
 
+**Verified 2026-08-22 at the licensing module's closure, by running the commands rather than by recall.**
+
 | | |
 |---|---|
-| Branch | **`fix/audit-followup-2026-08`** (cut from `master`) — clean working tree, **not pushed** |
-| HEAD | Phase 5 closing commit on `fix/audit-followup-2026-08` |
-| Build | **0 warnings / 0 errors**, in **both `Release` and `Debug`** (`TreatWarningsAsErrors=true`) |
-| Tests | **8 853** (8 813 + 31 guard + 9 localization) — ⛔ measured, not re-run at closure |
+| Branch | ⭐ **`master`** — `feat/licensing-system` was merged back with `--no-ff` at the module's closure and is **kept**, locally and on both remotes, as the historical reference for L1–L10 |
+| HEAD | the merge commit *Merge branch 'feat/licensing-system'*, over *docs(licensing): close License Manager module*. ⛔ A commit cannot name its own hash; `git log -1` gives the SHA |
+| Sync | ⭐ **`master` == `origin/master` == `private/master`**, pushed to both at the closure |
+| Working tree | ✅ **CLEAN** |
+| Build | **0 warnings / 0 errors** — License Manager **Debug and Release**. ⚠ Measured before the closing documentation commit; ⛔ that commit changes no code |
+| Tests | ⭐ **License Manager: 929 / 929**, measured 2026-08-22 at the closure. ⚠ **Measure, do not quote** — this row has gone stale at every stage of this module |
+| Solutions | `EmberTern.slnx` (the product) **+** `EmberTern.LicenseManager.slnx` (the issuer). ⛔ Separate on purpose: the private key must never be reachable from a solution that ships |
 | Version | **0.5.0** (`Directory.Build.props` — the single source; 0.x is deliberate) |
-| Remotes | `origin` (company Gitea) + `private` (GitHub) — **both** receive every accepted stage |
+| Remotes | ⭐ **TWO, and both are kept on the same SHA**: `origin` → the company Gitea, `private` → the personal GitHub. The flow is **commit → push `origin` → push `private`** |
 
 ⚠⚠ **Build BOTH configurations before asking for a visual check.** `CLAUDE.md` runs the app from
 `bin\Debug\`, and an etap built only in `Release` left the user verifying a binary that predated the
@@ -89,144 +138,43 @@ reasoning lives.
 | **Audit follow-up — Phase 5: charset guard** ✅ user-verified | 2026-08-15 | gotchas #372/#373, `tools/probes/CharsetProbe`, rule 12 in `CLAUDE.md` |
 | **Audit follow-up — Phase 6: NuGet to latest stable** | 2026-08-15 | §3 below — 8 packages raised, 2 held for a stated reason |
 | **Audit follow-up — Phase 7: `ARCHITECTURE.md` as-built** | 2026-08-15 | [`ARCHITECTURE.md`](../ARCHITECTURE.md) |
+| ⭐⭐ **LICENSING SYSTEM V1 — THE WHOLE MODULE, CLOSED.** Offline licensing end to end: the signed `.etlic` artifact and its verifier, the License Manager (register, customers, licences, issuing, re-issuing, batch renewal, encrypted backup and restore), the product's activation surfaces, e-mail delivery one at a time **and** as a throttled batch, administrative removal of licences and customers, the production key `R1`, and a fully bilingual (EN + PL, live-switching) interface. ✅ user-verified against the user's own register | 2026-08-22 | `design/licensing-system.md` — **§61** is the as-built state, **§60** the ratified bulk-send specification, **§0** the ratified decisions; per stage §34–§59. Narrative: `history/33`, `history/34`, `history/35` |
 
 ---
 
 ## 2a. The audit follow-up etap — as accepted
 
-⚠ Delivered on `fix/audit-followup-2026-08`, **not yet merged and not pushed.**
-
-**Test isolation (`440c0ce`).** The full suite failed 45 tests deterministically because
-`Loc.LanguageChanged` is `static`: every view model any earlier test built stayed subscribed, and the
-next test to swap the catalog broadcast into all of them. Fixed at the source —
-`Loc.IsolateSubscribersForVerification()` plus `IsolatesGlobalLanguageState` on `HeadlessCollection`, so
-each headless test gets a clean subscriber list **automatically**. ⛔ The old three-partition manual
-split is gone and must not return; it hid this for months. `DiagnosticsPanelViewModel` stopped
-subscribing to the static event (it leaked one live VM per editor tab) and became an ordinary child of
-the app's single long-lived subscriber. Two source guards keep both rules armed.
-
-**E — settings read-modify-write (`972426e`).** Measured data loss: a facade doing
-`Load() ?? new ApplicationSettings()` → mutate → `Save()` turned a *transient* read failure into
-DEFAULTS and wrote them. Against a concurrent publisher: **182 failed reads, 89 of which wrote
-defaults, ending with 0 of 5 connection profiles surviving** — profiles and passwords, silently.
-`ApplicationSettingsStore.Update()` now takes the cross-process lock, reads **under it**, mutates and
-writes via `SaveCore`. `Missing` is the ONLY status that may produce a default aggregate and this is
-the only place that may; `Unreadable` / `Corrupt` / `FutureVersion` end the operation untouched.
-15 call sites migrated. ⛔ Not a retry — the lock's scope removes the window.
-
-**Phase 4 — debugger irreversible-effects warning (`1130e3d`, `1852611`), ✅ user-verified in the app:**
-
-- detection of `IN AUTONOMOUS TRANSACTION` / `GEN_ID` / `NEXT VALUE FOR` reuses the existing
-  `DebugPreflight`; `Scan` gained `out bool irreversible`, so **one scan** answers both the launch
-  panel's sentences and the running view's bar and they cannot disagree;
-- a **one-time modal** before launching risky code, with **"Nie pokazuj tego ostrzeżenia ponownie"**;
-  Cancel really stops the launch;
-- a **dismissible bar** at the foot of the debug view (shared `MessageBanner`, `Classes="docked"`) —
-  the launch panel disappears when a session starts, so that is where the warning was missing;
-- `BuildPreflight` runs on every Launch **and** Restart, so re-arming is automatic; dismissing is per
-  run;
-- ⭐ the preference silences the **modal only, never the bar** — pinned by a test;
-- ⛔ **no safe mode and no blocking of valid SQL**: suppressing a generator or an autonomous
-  transaction would mean refusing to execute correct SQL, against the debugger's fidelity law (§F).
-
-**UX fix (`1852611`).** The suppress checkbox was clipped (*"Nie pokazuj tego ostrzeż…"*). Measured:
-the label needs **358 px in English and 435 px in Polish** against ~380 px of content width — so a row
-of its own is necessary and **still not sufficient**, hence the label also wraps. ⛔ The shared dialog
-width (420, also `TextPromptDialog`) and the font size were **not** touched, and the wording stays as
-accepted — the layout absorbs longer localizations instead. `ConfirmDialogLayoutTests` measures the
-property ("nothing is cut"), verified red in both broken shapes before being accepted green.
-
----
+⭐ **Closed, merged to `master` (`2c3da45`) and pushed to both remotes.** The full narrative — test
+isolation, E (settings read-modify-write), the Avalonia headless race, Phase 4's debugger
+irreversible-effects warning and its UX fix — moved verbatim to
+[`history/32-audit-followup-2026-08.md`](history/32-audit-followup-2026-08.md) on 2026-08-15, when this
+file went over its 300-line budget. ⛔ Nothing was deleted.
 
 ## 3. Open work
 
-⏭ **Next task: final verification of the etap, then the push to both remotes. ⛔ Not started.**
+### Licensing system V1 — ✅ CLOSED, merged to `master`
 
-### Phase 7 — `ARCHITECTURE.md` "as built" ✅ DONE
+⛔ **Nothing here is open.** The module shipped L1–L10 and its whole state lives in
+`design/licensing-system.md` **§61**; the six items it left open are ratified and listed there
+(§61.6) — the clock-rollback warning surface, key portability at the first real migration, the
+unmeasured company mailbox, window size/position, `CompletedWithErrors`, and V2.
 
-Rewritten from scratch against the code. ⚠ The previous file dated from **2026-06-02** (the V1 era) and had
-gone silently stale in the most misleading way: it described `EmberTern.Core` as **17 files** against a real
-**304**, Firebird 12 against 42, App 30 against 274 — i.e. it read as a plausible document while describing a
-different product.
+⭐ **V2 — online activation** remains a **planned next stage**, not a hypothesis, and ⛔ V1 deliberately
+carries no code that only V2 would use (§3). It starts when the user decides it does.
 
-**Scope:** solution shape and the one-way dependency graph · the three connection lanes as the central domain
-boundary · F5 end-to-end · inter-layer communication · shell/theming/commands · the SQL/PSQL front-end and its
-three safety properties · metadata + DDL change safety · debugger and the Fidelity Law · charset guard ·
-`ApplicationSettingsStore` guarantees · localization incl. `ErrorText` · modules · test infrastructure incl. the
-upstream headless race and the guard tests · architectural invariants · deliberate limits.
+⛔ **Two dependency decisions inherited from the audit follow-up's Phase 6**, both test-only, both held
+back for this etap and both resolved as *stay*: **NPOI** stays 2.7.2 (2.8.0 is `OSMFEULA.txt` and demands
+`<AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>` — accepting terms on the owner's behalf), and
+**SixLabors.ImageSharp** stays on the 2.x line NPOI supports (3.0+ moved to the Six Labors Split Licence).
 
-**Validation:** every cited type name checked to exist in `src/`/`tests/` (the only three that do not resolve
-are `IDbProvider` and `IMessenger`, cited precisely as things the project does **not** have, plus
-`tools/probes/CharsetProbe` which is outside `src/`); every referenced document path checked to exist; the file
-counts, the six `IPerformanceRule` implementations and the ten per-object editors re-counted from the tree.
+### Audit follow-up — Phases 5, 6 and 7 ✅ CLOSED, merged, pushed
 
-**Discrepancies found while documenting — recorded, not fixed** (documentation phase, no code touched):
+Charset guard · NuGet to latest stable · `ARCHITECTURE.md` as-built. Narrative moved out of this file on
+2026-08-15: [`history/32-audit-followup-2026-08.md`](history/32-audit-followup-2026-08.md). The rules they
+produced live in `CLAUDE.md` (architecture rule 12, the charset seam) and in `docs/gotchas.md` (#372/#373).
 
-- ⚠ **`MessageBanner` is used by 21 views**, where prior prose said "23".
-- ⚠ **Naming trap around "breadcrumbs".** `CLAUDE.md` lists Breadcrumbs as deliberately unbuilt — true of
-  *editor* breadcrumbs — but `Controls/BreadcrumbBar` **does exist** as the debugger's call-stack breadcrumb.
-  A reader grepping the word finds a real control and concludes the docs are wrong. Written down explicitly in
-  `ARCHITECTURE.md` §16. Editor folding, by contrast, has genuinely zero occurrences.
-- ⚠ **`SourceObjectDetailTabViewModel` is an abstract base**, not an eleventh editor — the "ten per-object
-  editors" count is correct, but a file listing suggests eleven.
-
-### Phase 6 — NuGet update to latest stable ✅ DONE
-
-Target versions taken from nuget.org (`--outdated` + the flat-container API per package), applied in ONE pass;
-nothing pre-release. Full reasoning in commit `8ba4215`.
-
-⭐ **The packages expected to be hard were already current** — `Avalonia` (+Desktop/Themes.Fluent/Fonts.Inter/
-Headless) 12.1.1, `Avalonia.AvaloniaEdit` 12.0.0, `Avalonia.Controls.DataGrid` 12.1.2,
-`FirebirdSql.Data.FirebirdClient` 10.3.4, `CommunityToolkit.Mvvm` 8.4.2, `AvaloniaUI.DiagnosticsSupport` 2.2.3
-are each **the newest stable that exists**. So the two "deliberate mismatches" are **not pins**: no 12.1.x
-AvaloniaEdit and no 12.1.1 DataGrid were ever published.
-
-**Raised (9):** `System.Security.Cryptography.ProtectedData` 9.0.0→10.0.11 (⭐ rule #11 path — closed with 215
-targeted settings/crypto tests; the old "our TFM is net9.0" objection was measured false, 10.0.11 ships a real
-`lib/net9.0`), `System.IO.Packaging` 9.0.18→10.0.11, `System.Security.Cryptography.Xml` 8.0.4→10.0.11,
-`DocumentFormat.OpenXml` 3.1.0→3.5.1, `ExcelDataReader` 3.7.0→3.9.0, `Microsoft.NET.Test.Sdk` 17.11.1→18.9.0,
-`xunit` 2.9.2→2.9.3, `xunit.runner.visualstudio` 2.8.2→4.0.0, `SixLabors.ImageSharp` 2.1.11→2.1.13.
-
-**The one breaking change reaching our code:** OpenXml 3.5.1 annotates `WorkbookPart.Workbook` and
-`WorksheetPart.Worksheet` as nullable, so `XlsxExporterTests`' read-back helpers failed `CS8602`. Adapted, not
-suppressed — ⛔ no `#pragma`, no `NoWarn`. Product code needed no change.
-
-⛔ **Two held back, both TEST-ONLY and both LICENSING — for the licensing etap, not technical limits:**
-**NPOI** stays 2.7.2 (2.7.2 is `Apache-2.0`; **2.8.0 is `OSMFEULA.txt`** and adds a build gate demanding
-`<AcceptNPOIOSMFLicense>true</AcceptNPOIOSMFLicense>` — accepting terms on the owner's behalf).
-**SixLabors.ImageSharp** raised only within the 2.x line NPOI supports; 3.0+ moved to the Six Labors Split
-Licence. ⭐ If NPOI ever reaches 2.8.0+, the ImageSharp override disappears entirely — 2.8.0 renders through
-SkiaSharp.
-
-**Verified:** Debug + Release 0/0; full suite **8 853/8 853** (total unchanged, so nothing left discovery);
-`--vulnerable --include-transitive` zero across all five projects; `--outdated` now lists only the two held.
-
-### Phase 5 — charset guard ✅ CLOSED (implemented, tested, user-verified)
-
-Full narrative is in commit `aa12d9a` and gotchas **#372/#373**; the rule it produced is **architecture rule 12**
-in `CLAUDE.md`. In one paragraph: a character the CONNECTION charset cannot hold was destroyed **client-side, in
-the driver's encoder, before the server saw it** — no exception, no server error. ⚠ The audit's "becomes `?`" was
-incomplete: **330** characters become a *plausible different* one (`£`→`L`, `¼`→`1`, `À`→`A`), so a procedure body
-sent as `R = 'Cena £100 ¼ À'` was stored as `R = 'Cena L100 1 A'` — valid PSQL, wrong number. Reads were already
-safe (the server refuses transliteration loudly), so this was write-side only.
-
-Built as **ONE seam**, `FirebirdCommandGuard`, which every command creation and parameter bind goes through (96
-sites + the import batch), refusing **before** the driver encodes; DDL validates the whole batch **before a
-transaction opens**, so refused source never reaches the server at all. Core owns the oracle
-(`CharsetRepresentation`) and the wire question (`CharsetCatalog.ResolveWireEncoding`); ⛔ `CharsetCatalog.Resolve`
-was deliberately left untouched — it answers a *different* question, and merging them was the live `NONE` defect
-this closed in the shipped import guard. Messages go through localization in both languages, which needed
-`App/Localization/ErrorText.cs` (a refusal is *wrapped*, so the display site was reading the English `Message`).
-
-**Measured:** 8 844/8 844 after the guard, **8 853** after the localization fix; Debug and Release 0/0; live probe
-`tools/probes/CharsetProbe` **15/15** across parameter · F5 · DDL (stored source proven byte-identical after a
-refusal) · import · debugger. Three `CharsetGuardSeamTests` fail the build if a raw `CreateCommand` /
-`CommandText =` / `AddWithValue` reappears — verified red, then green.
-
-⛔ **Still open, deliberately out of Phase 5:** the UX of the read-side "cannot transliterate" message, and whether
-`NONE` should stay in `CharsetCatalog.Supported` (lossy and machine-dependent — gotcha #373).
-
-### Ratified but not started — each with a measured scope
+⛔ **Still open, deliberately out of Phase 5:** the UX of the read-side "cannot transliterate" message, and
+whether `NONE` should stay in `CharsetCatalog.Supported` (lossy and machine-dependent — gotcha #373).
 
 ### Ratified but not started — each with a measured scope
 
@@ -256,6 +204,8 @@ refusal) · import · debugger. Three `CharsetGuardSeamTests` fail the build if 
 | ~~Charset silent data loss~~ | ⏭ **Promoted out of the backlog — it is now Phase 5, the next task.** The formerly unmeasured DDL/source path was measured and IS vulnerable. See §3 "Phase 5". |
 | **Headless session init race** *(upstream — closed on our side)* | ⭐ **Root cause established 2026-08-14 and reproduced deterministically.** `EnsureIsolatedApplication` calls the process-wide `Dispatcher.ResetBeforeUnitTests()` on **every** `Dispatch`; a parallel thread constructing any Avalonia object claims `Dispatcher.UIThread` in that window and the session's `Compositor` then fails `VerifyAccess()`. Probe: **149/150 dispatches fail** with 4 noise threads, **0/150** without. Cost here: **1 test in ~1 run of 3–8**. ⭐ **It is NOT an EmberTern defect** and is identified by the STACK, not the test name. ⛔ **Five repairs measured and rejected** — no warm-up, no `Delay`, no retry, no global parallelism switch-off; do not attempt a sixth. Full evidence, the ready-to-file upstream report and the recognition signature: [`docs/avalonia-headless-session-race.md`](avalonia-headless-session-race.md); the "re-run once" rule is in `CLAUDE.md`. |
 | Activity Monitor / Data Import width at 150 %/175 % DPI | Ratified as debt: both command bars are bare horizontal `StackPanel`s (~1130 DIP) with **no** `ScrollViewer`, so they clip rather than compress. Not a DPI defect — they do not fit at 100 % on 1366×768 either. |
+| **`Icon.Name` nie istnieje — kolumny i zmienne lokalne w completion są bez ikony** | ⚠ **Znalezione 2026-08-16 przez nowy `IconGeometriesSplitTests`, nie spowodowane przez ten etap.** `SqlCompletionData.cs:283,286` prosi o `"Icon.Name"` dla `SqlCompletionKind.Column` i dla lokalnych; jedyne wystąpienie tego klucza w `IconGeometries.axaml` jest **wewnątrz komentarza** pokazującego, jak dodać geometrię. Zmierzone przez odpytanie żywego systemu zasobów, nie przez czytanie pliku. ⛔ Nie naprawione tutaj: wybór glifu dla kolumny to decyzja projektowa do przeglądu użytkownika. Strażnik trzyma to jako **jedyny** wpis `KnownMissing`, z komentarzem, że drugi wpis oznacza błędną regułę, a nie kolejny wyjątek. |
+| **`Calendar*` is not repinned in `FluentBridge`** | ⚠ Measured 2026-08-16: the bridge carries **zero** `Calendar*` keys, so every `CalendarDatePicker` popup in the product shows Fluent's own `SystemAccentColor` — the brown/orange the palette fights everywhere else. Affects EmberTern (`DebuggerTabView`, `ExecuteProcedureDialog`) and, since the L5.1 QA pass, the License Manager. ⛔ Not a License Manager defect and not fixable there: it is work in the product's bridge, for both applications at once. Ratified by the user as its own design-system item. |
 | **B1** — `TableDetailTabView` private icons | PK/FK/Unique drawn with a raw `<Path>` over locally declared geometries on a **14**-unit grid, invisible to three mechanisms at once. Prepared and measured; appearance deliberately unresolved. |
 | **Z‑3** — Table Data row height | A density question; cause must be found first (a taller row may be a deliberate readability decision). |
 | Icon literal tail 10/11/13/15 | A question about roles, not a sweep. |

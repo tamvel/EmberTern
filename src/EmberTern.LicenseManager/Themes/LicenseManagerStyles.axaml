@@ -1,0 +1,934 @@
+﻿<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ============================================================================================
+       The License Manager's own style layer.
+
+       ⛔⛔ IT MAY NOT DEFINE A SINGLE COLOUR. Not a hex literal, not a named colour, not a local
+       <SolidColorBrush>. Every brush painted here is a {DynamicResource} into the linked
+       Colors.axaml, which is EmberTern's own palette — that is the entire reason the token files are
+       linked rather than copied, and LicenseManagerThemeTests fails the build if it stops being true.
+
+       ⚠ WHY THIS FILE EXISTS AT ALL, given that EmberTern already has ControlStyles.axaml: that file
+       cannot be linked. It binds to EmberTern.App.Controls, AvaloniaEdit and DataGrid (see the
+       csproj). So the split is not "two palettes", it is "one palette, two style layers" — and the
+       rule above is what keeps the distinction real rather than aspirational.
+
+       ⭐ RULE 10 FROM CLAUDE.md APPLIES HERE TOO: a control's size comes from its CONTEXT, never from
+       its variant. There is deliberately NO MinHeight on the base Button style; heights live on the
+       variants and on the containers that declare what their children may be.
+       ============================================================================================ -->
+
+  <!-- ── Identity ────────────────────────────────────────────────────────────────────────────── -->
+
+  <!-- ⭐⭐ THE OS ICON EVERY WINDOW CARRIES COMES FROM **ONE** SETTER — the same rule, and the same
+       shape of rule, that `CLAUDE.md` states for EmberTern ("⛔ do not set `Icon` per window"). A window
+       that sets its own icon is a window that will one day be the only one without it.
+
+       ⭐ It is EmberTern's OWN icon, linked from `EmberTern.App/Assets/Branding/` rather than copied
+       (see the csproj): the License Manager is the same product's admin side, not a second brand, and
+       nothing here designs an alternative mark. The .ico is multi-resolution, so Windows picks the size
+       it needs for the title bar, for Alt+Tab and for the taskbar; it is theme-independent by nature —
+       an .ico carries its own artwork and is not repainted by our palette, in either theme. -->
+  <Style Selector="Window">
+    <Setter Property="Icon" Value="avares://EmberTern.LicenseManager/Assets/Branding/EmberTernLicenseManager.ico" />
+  </Style>
+
+  <!-- ── Text roles ──────────────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ A TYPOGRAPHY ROLE IS SIZE + WEIGHT + **LINE HEIGHT**, and the third one is the vertical
+       rhythm. Typography.axaml states it in its header ("rola to nie rozmiar pisma — to komplet") and
+       gives every role a `.LineHeight` on purpose. L3 consumed two thirds of each role and left line
+       height to Avalonia's per-font default, which is where the ragged vertical rhythm in the first
+       user review came from: every text block sat on a slightly different baseline grid. -->
+
+  <Style Selector="TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Ui}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Application.LineHeight}" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style Selector="TextBlock.h1">
+    <Setter Property="FontSize" Value="{DynamicResource Text.DialogHeader.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.DialogHeader.Weight}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.DialogHeader.LineHeight}" />
+  </Style>
+
+  <!-- ⭐⭐ `Text.Display` (23) — and Typography.axaml states its whole contract in its own comment:
+       "WYŁĄCZNIE OKNO ABOUT… rola istnieje po to, żeby nikt nie sięgnął po tę skalę »bo trzeba coś
+       wyróżnić«". So this class exists to have exactly ONE consumer, the product name on the About
+       window, and ⛔ a second consumer means the rule was broken rather than the catalog extended.
+       ⚠ It is not a second use of the product's own single use: that comment is about EmberTern.App, and
+       this is an About window too — which is precisely the sanctioned use of the role. -->
+  <Style Selector="TextBlock.display">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Display.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.Display.Weight}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Display.LineHeight}" />
+  </Style>
+
+  <Style Selector="TextBlock.section">
+    <Setter Property="FontSize" Value="{DynamicResource Text.SectionHeader.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.SectionHeader.Weight}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.SectionHeader.LineHeight}" />
+  </Style>
+
+  <!-- A form caption. Subtle on purpose: the VALUE is the content, the caption is the scaffolding.
+       ⚠⚠ `Text.Application`, NOT `Text.Caption` — this mirrors EmberTern's own `TextBlock.field-label`
+       setter for setter. L3 shipped it on `Text.Caption` (10 px), which is the smallest grade in the
+       product and is reserved for a shortcut chip and a secondary hint. Two grades below the value it
+       names made the whole form read as fine print, and it is the second half of the rhythm complaint.
+       ⭐ The caption is separated from its own field by `Margin.LabelGap` (2) while fields are separated
+       from each other by `Margin.FieldGap` (8): that inequality IS the proximity rule — if the two are
+       equal or inverted, the eye attaches the caption to the field ABOVE it. -->
+  <Style Selector="TextBlock.field-label">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Application.LineHeight}" />
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+    <Setter Property="Margin" Value="{DynamicResource Margin.LabelGap}" />
+  </Style>
+
+  <!-- ══ THE WORDMARK (L9) ═══════════════════════════════════════════════════════════════════════
+       ⭐⭐ The application's name in the title strip, and the ONE place this application shows its
+       identity as a mark rather than as a label. It is deliberately typographic and ⛔ NOT a bitmap:
+       the product removed its own titlebar mark on 2026-08-01 with the reason recorded in BRANDING.md
+       ("a working surface's chrome belongs to the document, and the identity belongs in About"), and a
+       wordmark keeps that decision intact while still reading as a product rather than as a caption.
+       The logo lives in About, which is where L9.1 put it.
+
+       ⭐ THREE carriers of "brandedness", and not one of them is "a bigger font":
+         1. COLOUR — `Ember`|`Tern` split in two tones, the warm half on `BrandEmberBrush`;
+         2. WEIGHT — SemiBold name against a Normal descriptor;
+         3. GRADE + TRACKING — `Text.Title` (14) against `Text.Compact` (11), plus a little tracking.
+
+       ⚠⚠ ONE `TextBlock` WITH THREE `Run`s, not two blocks side by side — and the reason is baselines.
+       Two blocks at 14 and 11 with different line heights align by BOX, not by baseline, so the
+       descriptor sits visibly off the name's foot; inline runs share one baseline for free. ⛔ The cost
+       is accepted knowingly: `LetterSpacing` is a `TextBlock` property, not a `Run` one, so the tracking
+       below applies to the whole mark rather than to the descriptor alone.
+
+       ⚠ `TextWrapping="NoWrap"` is LOAD-BEARING, not tidiness: the implicit `TextBlock` style at the top
+       of this file sets `Wrap`, and a wordmark that wraps inside a `Size.TitleBar` strip is clipped
+       rather than wrapped.
+
+       ⚠ `LetterSpacing` has no token role and gets a local value with its reason: the catalog names
+       spacing BETWEEN elements, and tracking WITHIN a word is not that. Writing `Space.Hair` here would
+       be a wrong role, which is worse than the local value (product-polish R12).
+       ══════════════════════════════════════════════════════════════════════════════════════════════ -->
+  <Style Selector="TextBlock.wordmark">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Title.Size}" />
+    <Setter Property="FontWeight" Value="{DynamicResource Text.Title.Weight}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Title.LineHeight}" />
+    <Setter Property="LetterSpacing" Value="0.4" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+  </Style>
+
+  <!-- A secondary hint. ⭐ THIS is what `Text.Caption` is for — the smallest grade, carrying something
+       the operator may read rather than must. -->
+  <Style Selector="TextBlock.hint">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Caption.LineHeight}" />
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <!-- ⚠⚠ `:is(TextBlock)` so the role also reaches `SelectableTextBlock`, which derives from it.
+       Avalonia's type selectors match the EXACT type, so plain `TextBlock.mono` silently missed every
+       generated identifier in this application — the customer id, the licence id, the validity, the
+       signing key, the token and the payload preview are all `SelectableTextBlock Classes="mono value"`,
+       and all eight have been rendering in the UI font since L5.1. ⭐ The failure is completely silent:
+       the class is accepted, nothing warns, and only reading `FontFamily` back off the realised control
+       shows it. EmberTern's own `ControlStyles.axaml` already carries this fix, with this reason, on
+       `.subtle` and `.error`; this file had not inherited it.
+       ⛔ Pinned by `StorageWindowTests.TheStoredPathsActuallyRenderInTheCodeFont`. -->
+  <Style Selector=":is(TextBlock).mono">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Code}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Code.Size}" />
+  </Style>
+
+  <!-- ⭐⭐ A GENERATED VALUE — read-only by nature, and it must LOOK it.
+       `SelectableTextBlock` derives from `TextBlock`, so the base role above already applies; this adds
+       only the standing of a value that sits where a field would.
+
+       ⚠ The alternative it replaces was `<TextBox IsReadOnly="True">`, i.e. a field with its editing
+       quietly switched off. That is the worst of both: the box, the border and the caret target all
+       invite typing, and the control silently refuses. A value plus a copy action states the same fact
+       without the invitation — and copying is what the operator actually wanted from it. -->
+  <Style Selector="SelectableTextBlock.value">
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Margin" Value="{DynamicResource Margin.LabelGap}" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+  </Style>
+
+  <!-- ⭐⭐ L5.2 · THE "CURRENT" MARK ON AN ISSUING HISTORY — and the reason it is a mark on ONE row
+       rather than a treatment of the others.
+
+       The operator's question behind the whole history panel is *"did re-issuing overwrite what I sent
+       them before?"*, and the answer is no — `issued_artifacts` refuses UPDATE and DELETE at the database
+       (§39.2). ⛔⛔ So an earlier issue MUST NOT be presented as removed, greyed out, struck through or
+       disabled: it was really delivered, to a real customer who may still be running it, and the
+       append-only guarantee exists precisely so the register can still answer for it.
+
+       ⭐ Hence the asymmetry is ADDITIVE: the current artifact gains a chip; every other row keeps the
+       full-strength `ForegroundBrush` its content would have had anyway, and says the word "superseded"
+       in the same subtle grade any secondary fact uses. Nothing is taken away from a superseded row.
+       `ArtifactHistoryTests` measures exactly that — the earlier row's content brush equals the current
+       row's, and its opacity is 1.
+
+       ⚠ `ConnectedBrush`, not `AccentBrush`: this is a state ("this is the live one"), which is the role
+       Colors.axaml names that token for, and it keeps the chip from competing with the primary action. -->
+  <Style Selector="Border.current-chip">
+    <Setter Property="Background" Value="{DynamicResource ConnectedBrush}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Chip}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.CellCompact}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Border.current-chip TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Caption.Size}" />
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Caption.LineHeight}" />
+  </Style>
+
+  <!-- ── Surfaces ────────────────────────────────────────────────────────────────────────────── -->
+
+  <!-- A side rail: the panel colour, separated from the document by ONE rail border. -->
+  <Style Selector="Border.rail">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.Rail}" />
+  </Style>
+
+  <Style Selector="Border.chrome">
+    <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.Bottom}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Panel}" />
+  </Style>
+
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Group}" />
+  </Style>
+
+  <!-- ── A command row ───────────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ EVERY CONTROL IN A COMMAND ROW STANDS ON THE ACTION LADDER, and that follows the tokens'
+       own written contract rather than overriding it.
+
+       `Tokens.axaml` keeps TWO independent ladders and says what separates them: `Size.Control` (24)
+       describes a control standing in a SERIES, "gdzie liczy się wyrównanie i gęstość" — the filter
+       card's four fields, the licence form's Seats and two dates. `Size.ControlProminent` (28)
+       describes one standing ALONE, "w którą użytkownik celuje świadomie i często", and its own
+       comment records a button AND a text field as the two consumers known when it was added.
+
+       The batch card's row is not a series: a date and a note stand alone beside three buttons, each
+       one a target the operator aims at on purpose. Measured before this style: picker 24, note 24,
+       three buttons 28 — one row, two ladders, which is what the QA report showed.
+
+       ⛔ Scoped to the ROW, never to `CalendarDatePicker`: the licence form's two pickers ARE a series
+       and stay at 24, which `LicenseControlSizeTests` measures on exactly those two. Injecting the
+       GLOBAL change — the existing `CalendarDatePicker` setter moved to 28 — turns those tests red, which
+       is what proves the rule is load-bearing rather than decorative.
+
+       ⚠ One injection that did NOT prove it, recorded so nobody repeats it and draws the wrong
+       conclusion: rewriting the selector below as a bare `CalendarDatePicker` left every test GREEN. Not
+       because the scoping is unnecessary — because a second GENERIC rule declared here, ABOVE the
+       `CalendarDatePicker` style further down this file, simply loses to it. A vacuous injection says
+       something about the injection, not about the code (#378).
+       ⛔ DIRECT children only. A descendant selector would also reach `PART_TextBox` inside the
+       picker's own template, whose `MinHeight` is deliberately 0 so the picker can own its height —
+       and undoing that is measured to leave the field rendering 26 while asking for 24. -->
+  <Style Selector="Grid.command-row > StackPanel > CalendarDatePicker">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+  </Style>
+
+  <Style Selector="Grid.command-row > StackPanel > TextBox">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+  </Style>
+
+  <!-- ── The dialog skeleton ─────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ EmberTern's dialogs are BANDED, and that band structure IS the product's visual language for
+       a window that asks the user for something: a PanelBrush header carrying the h1 and separated by a
+       hairline, a Background body carrying the form, a PanelBrush footer carrying the actions. Read
+       `EmberTern.App/Views/TextPromptDialog.axaml` and `ConfirmDialog.axaml` — both are exactly this.
+       ⚠ L3's Unlock window was a flat StackPanel with a uniform `Spacing`, which is why it did not read
+       as an EmberTern dialog even though every colour in it was correct.
+       ⭐ Here the three bands are CLASSES rather than the literal 20,16 / 20,18 / 20,12 those two views
+       still spell out by hand — the horizontal gutter is one role (`Pad.Dialog`) in all three, so the
+       h1, the fields and the buttons stand on one left edge. -->
+
+  <Style Selector="Border.dialog-header">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.Bottom}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Dialog}" />
+  </Style>
+
+  <Style Selector="Border.dialog-body">
+    <Setter Property="Background" Value="{DynamicResource BackgroundBrush}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Dialog}" />
+  </Style>
+
+  <Style Selector="Border.dialog-footer">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.Top}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Dialog}" />
+  </Style>
+
+  <!-- ⭐ The two vertical gaps a form is built from, as roles rather than as a StackPanel `Spacing`.
+       A uniform `Spacing` cannot express the proximity rule at all: it puts the SAME distance between a
+       caption and its field as between two fields, so the grouping the eye reads is arbitrary. -->
+  <Style Selector="Border.dialog-body TextBox">
+    <Setter Property="Margin" Value="{DynamicResource Margin.FieldGap}" />
+  </Style>
+
+  <!-- ── Message strip ───────────────────────────────────────────────────────────────────────── -->
+  <!-- ⚠ Not EmberTern's MessageBanner: that control lives in EmberTern.App.Controls and cannot be
+       referenced from here. Same JOB, same severities, same rule that a message is never a loose
+       coloured TextBlock — this is the License Manager's ONE message surface. -->
+
+  <!-- ⚠ Padding is ZERO and ClipToBounds is on, and both are load-bearing for the severity stripe: the
+       stripe has to reach the top and bottom edges (padding would inset it into a floating bar) while
+       still being cut by the corner radius. The breathing room moved onto the icon and the text. -->
+  <Style Selector="Border.message">
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+  </Style>
+
+  <!-- ⚠⚠ P1-a REMOVED the `Border.message TextBlock` margin that used to live here (`Pad.Cell`), and the
+       removal is the fix rather than a tidy-up. It gave the TEXT an 8 px left margin while the glyph
+       carried its own 8 px right margin, so glyph→text measured 16 while stripe→glyph measured 0 — two
+       owners contributing to one gap, and neither owning the gap that was actually missing. The inset is
+       now ONE `Pad.Cell` on the content grid inside the strip, and the glyph→text gap is that grid's
+       `ColumnSpacing`. ⛔ Do not restore a margin here: a second owner is exactly what produced the
+       reported result. -->
+
+  <!-- ── Inputs ──────────────────────────────────────────────────────────────────────────────── -->
+  <!-- Metrics only. Colours reach these controls through FluentBridge, which repins FluentTheme's own
+       named resources onto our palette — the pattern CLAUDE.md §16 requires instead of rewriting
+       templates. -->
+
+  <!-- ⭐⭐ `VerticalContentAlignment` IS NOT OPTIONAL HERE — IT IS THE OTHER HALF OF `Pad.Control`.
+       That token is `8,0`: the vertical padding is deliberately ZERO, because a single-line field takes
+       its height from `Size.Control` and Tokens.axaml states the rule that ONE thing must own a size
+       ("padding pionowy w polu tekstowym walczy z wysokością kontrolki i wygrywa ten, który jest
+       większy"). ⚠⚠ But zero padding only centres the text if something else says where the content
+       goes, and the framework default is `Stretch` — which lets the presenter fill the field and puts
+       the text against its TOP edge. L3 copied `Pad.Control` and left this setter behind, so every field
+       in the application had its text and its password dots stuck to the top of the box (user review,
+       2026-08-15, seen in the running application — no test had ever asked).
+       ⭐ EmberTern's own base `TextBox` style carries exactly this setter, for exactly this reason. -->
+  <Style Selector="TextBox">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⭐ …AND A MULTI-LINE FIELD STARTS ITS TEXT AT THE TOP, which is why this setter has to be here the
+       moment the one above exists. Centring is correct for a one-line field and wrong for a box of
+       fifteen lines: it hangs a short note in the middle of the frame, where a text editor is expected.
+       ⚠ EmberTern learned this the same way — its `TextBox[AcceptsReturn=True]` style carries the same
+       two setters, added after a user reported it at the M2c acceptance (§18.11). `Pad.ControlMultiline`
+       has a NON-zero vertical for the matching reason: here the box owns its own height, so the padding
+       is not competing with anything. -->
+  <Style Selector="TextBox.multiline">
+    <Setter Property="Padding" Value="{DynamicResource Pad.ControlMultiline}" />
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="AcceptsReturn" Value="True" />
+    <Setter Property="VerticalContentAlignment" Value="Top" />
+  </Style>
+
+  <Style Selector="TextBox.mono">
+    <Setter Property="FontFamily" Value="{DynamicResource Font.Code}" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Code.Size}" />
+  </Style>
+
+  <Style Selector="ComboBox">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+  </Style>
+
+  <!-- ⭐⭐ P1-b · A CONTROL'S VALUE IS NOT PROSE, SO IT TRIMS RATHER THAN WRAPS — and this is a defect
+       found by the height sweep, not by the user's list.
+
+       ⚠⚠ MEASURED: the "Issuing" filter stood at **34 px** beside two identical dropdowns at 24, and the
+       cause was not the dropdown at all — the `<TextBlock>` inside it had rendered its label on TWO
+       LINES (17 + 17). The base `TextBlock` style at the top of this file sets `TextWrapping="Wrap"`,
+       which is right for a caption, a hint and a message, and reaches into a ComboBox's content
+       presenter as well, where it is wrong: a value that does not fit its box must lose its tail, not
+       gain a row and push its neighbours out of line.
+
+       ⚠ A/B'd before writing it, because P1-a had just narrowed those columns by 8 px and was the
+       obvious suspect: with the filter row reverted to its exact pre-P1-a shape the label still wrapped
+       and the dropdown still measured 34. ⭐ **The defect pre-existed P1-a** — narrowing the column would
+       have made it worse, and hiding behind that would have left a live defect labelled "not mine".
+
+       ⛔ Bounded by WHAT THE TEXT IS, not by which dropdown was seen: any label a ComboBox displays, in
+       the closed box and in the open list, present and future. Fixing only the three filters would have
+       been an exception list with a defect waiting behind it. -->
+  <Style Selector="ComboBox TextBlock, ComboBoxItem TextBlock">
+    <Setter Property="TextWrapping" Value="NoWrap" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+
+  <!-- ⭐⭐ P1-b · THE DATE FIELD JOINS THE FIELD LADDER, and it takes a style setter to do it because
+       Fluent puts it on a different one. MEASURED before writing this: the picker stood at 32 px beside a
+       24 px `Seats`, and `GetDiagnostic(MinHeightProperty)` reported that 32 arriving at priority
+       **Style** — Fluent's own `CalendarDatePicker` setter.
+
+       ⚠⚠ That measurement is the whole point, because §16 records a trap that would have made this
+       impossible: **a setter cannot beat a value the template holds LOCALLY on the element** (measured
+       for `ExpanderMinHeight` and `ScrollBarThumbBackgroundColor`, both of which needed a resource
+       ALIAS instead). Here the value is not local — it is a peer setter, and our style layer is merged
+       into `Application.Styles` AFTER `FluentTheme`, so the later one wins. ⭐ The proof is not an
+       argument, it is standing next to this one: the `TextBox` style above beats Fluent's own 32 by
+       exactly this mechanism, which is why `Seats` measures 24.
+
+       ⛔ NOT `Size.ControlProminent`. Tokens.axaml keeps fields and actions on two independent ladders,
+       and a date here stands in a SERIES with Seats — it is a field, not a conclusion.
+
+       ⚠ It also takes a SECOND style, on the box inside the template — see immediately below, and see
+       why the first version of that one was three-quarters dead. -->
+  <Style Selector="CalendarDatePicker">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Control}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Control}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⭐⭐ …AND THE SETTER ABOVE IS NOT ENOUGH ON ITS OWN. MEASURED: with the picker asking for 24 and
+       nothing else changed, it still stood at **26** — because the base `TextBox` style also reaches
+       `PART_TextBox` inside the template and hands it `MinHeight` 24, which the template then insets by
+       its own 1 px margin. A field cannot be shorter than the field inside it plus two.
+
+       ⭐ So the inner box gives up its own floor and takes the picker's: ONE control, ONE height. With
+       this the row measures 24 / 24 / 24 — Seats and both dates on the same line, which is what P1-b was
+       about.
+
+       ⚠⚠ AND HERE IS §16'S TRAP, WHICH DID SHOW UP — just not where it was expected. A first version of
+       this style also set `Padding` and `BorderThickness` to 0. **Both were measured to change nothing**:
+       Fluent's template hands PART_TextBox those two as TEMPLATE-BOUND LOCAL VALUES, and a local value
+       beats every style setter. They were removed rather than left in looking effective. ⛔ Do not add a
+       setter here without measuring it afterwards — this element is one where three of four silently do
+       nothing, and a dead setter reads exactly like a live one. -->
+  <Style Selector="CalendarDatePicker /template/ TextBox#PART_TextBox">
+    <Setter Property="MinHeight" Value="0" />
+  </Style>
+
+  <!-- ── Buttons ─────────────────────────────────────────────────────────────────────────────── -->
+  <!-- ⛔ No MinHeight / MinWidth on the base Button style — CLAUDE.md's UI rule 10. -->
+
+  <Style Selector="Button">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <!-- ⚠ BOTH alignments, and the vertical one is load-bearing: `Pad.Button` is `12,0`, i.e. the
+         vertical padding is deliberately ZERO because the height comes from `MinHeight`. Without
+         `VerticalContentAlignment=Center` the label is not centred in that height — it sits wherever
+         the content presenter's default puts it. L3 set only the horizontal one. -->
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+  </Style>
+
+  <!-- ⭐⭐ ACTION GEOMETRY — ONE style for BOTH variants, copied from EmberTern's own
+       `<Style Selector="Button.primary, Button.flat">` including its reason: so that a primary and a
+       secondary action standing side by side cannot drift apart.
+
+       ⚠⚠ `Size.ControlProminent` (28), NOT `Size.Control` (24) — this is the single biggest cause of
+       the rhythm the user rejected. Tokens.axaml records the distinction explicitly: **fields and
+       actions are TWO INDEPENDENT LADDERS.** `Size.Control` is a control standing in a SERIES, where
+       alignment and density decide; `Size.ControlProminent` is a control standing ALONE that the user
+       aims at deliberately — "przycisk stopki dialogu (Close, Cancel, OK)". L3 gave the dialog action
+       the height of a form field, so it read as one more row of the form rather than as its conclusion.
+
+       ⚠ `Size.ActionMinWidth` is a FLOOR, not a width: it exists because otherwise the label decides
+       the size, and a short label yields a smaller button than a long one — size carrying information
+       that colour already carries. -->
+  <Style Selector="Button.primary, Button.flat">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlProminent}" />
+    <Setter Property="MinWidth" Value="{DynamicResource Size.ActionMinWidth}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Button}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <!-- ⭐ A LABEL WRITTEN AS AN EXPLICIT `<TextBlock>` CHILD READS ON THE ACCENT FILL, NOT ON THE
+       DOCUMENT. EmberTern carries the identical style, recorded there as a Light-theme defect report:
+       the implicit `Style Selector="TextBlock"` at the top of this file paints `ForegroundBrush`, and a
+       style setter outranks the Foreground a Button hands down by inheritance — so a dark label lands on
+       the blue fill.
+
+       ⚠⚠ MEASURED, AND THE FIRST VERSION OF THIS COMMENT WAS WRONG. It claimed the defect was live in
+       this window. It is not: both actions here use a STRING `Content`, and for those the
+       ContentPresenter sets Foreground as a LOCAL VALUE on the TextBlock it creates — and a local value
+       beats every style setter. Removing this style and re-running the theme tests changed nothing,
+       which is how the error was caught.
+       ⭐ So the style is here for the shape EmberTern's own buttons take — icon + label + shortcut chip
+       as explicit children, which is what every primary button in the product looks like and what the
+       first `Button.primary` in this application with an icon will look like. `AnExplicitLabelInside…`
+       pins exactly that case, and was verified red with this style removed. -->
+  <Style Selector="Button.primary TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <Style Selector="Button.primary:disabled /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource AccentDisabledBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource OnAccentSubtleBrush}" />
+  </Style>
+
+  <Style Selector="Button.flat">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <!-- ⚠ `BorderBrush`, not `ControlOutlineBrush`. The outline token names its own two consumers in
+         Colors.axaml — CheckBox and RadioButton — and exists because an unchecked box has to be findable
+         with nothing inside it. A button already reads as a button; it takes the structural role. -->
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+  </Style>
+
+  <Style Selector="Button.flat:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.flat:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.flat:disabled /template/ ContentPresenter">
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <!-- ⭐ FOCUS — the state L3 had no answer for at all, in either variant. A keyboard user who cannot
+       see where focus is cannot use this window, and the passphrase field is reached by Tab. -->
+  <Style Selector="Button.primary:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
+  <Style Selector="Button.flat:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
+  <!-- A toolbar-height variant: the strip declares what its children may be, not the variant. -->
+  <Style Selector="Border.chrome Button">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+    <!-- ⛔ …and it drops the width FLOOR, because `Size.ActionMinWidth` says in its own comment that
+         chrome does not take it: in a strip the width is the content. Keeping it made the title-strip
+         buttons 100 px wide for a two-word label. `0` is "no floor", not a measurement. -->
+    <Setter Property="MinWidth" Value="0" />
+  </Style>
+
+  <!-- ── Icons ───────────────────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ THE GEOMETRIES ARE EMBERTERN'S OWN, LINKED (csproj) — ⛔ never copied. What could NOT come
+       across is the `SvgIcon` CONTROL, because it lives in `EmberTern.App.Controls` and this application
+       must not acquire that assembly (§12.1). So the render path is reproduced here as STRUCTURE, which
+       is what this file is allowed to hold: the same Viewbox → 24×24 Canvas → stroked Path that
+       `SvgIcon`'s ControlTheme builds, setter for setter.
+
+       ⚠ STROKE, not Fill, and that is not a preference: the geometries are Lucide — 24×24, stroke-based,
+       2 px, round caps and joins. Avalonia's built-in `PathIcon` FILLS its data, so it renders a Lucide
+       glyph as a smeared blob. A fixed 24×24 canvas inside a Uniform Viewbox is what keeps stroke weight
+       identical across icons whose actual bounds differ.
+
+       ⭐ Colour flows through `Foreground` on the containing control, exactly as in EmberTern — ⛔ never
+       baked into the geometry. -->
+
+  <Style Selector="Viewbox.icon">
+    <Setter Property="Width" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Stretch" Value="Uniform" />
+  </Style>
+
+  <Style Selector="Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+  </Style>
+
+  <!-- ⚠ A disabled icon button must dim its GLYPH, not just its (absent) label — the stroke is the whole
+       content, so without this an unavailable action looks available. -->
+  <Style Selector="Button.icon:disabled Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <!-- An icon-only action. ⚠ Mirrors EmberTern's `Button.icon`: chrome height, and NO width floor —
+       its width is the icon (`Size.ActionMinWidth` says in its own comment that chrome does not take it). -->
+  <Style Selector="Button.icon">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.ControlToolbar}" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.ButtonIcon}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <Style Selector="Button.icon:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <Style Selector="Button.icon:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <Style Selector="Button.icon:disabled">
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.icon:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
+  <!-- ── Window caption buttons ──────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ The License Manager now draws its OWN window chrome, exactly as EmberTern does. Before this,
+       Windows drew a title bar saying "EmberTern License Manager" and the application drew a second bar
+       saying the same thing directly beneath it — two bars that looked like they belonged to two
+       different programs.
+
+       ⚠ Mirrors EmberTern's `Button.caption` setter for setter, including the two that look like
+       omissions: `CornerRadius` 0 and `Padding` 0 are RESETS, not roles — a caption button is a full-bleed
+       hit target that must reach the window's very corner, which is where a user throws the pointer to
+       close a maximised window. The 46 width is Windows' own caption metric. -->
+
+  <Style Selector="Button.caption">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+    <Setter Property="Width" Value="46" />
+    <Setter Property="Height" Value="{DynamicResource Size.TitleBar}" />
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
+  <Style Selector="Button.caption:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+
+  <!-- ⚠ Close is the one caption button with its own colour, and it is the Windows convention rather
+       than a decision of ours — `CloseButtonHoverBrush` exists in both dictionaries for exactly this. -->
+  <Style Selector="Button.caption.close:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource CloseButtonHoverBrush}" />
+  </Style>
+
+  <Style Selector="Button.caption.close:pointerover Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource OnAccentBrush}" />
+  </Style>
+
+  <!-- ── The view switch ─────────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ TWO BUTTONS CARRYING A `.active` CLASS, NOT A `TabControl`, and the reason is the one L3
+       recorded for declining a date picker: a templated control is the largest theming surface this
+       application can take on, and `ControlStyles.axaml` — where EmberTern's own `TabItem.bottom-tab`
+       and `TabItem.sub-tab` live — is NOT linkable (it binds to AvaloniaEdit, DataGrid and
+       EmberTern.App.Controls; see the csproj). A `TabControl` here would fall back to Fluent's own
+       `TabItem`, i.e. a fresh set of normal / hover / selected / disabled / focus decisions to repin,
+       introduced for a two-item switch.
+
+       ⭐ The switch still reads as tabs because it takes the TAB VOCABULARY the token layer already has
+       — `Size.Row.Tab`, `Pad.Tab`, `Radius.Tab` — so if that vocabulary ever changes, this moves with
+       EmberTern's real tabs instead of drifting away from them.
+
+       ⚠ The strip is its own container and NOT nested in `Border.chrome`, deliberately: `Border.chrome
+       Button` already declares a toolbar height for its children, and two context styles racing over
+       one button is decided by declaration order rather than by intent. -->
+
+  <Style Selector="Border.view-switch">
+    <Setter Property="Background" Value="{DynamicResource PanelBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.Bottom}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Panel}" />
+  </Style>
+
+  <!-- The strip declares what its children may be — CLAUDE.md UI rule 10. -->
+  <Style Selector="Border.view-switch Button">
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Tab}" />
+    <!-- ⛔ No width floor: in a strip the width is the content, exactly as in `Border.chrome Button`. -->
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.Tab}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Tab}" />
+  </Style>
+
+  <Style Selector="Button.view-tab">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+
+  <!-- ⭐ `SurfaceRaisedBrush`, not `SelectionBrush`: the token cheat-sheet names "the selected tab" as
+       one of this role's own consumers — a tab that is current FLOATS above the strip it sits in, which
+       is a different job from a row being picked out of a list, and in Light the two are opposites. -->
+  <Style Selector="Button.view-tab.active /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.view-tab:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <!-- ⚠ Without this, hovering the CURRENT tab repaints it as an inactive one being hovered — the
+       selected state silently disappearing under the cursor. -->
+  <Style Selector="Button.view-tab.active:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="Button.view-tab:focus-visible /template/ ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource FocusBorderBrush}" />
+  </Style>
+
+  <!-- ── Lists ───────────────────────────────────────────────────────────────────────────────── -->
+
+  <Style Selector="ListBox">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+
+  <Style Selector="ListBoxItem">
+    <Setter Property="Padding" Value="{DynamicResource Pad.Cell}" />
+    <Setter Property="MinHeight" Value="{DynamicResource Size.Row.Tree}" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+  </Style>
+
+  <!-- ⛔ FluentTheme paints selection from SystemAccentColor — brown/orange on a default Windows
+       install, which is not this palette. Repinned here rather than re-solved with a literal. -->
+  <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <Style Selector="ListBoxItem:selected:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <!-- ── Grids ───────────────────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ EVERYTHING ABOUT HOW THE GRID LOOKS COMES FROM `Themes/DataGridStyles.axaml` — EmberTern.App's
+       own file, LINKED rather than copied (see the csproj and App.axaml). Row height, header height, cell
+       padding, zebra rows, selection over zebra, hover, header chrome and the focus ring are all defined
+       exactly once, for both applications. ⛔ Do not restate any of them here: a local value would make
+       this window drift from EmberTern's grids silently, which is the one thing the link exists to stop.
+
+       ⚠ The two setters below are not appearance, they are CONTAINMENT — the grid stands inside a
+       `Border.card`, which already draws the surface and the frame. Left at Fluent's defaults the card
+       would show a second background inside its own and a second border just inside its own.
+       ⭐ Both values are ZERO / Transparent, i.e. "none": the same standing `Transparent` has among
+       colours, and neither is a metric a token names. -->
+  <Style Selector="DataGrid">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+
+  <!-- ⚠⚠ A GRID CELL IS ONE LINE, AND THIS APPLICATION HAS TO SAY SO — measured, not assumed.
+       The implicit `TextBlock` style at the top of this file sets `TextWrapping="Wrap"`, which is right
+       for a form and catastrophic in a grid: a customer name in a 140 px column wrapped to three lines,
+       every cell measured 57 px instead of 20, and the licence rows came out TALLER than the ListBox they
+       replaced. ⚠ Nothing about it looked like a wrapping bug — the row was simply the wrong height.
+
+       ⭐ So the rule is stated POSITIVELY (rule 11): a cell shows ONE line, and a value too wide for its
+       column loses its TAIL rather than its meaning. Ellipsis rather than a hard clip, because a name cut
+       mid-glyph reads as a shorter, different, wholly plausible name.
+       ⚠ EmberTern needs neither setter: it has no application-wide wrap, so its cells are single-line by
+       default. This is not a second standard — it is this application undoing its own form default at the
+       one place a form default does not belong. -->
+  <!-- ⚠ BOTH halves of the grid, and the second was found by measurement rather than by reasoning: with
+       the cells fixed the ROW came out right and the HEADER was still 57 px, because "Licence id" wrapped
+       inside its own 140 px column and every other header was stretched to match it. A header that wraps
+       is the same defect one line higher up. -->
+  <Style Selector="DataGridCell TextBlock">
+    <Setter Property="TextWrapping" Value="NoWrap" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <!-- ⭐ COMPLETING THE ROLE THE SHARED FILE STARTS. `DataGridStyles.axaml` puts `Text.Grid.Size` and
+         `Text.Grid.Weight` on the cell, and the cell inherits both down to this TextBlock — but
+         `LineHeight` is a TextBlock property, so it cannot travel that way, and left unset the block
+         falls back to `Text.Application.LineHeight` from the implicit style at the top of this file. That
+         is the FORM's line height inside a grid: measured, it is the difference between a 24 px row and
+         the 21 px the grid role actually asks for. A role is family + size + weight + line height, or it
+         is not the role (Typography.axaml says so in its own header). -->
+    <Setter Property="LineHeight" Value="{DynamicResource Text.Grid.LineHeight}" />
+  </Style>
+
+  <Style Selector="DataGridColumnHeader TextBlock">
+    <Setter Property="TextWrapping" Value="NoWrap" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <!-- ⚠ The HEADER's own role, not the cell's — they are two roles in the catalog even where the
+         numbers currently agree, and `Text.GridHeader` is the one that carries SemiBold. -->
+    <Setter Property="LineHeight" Value="{DynamicResource Text.GridHeader.LineHeight}" />
+  </Style>
+
+  <!-- ── Message severity ────────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ DECLARED LAST ON PURPOSE. Avalonia resolves competing setters by DECLARATION ORDER, not by
+       specificity, so these must come after `Viewbox.icon > Canvas > Path` — which paints every icon
+       `ForegroundBrush` — or the severity glyph would silently be neutral.
+
+       ⚠ Severity is carried by the STRIPE, the GLYPH and the TEXT together. It used to be carried by the
+       border colour alone, which in Light is a hairline against a panel that is nearly the document
+       colour — the state was technically present and practically invisible. -->
+
+  <Style Selector="Border.message.info Border.severity-stripe">
+    <Setter Property="Background" Value="{DynamicResource AccentMutedBrush}" />
+  </Style>
+  <Style Selector="Border.message.success Border.severity-stripe">
+    <Setter Property="Background" Value="{DynamicResource ConnectedBrush}" />
+  </Style>
+  <Style Selector="Border.message.warning Border.severity-stripe">
+    <Setter Property="Background" Value="{DynamicResource WarningBrush}" />
+  </Style>
+  <Style Selector="Border.message.error Border.severity-stripe">
+    <Setter Property="Background" Value="{DynamicResource ErrorBrush}" />
+  </Style>
+
+  <Style Selector="Border.message.info Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource AccentMutedBrush}" />
+  </Style>
+  <Style Selector="Border.message.success Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource ConnectedBrush}" />
+  </Style>
+  <Style Selector="Border.message.warning Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource WarningBrush}" />
+  </Style>
+  <Style Selector="Border.message.error Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource ErrorBrush}" />
+  </Style>
+
+  <!-- ⚠ Info keeps DOCUMENT text: it is the one severity that is not a warning, and colouring ordinary
+       information would make every routine confirmation read as an event. -->
+  <Style Selector="Border.message.info TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+  <Style Selector="Border.message.success TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource ConnectedBrush}" />
+  </Style>
+  <Style Selector="Border.message.warning TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource WarningBrush}" />
+  </Style>
+  <Style Selector="Border.message.error TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource ErrorBrush}" />
+  </Style>
+
+  <!-- ── A disclosure header ─────────────────────────────────────────────────────────────────── -->
+  <!-- ⭐⭐ CHEVRON + TITLE, AND NO `Expander` — the idiom the product already uses for its own folding
+       sections (`DataImportTabView`'s format options, whose comment names the debugger launch panel as
+       where it came from). ⛔ An `Expander` is a templated control with its own header, its own toggle
+       glyph and its own animation: a new theming surface for a job a `Button` and a `bool` already do,
+       and §60.8 refused it once already for the report's detail toggle.
+
+       ⚠ It is a whole-width BUTTON rather than a clickable `Border`: a panel that folds is an ACTION, so
+       it has to be reachable from the keyboard and has to show a focus ring like every other action. A
+       `Border` with a pointer handler would be neither.
+
+       ⭐ It carries no colour and no height of its own — `Button.flat` already says what a low-emphasis
+       action looks like; this only says that this one fills its row and reads left-to-right. -->
+  <Style Selector="Button.disclosure">
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.CellCompact}" />
+  </Style>
+
+  <!-- ⚠ The chevron stands BESIDE A SECTION TITLE, so it takes the row ladder (`Size.Icon`) rather than
+       the action one — the same call the product's own disclosure records. -->
+  <Style Selector="Button.disclosure Viewbox.icon">
+    <Setter Property="Width" Value="{DynamicResource Size.Icon}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon}" />
+  </Style>
+
+  <!-- ── The bulk send: the bar, and the four outcomes ───────────────────────────────────────── -->
+  <!-- ⭐⭐ THE BAR IS TIED TO A REAL NUMBER AND TO NOTHING ELSE (§60.8 B, and the user said it twice).
+       `Maximum` is the count of messages that will be ATTEMPTED and `Value` is the count of attempts that
+       have FINISHED, so the bar stands still during the pacing between two messages — honestly, with the
+       line beneath it saying why. ⛔⛔ `IsIndeterminate` is never set, anywhere: an animation that moves
+       while nothing is happening is a progress bar that lies, and the whole reason this card exists is
+       that a bulk send must not overstate itself.
+
+       ⚠ A SEPARATE ROLE from EmberTern's `ProgressBar.status` (§60.1 note 6), which is a 4 px indicator in
+       the window's chrome. This one sits inside a card, in the document, and is the thing the operator is
+       actually watching. ⭐ Nothing here defines a colour: `AccentBrush` and `ChromeStrongBrush` are the
+       existing tokens, and `Colors.axaml` already repins `SystemAccentColor`, so Fluent's own parts land
+       in our blue rather than in a Windows accent. -->
+  <Style Selector="ProgressBar.run">
+    <!-- ⚠⚠ MinWidth/MinHeight = 0 are LOAD-BEARING, not tidiness: Avalonia clamps by them and Fluent gives
+         `ProgressBar` its own minimum, so without these the height below is silently ignored. The same
+         trap that grew EmberTern's metadata-tree arrow from 20 px to 100. -->
+    <Setter Property="MinWidth" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+
+    <!-- ⚠ `8` LOCALLY AND DELIBERATELY, exactly as EmberTern's `ProgressBar.status` keeps its own `4`:
+         the catalog has no role for the THICKNESS of an indicator, and the only token at this number is
+         `Space.Md`, a gap. Borrowing a spacing role for a thickness is the wrong role, which R12 records
+         as worse than the local value it would replace — a local value is visible as debt, a wrong role
+         pretends the debt is gone. ⭐ Thicker than the chrome indicator's 4 on purpose: this one is the
+         subject of the screen rather than a corner of it. -->
+    <Setter Property="Height" Value="8" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Background" Value="{DynamicResource ChromeStrongBrush}" />
+  </Style>
+
+  <!-- ⭐ FOUR outcomes, four rules, and each names its own token rather than aliasing a neighbour's.
+       ⚠ Two of them resolve to the same brush TODAY, and that is a shared value rather than a
+       dependency: "deliberately not attempted" and "the run never reached it" are different facts about a
+       licence, and the day one of them earns its own colour the other must not follow it.
+       ⚠⚠ STROKE, never Fill — the geometries are Lucide, stroke-based (see `Viewbox.icon` above), and
+       these rules come AFTER the neutral one in this file, which is what makes them win: Avalonia settles
+       equally-specific selectors by document order. -->
+  <Style Selector="StackPanel.sent Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource ConnectedBrush}" />
+  </Style>
+  <Style Selector="StackPanel.failed Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource ErrorBrush}" />
+  </Style>
+  <Style Selector="StackPanel.skipped Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+  <Style Selector="StackPanel.stopped Viewbox.icon > Canvas > Path">
+    <Setter Property="Stroke" Value="{DynamicResource SubtleForegroundBrush}" />
+  </Style>
+
+  <!-- ⚠ The row's icon is a STATUS GLYPH in a list, not a toolbar action, so it takes the row ladder
+       (`Size.Icon`) rather than the action one. ⭐ Scoped to a report row: `Viewbox.icon` elsewhere in this
+       application is an action or a severity glyph and keeps its own size. -->
+  <Style Selector="ListBox.report Viewbox.icon">
+    <Setter Property="Width" Value="{DynamicResource Size.Icon}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon}" />
+  </Style>
+
+</Styles>

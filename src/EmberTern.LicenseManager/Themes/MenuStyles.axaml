@@ -1,0 +1,119 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- ================================================================================================
+       THE MENU APPEARANCE — a REPRODUCTION of EmberTern's, not a link, and not an invention.
+
+       ⭐⭐ Why this file exists at all. The License Manager gained a hamburger menu (L6.1a) and had
+       ZERO menu styling — no `ContextMenu`, no `MenuItem`, no `Separator`, and no menu anywhere in the
+       application. Without these, Avalonia falls back to FluentTheme's own: 27 px rows, 14 pt type, and
+       hover/selection painted from `SystemAccentColor` — the brown/orange the palette fights everywhere
+       else (CLAUDE.md styling rule 6). That is the identical situation §40.2 recorded when it declined a
+       `TabControl` for the view switch.
+
+       ⚠⚠ THE HONEST STATUS: this is a COPY, and a copy drifts. The project's own answer to that problem
+       twice — `IconGeometries.axaml` (L5.1) and `DataGridStyles.axaml` (L5.4) — was to SPLIT the block
+       out of `EmberTern.App` and LINK it, and that remains the better move. It was measured and offered:
+       the source block is type-free, token-only and sits at the very END of `ControlStyles.axaml`, so the
+       split is a clean cut of the file's tail. ⛔ The user ratified the copy instead (decision D‑7 = B)
+       to keep `EmberTern.App` closed during this stage.
+
+       ⭐ SO THE DRIFT IS GUARDED INSTEAD: `MenuStyleDriftTests` compares this file against
+       `src/EmberTern.App/Themes/ControlStyles.axaml` selector by selector and setter by setter, resolving
+       tokens to their values first. It fails if a setter here disagrees with EmberTern's, if EmberTern
+       gains a menu selector this file has not decided about, or if this file invents one of its own.
+       ⛔ Do not "fix" a failure there by editing the expectation — the point is that the two must agree.
+
+       ── The two deliberate differences, both recorded so the guard can allow exactly them ──
+
+       1. ⛔ `MenuItem /template/ TextBlock#PART_InputGestureText` is NOT reproduced. It styles the
+          keyboard-gesture column, and the License Manager has no command registry, no gesture vocabulary
+          and no menu row that shows one. Copying it would be carrying chrome for a surface that does not
+          exist — and gotcha #233's dead-surface trap is exactly that.
+
+       2. ⭐ Two literals in EmberTern's block are written HERE AS THE TOKENS THAT ALREADY NAME THEM, at
+          identical rendered values: `Pad.MenuItem` IS `10,3` and `Border.All` IS `1` (both measured in
+          `Tokens.axaml`). ⚠ That is not a cosmetic improvement — this application's
+          `LicenseManagerThemeTests.NoMetricIsWrittenAsALiteralWhereATokenNamesIt` has no per-file
+          allowance list, so it is STRICTER than the guard EmberTern applies to its own file, and a
+          verbatim copy would fail the build.
+
+       ⚠ The five remaining literals have no token and deliberately do not gain one: inventing a
+       `Thickness` role for one element would be starting the ratified spacing stage through the back
+       door, which `SettingsWindow.axaml` in EmberTern refuses in those exact words. They are listed with
+       their reasons in the theme guard's allowance table.
+       ================================================================================================ -->
+
+  <Style Selector="ContextMenu">
+    <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="BorderThickness" Value="{DynamicResource Border.All}" />
+    <!-- ⚠ 4 stays, DELIBERATELY, and EmberTern carries the same note: a context menu floats above the
+         content, while `Radius.Surface` is 3. ⛔ Not `Radius.Chip` or `Radius.Tab` — both happen to be 4
+         today, and borrowing an unrelated role because its number matches is how a role stops meaning
+         anything. The open question "floating surface: 3 or 4?" belongs to product-polish §13.3. -->
+    <Setter Property="CornerRadius" Value="4" />
+    <!-- A 4px band top and bottom so the first and last row do not touch the border. -->
+    <Setter Property="Padding" Value="0,4" />
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+  </Style>
+
+  <Style Selector="ContextMenu, MenuItem">
+    <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+  </Style>
+
+  <!-- The row. 12px type and a symmetric 3px vertical pad bring a row from Fluent's 27px to ~22px
+       without crowding the text; MinHeight keeps an icon-less row exactly as tall as one with an icon. -->
+  <Style Selector="MenuItem">
+    <Setter Property="FontSize" Value="{DynamicResource Text.Application.Size}" />
+    <Setter Property="Padding" Value="{DynamicResource Pad.MenuItem}" />
+    <Setter Property="MinHeight" Value="22" />
+  </Style>
+
+  <Style Selector="MenuItem /template/ Border#PART_LayoutRoot">
+    <Setter Property="CornerRadius" Value="{DynamicResource Radius.Surface}" />
+    <Setter Property="Margin" Value="3,0" />
+  </Style>
+
+  <!-- Hover / open-submenu / pressed. One calm wash from the app's palette; never SystemAccentColor. -->
+  <Style Selector="MenuItem:pointerover /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource HoverOverlayBrush}" />
+  </Style>
+  <Style Selector="MenuItem:selected /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+  <Style Selector="MenuItem:pressed /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="{DynamicResource SelectionBrush}" />
+  </Style>
+
+  <!-- ⭐⭐ A disabled item still has to be READABLE — and in this application that is load-bearing rather
+       than a nicety: `About` ships as a deliberate disabled placeholder (D‑8's sibling decision), so the
+       disabled state is not an edge case here, it is a row the operator sees on every open. Fluent's
+       default fades it close to invisible. -->
+  <Style Selector="MenuItem:disabled /template/ Border#PART_LayoutRoot">
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="MenuItem:disabled">
+    <Setter Property="Foreground" Value="{DynamicResource SubtleForegroundBrush}" />
+    <Setter Property="Opacity" Value="0.75" />
+  </Style>
+
+  <!-- The icon column: a fixed 14px box so every mark reads at one size regardless of its geometry's
+       proportions, with breathing room before the label. -->
+  <Style Selector="MenuItem /template/ ContentControl#PART_IconPresenter">
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="14" />
+    <Setter Property="Margin" Value="0,0,4,0" />
+  </Style>
+
+  <!-- Separator: a hairline that spans the menu, with equal air above and below. Scoped to menus so a
+       Separator used elsewhere is untouched. -->
+  <Style Selector="ContextMenu > Separator, MenuItem > Separator">
+    <Setter Property="Background" Value="{DynamicResource BorderBrush}" />
+    <Setter Property="Height" Value="1" />
+    <Setter Property="MinHeight" Value="1" />
+    <Setter Property="Margin" Value="6,4" />
+    <Setter Property="Opacity" Value="0.7" />
+  </Style>
+
+</Styles>

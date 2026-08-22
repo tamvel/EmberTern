@@ -62,9 +62,30 @@
                HorizontalAlignment="Center"
                Margin="0,3,0,0" />
 
+    <!-- ⭐ The licence line, in the slot §8.3 reserved for it — one row, not a redesign. Collapses entirely
+         when there is no payload, so the window never shows a label with nothing after it. It is UX and a
+         deterrent against careless sharing (D6), never a technical control. -->
+    <TextBlock Text="{Binding LicensedToText}"
+               IsVisible="{Binding HasLicensee}"
+               FontSize="{DynamicResource Text.Compact.Size}"
+               Foreground="{DynamicResource SubtleForegroundBrush}"
+               HorizontalAlignment="Center"
+               TextAlignment="Center"
+               TextWrapping="Wrap"
+               Margin="0,8,0,0" />
+
+    <!-- ⛔ Debug-only, and it disappears from a Release binary entirely: GateEnabled is a compile-time const,
+         so the compiler folds ShowDebugGateMarker to false. Discreet by design (§16.5) — it answers one
+         developer question ("is the gate off deliberately or broken?"), and is not a banner. -->
+    <TextBlock Text="{Binding DebugGateMarker}"
+               IsVisible="{Binding ShowDebugGateMarker}"
+               FontSize="{DynamicResource Text.Compact.Size}"
+               Foreground="{DynamicResource SubtleForegroundBrush}"
+               HorizontalAlignment="Center"
+               Margin="0,4,0,0" />
+
     <!-- A short hairline instead of a full-width rule: it separates authorship from identity without
-         drawing a band across the window. This is also the slot a future licence line goes in — one row,
-         not a redesign (design §8.3). -->
+         drawing a band across the window. -->
     <Border Width="40" Height="1"
             Background="{DynamicResource BorderBrush}"
             HorizontalAlignment="Center"

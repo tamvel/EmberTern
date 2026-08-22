@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using EmberTern.App.Licensing;
 using EmberTern.Core.Formatting;
 
 namespace EmberTern.App.ViewModels;
@@ -17,6 +18,16 @@ namespace EmberTern.App.ViewModels;
 /// </summary>
 public sealed class AboutViewModel
 {
+    private readonly LicenseService? _license;
+
+    /// <summary>⚠ For the designer and for tests that are not about licensing: no licence line is shown.</summary>
+    public AboutViewModel()
+    {
+    }
+
+    /// <param name="license">The application's one licence service, so About names the same licensee Settings does.</param>
+    internal AboutViewModel(LicenseService? license) => _license = license;
+
     public string Product => AppInfo.Product;
 
     public string VersionText =>
@@ -51,4 +62,30 @@ public sealed class AboutViewModel
         string.Format(CultureInfo.CurrentCulture, UiStrings.AboutAuthorFormat, AppInfo.Author);
 
     public string Copyright => AppInfo.Copyright;
+
+    /// <summary>
+    /// "Licensed to ACME Sp. z o.o." — the licensee, beside the version (design §17.2, decision D6).
+    ///
+    /// <para>⚠ Empty when there is no payload, and the view hides the line rather than showing a label with
+    /// nothing after it. ⭐ It is UX and a deterrent against careless sharing — ⛔ never a technical control.</para>
+    /// </summary>
+    public string LicensedToText => _license?.Verdict.Payload is { } payload
+        ? string.Format(CultureInfo.CurrentCulture, UiStrings.AboutLicensedToFormat, payload.Licensee)
+        : string.Empty;
+
+    public bool HasLicensee => !string.IsNullOrEmpty(LicensedToText);
+
+    /// <summary>
+    /// ⭐ The one Debug-only marker (design §16.5), and the reason it exists: without it a developer seeing
+    /// EmberTern start with no licence cannot tell whether the gate is off BY DESIGN or broken.
+    ///
+    /// <para>⛔ It is deliberately NOT localized, and Architecture rule 12 is not engaged: users receive
+    /// <c>Release</c> builds, where <c>GateEnabled</c> is a <c>const true</c> and the compiler folds this to
+    /// <see langword="false"/> — the text can never reach a customer. Same class as
+    /// <c>%TEMP%\EmberTern-debug.log</c>. Ratified in §16.5, which flagged it so it could be overruled.</para>
+    /// </summary>
+    public bool ShowDebugGateMarker => !LicensingPolicy.GateEnabled;
+
+    /// <summary>⛔ Developer-facing text; see <see cref="ShowDebugGateMarker"/> for why it is not a resource.</summary>
+    public string DebugGateMarker => "Debug build — licensing gate off";
 }

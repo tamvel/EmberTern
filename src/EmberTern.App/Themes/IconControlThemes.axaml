@@ -1,0 +1,192 @@
+﻿<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="using:EmberTern.App.Controls">
+
+  <!-- ============================================================================
+       THE THREE ICON CONTROL THEMES — split out of IconGeometries.axaml (2026-08-16).
+
+       ⭐⭐ WHY THEY LIVE APART FROM THE GEOMETRIES. IconGeometries.axaml is 86 pure
+       <StreamGeometry> resources with ZERO type references — data, and nothing else.
+       These three ControlThemes are the only thing in that file that binds to a TYPE
+       (controls:SvgIcon / DebuggerIcon / CreateIcon), and that binding is what made
+       the whole dictionary unlinkable from a second application.
+
+       EmberTern License Manager needs the icons and must NOT acquire EmberTern.App's
+       controls (docs/design/licensing-system.md §12.1). With the type-bound half moved
+       here, the data half links cleanly into that project — one source of every icon
+       for two applications, instead of a copy that drifts on the first icon anybody adds.
+
+       ⚠ THE MERGE ORDER IS LOAD-BEARING. The CreateIcon theme below resolves
+       {StaticResource Icon.Play}, so App.axaml must include IconGeometries.axaml BEFORE
+       this file. IconGeometriesSplitTests fails the build if that order is ever reversed.
+       ⛔ Do not move a <StreamGeometry> into this file: geometry is data and belongs
+       where the License Manager can reach it.
+       ============================================================================ -->
+
+  <!-- ============================================================================
+       SvgIcon ControlTheme — the single render path for every icon above.
+       A fixed 24×24 Canvas inside a Uniform Viewbox guarantees a consistent
+       coordinate space (and therefore consistent stroke weight) regardless of each
+       icon's actual bounds. Stroke = Foreground so a theme token colors the icon
+       and theme toggle re-evaluates live.
+
+       ⭐⭐ ROZMIAR DOMYŚLNY MA OD M4 ROLĘ (A‑3): `Size.Icon.Toolbar` = 16, czyli DOKŁADNIE ta liczba,
+       która stała tu literałem — zmiana jest wizualnie zerowa. Powód, dla którego mimo to jest ważna:
+       191 z 355 deklaracji ikon w aplikacji nie podaje rozmiaru, więc to ten setter decydował o ich
+       wielkości, a katalog o tym nie wiedział (`Size.Icon` obiecywał 14 i miał DWÓCH konsumentów).
+       Teraz widać, co zmieni te 191 ikon naraz.
+       ⚠ Ikona stojąca W WIERSZU nadpisuje to na `Size.Icon` (14) — zakładka, drzewo, menu kontekstowe.
+       ============================================================================ -->
+  <ControlTheme x:Key="{x:Type controls:SvgIcon}" TargetType="controls:SvgIcon">
+    <Setter Property="Width" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Foreground" Value="{DynamicResource NeutralIconBrush}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Viewbox Stretch="Uniform">
+          <Canvas Width="24" Height="24">
+            <Path Data="{TemplateBinding Data}"
+                  Stroke="{TemplateBinding Foreground}"
+                  StrokeThickness="2"
+                  StrokeLineCap="Round"
+                  StrokeJoin="Round" />
+          </Canvas>
+        </Viewbox>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- ============================================================================
+       DebuggerIcon ControlTheme — the debugger's two-colour identity mark
+       (Stage X / D15.2 Seam B), replacing the old Icon.Bug at every debugger
+       entry point. A blue Play triangle (the execution pointer, dominant) with a
+       small red breakpoint dot nested into its lower-right, overlapping the tip so
+       the two read as ONE "Start Debugging" glyph. Two colours + a filled dot can't
+       be a single stroked SvgIcon, hence a dedicated composite; both brushes are
+       REUSED theme tokens (accent blue + the very DebugBreakpointBrush the gutter
+       dot uses), so it stays inside the central theme system and recolours per
+       theme. Same idiom: 24×24, 2px stroke, round caps/joins. Default 16; the tab
+       overrides to 14. Canonical source: Assets/Icons/Debugger/debugger.svg.
+       ============================================================================ -->
+  <ControlTheme x:Key="{x:Type controls:DebuggerIcon}" TargetType="controls:DebuggerIcon">
+    <!-- Domyślna z roli `Size.Icon.Toolbar` (16) — jak `SvgIcon`; zakładka nadpisuje na `Size.Icon`. -->
+    <Setter Property="Width" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Viewbox Stretch="Uniform">
+          <Canvas Width="24" Height="24">
+            <!-- ⭐⭐ TRÓJKĄT TO DOSŁOWNIE `Icon.Play` — TA SAMA GEOMETRIA, NIE KOPIA.
+                 Decyzja użytkownika (M3.1e QA, §19.6): *„Debugger powinien być po prostu ikoną Execute
+                 z dodaną czerwoną kropką, a nie osobnym symbolem"*. Referencja zamiast własnej ścieżki
+                 czyni to POKREWIEŃSTWO STRUKTURALNYM: Execute i Debug nie mogą się rozjechać, bo jest
+                 jedna geometria, i zmiana `Icon.Play` pociąga za sobą znak debuggera automatycznie.
+
+                 ⚠⚠ POMIAR, KTÓRY TO WYMUSIŁ: znak NIGDY nie był ikoną Execute. Nosił własny trójkąt
+                 (6,4)(18,12)(6,20), podczas gdy `Icon.Play` to (8,5)(19,12)(8,19) — inny o 1 j. wszerz
+                 i 2 j. wzwyż. Rodzina była PRZYBLIŻENIEM utrzymywanym ręcznie, i dlatego rozjechała się
+                 przy pierwszej próbie poprawienia kropki. ⛔ Nie zamieniać tej referencji z powrotem na
+                 wpisaną ścieżkę, nawet identyczną — to przywraca dokładnie tę możliwość rozjazdu. -->
+            <Path Data="{StaticResource Icon.Play}"
+                  Stroke="{DynamicResource AccentIconBrush}"
+                  StrokeThickness="2"
+                  StrokeLineCap="Round"
+                  StrokeJoin="Round" />
+            <!-- The breakpoint dot is an accent on the pointer, not a second subject — diameter 4.5
+                 (trimmed 6 → 4.5 in the Seam 4 QA round) so it reads as a mark rather than competing
+                 with the play shape.
+
+                 ⚠⚠ CENTRE MOVED (16; 15.5) → (19; 19) in the M3.1e QA round (§19.6), and it is the ONLY
+                 thing that moved — the base symbol is untouched, by decision. The dot used to OVERLAP
+                 the triangle's lower edge, deliberately, so the two read as one glyph; at 16 px that
+                 worked. MEASURED against `Icon.Play`: the old position leaves −1.91 units of clearance
+                 past the 2 px stroke, i.e. at the chip's 12 px roughly a pixel of two antialiased shapes
+                 bleeding together. It stopped reading as one glyph and started reading as an artifact.
+
+                 ⭐ x = 19 is the apex's own x, so the breakpoint sits at the END OF THE EXECUTION
+                 POINTER — a stated relationship, not a tuned offset. Clearance +2.66 units
+                 = 1.33 px @12, 1.55 px @14, 1.77 px @16.
+
+                 ⛔⛔ THE LESSON, AND IT OUTRANKS THE DOT: an intermediate round redrew the TRIANGLE to
+                 make room (bigger, pushed right). It measured better and was rejected on sight, for the
+                 right reason — Execute and Debug stopped reading as one family. **Consistency of the
+                 icon set beats the optimum of any single glyph.** If this dot ever needs more room
+                 again, move the DOT; the base symbol is not the adjustable part.
+
+                 ⚠ ONE ControlTheme serves every size — chip 12, tab 14, editor "Debug…" buttons 16 —
+                 so a change here reaches every consumer; there is no per-scale variant and inventing one
+                 for a single consumer would violate R3. Canonical source updated in lockstep:
+                 Assets/Icons/Debugger/debugger.svg. -->
+            <Ellipse Canvas.Left="16.75" Canvas.Top="16.75" Width="4.5" Height="4.5"
+                     Fill="{DynamicResource DebugBreakpointBrush}" />
+          </Canvas>
+        </Viewbox>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+  <!-- ============================================================================
+       CreateIcon ControlTheme — pasek narzędzi „Utwórz …" (Product Polish M3.5 / Z-6).
+       Pełnowymiarowy glif rodzaju + mały badge akcji nałożony na prawy dolny narożnik.
+
+       ⭐⭐ DWA FAKTY, DWA SYSTEMY — i to jest cała idea: glif niesie RODZAJ (S1, `IconColor_*`, ta sama
+       barwa co w drzewie metadanych), badge niesie AKCJĘ „utwórz" (S2, jedna barwa dla wszystkich
+       dziewięciu, więc znak wszędzie znaczy to samo — W1). Wcześniej obie informacje walczyły o te same
+       24 jednostki i przegrywały obie: glif był ściśnięty do ~11 j. tam, gdzie jego odpowiednik w drzewie
+       ma 18 — czyli ~62 % rozmiaru liniowego i ~40 % powierzchni, przy IDENTYCZNYM pudełku.
+
+       ⚠⚠ DLACZEGO NIE `SvgIcon`, POMIAR NIE GUST: `SvgIcon` to jeden `Path`, jeden `Stroke`, jedna
+       `StrokeThickness=2` dla całej geometrii. Badge jest z definicji znakiem MNIEJSZYM i GĘŚCIEJSZYM,
+       a stąd da się dostać tylko „mniejszy i równie grubo" — co przy 16 px daje kleks. Wariant czysto
+       geometryczny (plus we wnętrzu glifu) był wyrenderowany sondą i odrzucony: działał dla 5 z 9 ikon,
+       a badge przestawał się czytać.
+
+       ⭐ BADGE JEST SOLIDNY, WIĘC PO PROSTU ZASŁANIA — bez knockoutu, a zatem bez zależności od barwy
+       tła pod ikoną. To nie jest oszczędność, to warunek poprawności: tło paska to `ChromeStrongBrush`
+       w spoczynku, ale `IconHoverBrush` pod kursorem, więc knockout w barwie chromy pokazałby łatę złego
+       koloru przy najechaniu. Ten sam zabieg, którym kropka breakpointu siedzi na trójkącie wyżej.
+
+       ⚠ `AccentBrush` na badge'u NIE otwiera ponownie P-2 (akcent na panelu = 2,89:1 w Dark). P-2 dotyczy
+       linii 2 px, która niesie sygnał SAMA; tutaj pracuje solidny dysk 10 j. z białym plusem w środku —
+       powierzchnia i kontrast wewnętrzny, nie różnica wobec tła.
+
+       ⚠ PROPORCJE ZMIERZONE, NIE DOBRANE NA OKO (runda 3 sondy, na dwóch najgęstszych glifach): dysk
+       Ø10 odsunięty 0,5 j. od krawędzi. Ø11 przy krawędzi zasłaniał róg siatki `Table` i dolny narożnik
+       `Package`; Ø9,5 odsłaniał najwięcej glifu, ale plus tracił ostrość. ⚠ Przy 16 px sam plus jest na
+       granicy rozdzielczości przy KAŻDEJ średnicy (kreska 1,33 px) — i tak ma być: badge rozpoznaje się
+       po pozycji i barwie, jak w VS/JetBrains, a od ~20 px i przy 150 % DPI plus jest ostry.
+
+       ⛔ `Data` bierze geometrię PLAIN PRZEZ REFERENCJĘ (`Icon.Table`, nie `Icon.TablePlus` — te dziewięć
+       kopii zostało USUNIĘTYCH w M3.5). Nie wpisywać ścieżki na sztywno, nawet identycznej: to przywraca
+       dokładnie tę możliwość rozjazdu, którą `DebuggerIcon` opisuje u siebie.
+       ============================================================================ -->
+  <ControlTheme x:Key="{x:Type controls:CreateIcon}" TargetType="controls:CreateIcon">
+    <!-- ⚠ Domyślna z roli `Size.Icon.Toolbar` (16), i to jest jedyne miejsce, w którym ta ikona żyje:
+         dziewięć przycisków „utwórz…" w pasku narzędzi nie podaje rozmiaru. ⛔ Proporcje badge'a
+         (Ø10, inset 0,5) dobrano i odebrano PRZY 16 px — zmiana tej roli je unieważnia (M3.5 / Z‑6). -->
+    <Setter Property="Width" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Height" Value="{DynamicResource Size.Icon.Toolbar}" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Viewbox Stretch="Uniform">
+          <Canvas Width="24" Height="24">
+            <Path Data="{TemplateBinding Data}"
+                  Stroke="{TemplateBinding Foreground}"
+                  StrokeThickness="2"
+                  StrokeLineCap="Round"
+                  StrokeJoin="Round" />
+            <Ellipse Canvas.Left="13.5" Canvas.Top="13.5" Width="10" Height="10"
+                     Fill="{DynamicResource AccentBrush}" />
+            <!-- Plus kontrastuje wyłącznie z DYSKIEM, nie z tłem strony — dlatego jest pewny w obu
+                 motywach i niezależny od dziewięciu barw rodzajów. Ramię 2,6 j. = 0,26 × Ø. -->
+            <Path Data="M18.5 15.9 V21.1 M15.9 18.5 H21.1"
+                  Stroke="{DynamicResource OnAccentBrush}"
+                  StrokeThickness="2"
+                  StrokeLineCap="Round" />
+          </Canvas>
+        </Viewbox>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+
+</ResourceDictionary>

@@ -10,7 +10,7 @@ public class NewConnectionDialogVmTests
     public void Save_BlankName_DerivesFromDatabaseFileBaseName()
     {
         using var service = new FirebirdConnectionService();
-        var vm = new NewConnectionDialogViewModel(service)
+        var vm = new NewConnectionDialogViewModel(new EmberTern.App.Licensing.LicensedConnections(service, license: null))
         {
             DatabasePath = @"D:\Bazy\Firma\Magazyn.fdb",
             Name = string.Empty,
@@ -28,7 +28,7 @@ public class NewConnectionDialogVmTests
     public void Save_ExplicitName_IsNotOverwrittenByPath()
     {
         using var service = new FirebirdConnectionService();
-        var vm = new NewConnectionDialogViewModel(service)
+        var vm = new NewConnectionDialogViewModel(new EmberTern.App.Licensing.LicensedConnections(service, license: null))
         {
             DatabasePath = @"D:\Bazy\Firma\Magazyn.fdb",
             Name = "Production",
@@ -44,7 +44,7 @@ public class NewConnectionDialogVmTests
     public void Save_BlankNameAndBlankPath_FailsValidation_NoResult()
     {
         using var service = new FirebirdConnectionService();
-        var vm = new NewConnectionDialogViewModel(service) { DatabasePath = string.Empty, Name = string.Empty };
+        var vm = new NewConnectionDialogViewModel(new EmberTern.App.Licensing.LicensedConnections(service, license: null)) { DatabasePath = string.Empty, Name = string.Empty };
 
         vm.SaveCommand.Execute(null);
 

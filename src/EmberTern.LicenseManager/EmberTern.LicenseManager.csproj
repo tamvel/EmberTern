@@ -1,0 +1,195 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <RootNamespace>EmberTern.LicenseManager</RootNamespace>
+    <AssemblyName>EmberTern.LicenseManager</AssemblyName>
+    <!-- ⭐⭐ THE ONE IDENTITY VALUE THIS PROJECT OVERRIDES, and the reason is that the inherited one was
+         simply wrong: `Directory.Build.props` declares `<Product>EmberTern</Product>`, so until L9 this
+         executable claimed its product was EmberTern — in the Windows file properties, in the EXE's
+         resources, and in anything reading the assembly back. It is not EmberTern; it is the tool that
+         issues EmberTern's licences.
+
+         ⛔ Nothing ELSE is overridden here. Version, ReleaseDate, Company and Copyright stay inherited
+         from that one PropertyGroup, which is what makes `ManagerInfo` and `AppInfo` structurally unable
+         to disagree about which release this is. ⛔ And still never a version number in code. -->
+    <Product>EmberTern License Manager</Product>
+    <!-- ⭐⭐ THE OS ICON — THIS APPLICATION'S OWN, and the reversal is deliberate (user, 2026-08-22).
+         It used to reference EmberTern's .ico across the project boundary, on the reasoning that the
+         License Manager is the same product's admin side rather than a second brand. ⚠ That reasoning
+         was sound and the RESULT was not: two icons that are byte-identical are two applications the
+         operator cannot tell apart in the taskbar, in Alt+Tab or in Explorer — and these two sit open
+         side by side doing very different things, one of them holding the signing key.
+         ⭐ Same family, distinct mark: a shield carrying the ember wing the product's icon carries, plus
+         a padlock. ⛔ The PRODUCT's icon is untouched, and nothing here is copied from it.
+         ⚠ Rendered from Assets\Branding\Masters\ by the pipeline in that folder's BRANDING.md. -->
+    <ApplicationIcon>Assets\Branding\EmberTernLicenseManager.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <!-- ⭐⭐ THE TOKEN LAYER IS LINKED FROM EmberTern.App, NOT COPIED.
+
+       One source of every colour and every metric, for two applications. A copy would drift on the
+       first palette change, and the drift would be invisible until someone put the two windows side
+       by side.
+
+       ⚠⚠ MEASURED CORRECTION TO THE DESIGN (docs/design/licensing-system.md §12.1 said "link
+       Themes/*.axaml"). Only these FOUR files are linkable. The rest of EmberTern's theme layer binds
+       to types this application does not have and must not acquire:
+
+         IconGeometries.axaml     → ControlTheme for controls:SvgIcon / DebuggerIcon / CreateIcon
+         ControlThemes.axaml      → the CheckBox template instantiates controls:SvgIcon
+         SearchableComboBox.axaml → controls:
+         PickerTemplates.axaml    → EmberTern.App + EmberTern.Core.Metadata
+         ControlStyles.axaml      → all of the above, plus AvaloniaEdit, plus DataGrid, plus
+                                    avares://EmberTern/Assets/Branding/EmberTern.ico
+
+       So the License Manager brings its own Themes/LicenseManagerStyles.axaml — small, and allowed to
+       contain STRUCTURE and METRICS only. ⛔ It may not define a single colour: every brush it paints
+       with comes from the linked Colors.axaml. LicenseManagerThemeTests fails the build otherwise,
+       which is what keeps "two style files" from becoming "two palettes". -->
+  <ItemGroup>
+    <AvaloniaResource Include="..\EmberTern.App\Themes\Colors.axaml" Link="Themes\Colors.axaml" />
+    <AvaloniaResource Include="..\EmberTern.App\Themes\Tokens.axaml" Link="Themes\Tokens.axaml" />
+    <AvaloniaResource Include="..\EmberTern.App\Themes\Typography.axaml" Link="Themes\Typography.axaml" />
+    <AvaloniaResource Include="..\EmberTern.App\Themes\FluentBridge.axaml" Link="Themes\FluentBridge.axaml" />
+    <!-- ⭐⭐ THE DATAGRID STANDARD — linkable since the 2026-08-18 split, and that split existed for this.
+         Row height, header height, cell padding, zebra striping, selection-over-zebra, hover, the column
+         header's chrome and the cell focus ring: EmberTern's ONE grid appearance, in a file that binds to
+         nothing but the tokens above it. It used to sit inside `ControlStyles.axaml`, which is unlinkable
+         for the reasons listed below, so the licences list here would otherwise have been a lookalike
+         maintained twice.
+         ⛔ Do not copy a grid metric into this project. `DataGridStylesSplitTests` (in EmberTern.Tests)
+         fails the build if that file stops being portable, and `LicenseManagerThemeTests` if it is copied
+         here rather than linked. -->
+    <AvaloniaResource Include="..\EmberTern.App\Themes\DataGridStyles.axaml"
+                      Link="Themes\DataGridStyles.axaml" />
+    <!-- ⭐⭐ THE ICON GEOMETRIES — linkable since the 2026-08-16 split, and that split existed for this.
+         The file used to end with three ControlThemes bound to controls:SvgIcon / DebuggerIcon /
+         CreateIcon; those 164 lines were the ONLY type reference in an otherwise pure catalogue of 86
+         <StreamGeometry> resources, and they were what made the whole dictionary unusable here. They now
+         live in EmberTern.App/Themes/IconControlThemes.axaml, which this project deliberately does NOT
+         link — it has no such controls and must not acquire them.
+         ⛔ Do not copy a geometry into this project. One source of every icon, two applications;
+         IconGeometriesSplitTests (in EmberTern.Tests) fails the build if the file stops being pure. -->
+    <AvaloniaResource Include="..\EmberTern.App\Themes\IconGeometries.axaml"
+                      Link="Themes\IconGeometries.axaml" />
+    <!-- ⚠ Only the LINKED files are listed. The Avalonia SDK already includes every .axaml under this
+         project directory, so naming App.axaml, Views\**\*.axaml or the local Themes file here produces
+         AVLN2002 "duplicate x:Class" rather than the belt-and-braces it looks like. -->
+
+    <!-- ⭐ THE WINDOW ICON — the same file as ApplicationIcon above. The two references answer DIFFERENT
+         questions and neither replaces the other: ApplicationIcon is a Win32 resource compiled into the
+         EXE (Explorer, file properties, the taskbar button before a window exists), this one is what
+         Avalonia paints in the window's own title bar and hands to Alt+Tab.
+         ⚠ The Avalonia SDK already includes everything under Assets\, so this line is belt-and-braces —
+         the Remove below is the part that changes behaviour. -->
+    <AvaloniaResource Include="Assets\Branding\EmberTernLicenseManager.ico" />
+
+    <!-- ⚠⚠ THE MASTER NEVER SHIPS. Assets\Branding\Masters\ holds the SOURCE artwork the .ico is
+         rendered from — un-cropped, with an opaque background. Without this Remove it would be embedded
+         in the assembly, and someone would eventually reference it from XAML and get a black square.
+         ⭐ The same rule, spelled the same way, as EmberTern.App.csproj. -->
+    <AvaloniaResource Remove="Assets\Branding\Masters\**" />
+
+    <!-- ⭐ THE UI MARK for the About window (L9) — the 256×256 transparent PNG, LINKED for exactly the
+         same reason the .ico above is: one master, two applications. ⛔ Not copied.
+         ⚠⚠ It is DIFFERENT artwork from the .ico, from a different master, ON PURPOSE — an icon is judged
+         at 16-32 px in dense chrome and this at 128 px on a quiet window. Replacing one does not replace
+         the other; `EmberTern.App/Assets/Branding/BRANDING.md` is the authority and lists its consumers.
+         ⭐ This reference is the only thing that makes `avares://EmberTern.LicenseManager/Assets/Branding/
+         EmberTern_logo.png` resolvable here — the product's own avares path is a different assembly. -->
+    <AvaloniaResource Include="..\EmberTern.App\Assets\Branding\EmberTern_logo.png"
+                      Link="Assets\Branding\EmberTern_logo.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Versions pinned to EmberTern.App's, deliberately. Two Avalonia versions in one repository is a
+         maintenance trap, and this repository already carries two documented version mismatches it did
+         not choose (docs/design/avalonia-12.1.1-update.md). -->
+    <PackageReference Include="Avalonia" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.1" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!-- ⚠ NUMER NIE ZGADZA SIĘ Z COREM CELOWO, dokładnie jak w EmberTern.App: DataGrid ma własne repo i
+         własny cykl wydań — przy corze 12.1.1 najnowszy DataGrid to 12.1.2, a wydania 12.1.1 nie ma.
+         ⛔ Wersja MUSI być ta sama co w EmberTern.App: obie aplikacje dzielą jeden plik stylu siatki
+         (`Themes/DataGridStyles.axaml`, linkowany wyżej), a ten styl celuje w NAZWANE części szablonu
+         Fluenta (`Rectangle#BackgroundRectangle`, `Grid#PART_ColumnHeaderRoot`). Dwie wersje pakietu to
+         dwa szablony i cicha rozbieżność wyglądu, bez żadnego błędu. -->
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="12.1.2" />
+    <!-- The register of record (§18.1). First-party, one package, one file on disk. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.11" />
+    <!-- ⭐ DPAPI for the SMTP password at rest (L6, decision D‑1). First-party, out-of-band package —
+         ProtectedData is NOT in the BCL, exactly as EmberTern.App records at its own reference, and the
+         version is pinned EQUAL to App's so the repository carries one DPAPI implementation version.
+         ⛔ The only new package L6 adds. MailKit is not needed: the SMTP auth question was measured on
+         2026-08-19 and basic auth over STARTTLS works (235 Accepted), so System.Net.Mail suffices.
+         ⚠ This package's members are Windows-only and the platform analyzer CA1416 ENFORCES it — under
+         TreatWarningsAsErrors an unguarded call is a build error, measured with a negative control.
+         Every call site therefore sits behind OperatingSystem.IsWindows(); see LocalDpapiProtector. -->
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ⭐ Same arrangement EmberTern.Firebird already uses. It exists for exactly one reason here:
+         BackupWorkflow's snapshot VERIFICATION only fires when a snapshot fails to reproduce the register,
+         and that state cannot be reached through the public API — so without a seam the guard has nothing
+         watching it and deleting it would leave every test green.
+         ⚠ Provenance, stated accurately: the gap was identified by reading the code during L5.5 and
+         reported to the user as a known testability limit; it was NOT established by a fault-injection
+         run. The L5.5 injection campaign was interrupted before it produced any result and was then
+         retired by user directive (gotcha #383 as amended). -->
+    <InternalsVisibleTo Include="EmberTern.LicenseManager.Tests" />
+  </ItemGroup>
+
+  <!-- ⭐⭐ THE MESSAGE TEMPLATES — one pair per language, embedded rather than loose on disk.
+       A template is part of the build, not something an operator edits: an editable file would be a
+       fifth thing to back up and would let a message say something the register cannot reproduce.
+       ⛔ There is no `if` anywhere that picks between them — a language code plus a body kind NAME the
+       resource (LicenseEmailTemplates), so a third language is two files plus one row in
+       MessageLanguages. `LicenseEmailTemplateTests` asserts every expected name is actually embedded,
+       because a renamed or unembedded file would otherwise surface as an empty message at send time. -->
+  <!-- ⚠⚠⚠ `WithCulture="false"` IS LOAD-BEARING — WITHOUT IT THESE FOUR FILES DO NOT REACH THIS ASSEMBLY
+       AT ALL, AND NOTHING REPORTS IT.
+
+       MSBuild reads the segment before the extension as a CULTURE, and `pl` and `en` are both real
+       culture names. So `LicenceEmail.pl.html` was classified as a Polish culture-specific resource and
+       compiled into a SATELLITE assembly — measured in the build log:
+
+         "Kultura 'pl' została przypisana do pliku 'Email\Templates\LicenceEmail.pl.html'."
+         csc … /out:obj\Debug\net9.0\pl\EmberTern.LicenseManager.resources.dll  /resource:…pl.html…
+
+       ⚠⚠ Every surface said it was fine: `msbuild -getItem:EmbeddedResource` listed all four with correct
+       paths, the csc command line carried all four `/resource:` switches, and the build reported 0
+       warnings / 0 errors. The main assembly simply carried none of them, and `GetManifestResourceNames()`
+       returned only Avalonia's `!AvaloniaResources`. At run time that surfaces as an EMPTY MESSAGE BODY,
+       not as an error — which is why `LicenseEmailTemplateTests` asserts embedding rather than trusting
+       it, and is what caught this on its first run.
+
+       ⭐ `LogicalName` is declared alongside so the name is a DECLARED fact that
+       `LicenseEmailTemplates.ResourceName` composes to match, rather than a convention to re-derive.
+       ⛔ Do not remove either attribute, and ⛔ do not "simplify" the file names to avoid the problem —
+       the language belongs in the name, and that is exactly what makes a third language two files. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Email\Templates\LicenceEmail.pl.html"
+                      LogicalName="EmberTern.LicenseManager.Email.Templates.LicenceEmail.pl.html"
+                      WithCulture="false" />
+    <EmbeddedResource Include="Email\Templates\LicenceEmail.pl.txt"
+                      LogicalName="EmberTern.LicenseManager.Email.Templates.LicenceEmail.pl.txt"
+                      WithCulture="false" />
+    <EmbeddedResource Include="Email\Templates\LicenceEmail.en.html"
+                      LogicalName="EmberTern.LicenseManager.Email.Templates.LicenceEmail.en.html"
+                      WithCulture="false" />
+    <EmbeddedResource Include="Email\Templates\LicenceEmail.en.txt"
+                      LogicalName="EmberTern.LicenseManager.Email.Templates.LicenceEmail.en.txt"
+                      WithCulture="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\EmberTern.Licensing\EmberTern.Licensing.csproj" />
+    <ProjectReference Include="..\EmberTern.Licensing.Issuing\EmberTern.Licensing.Issuing.csproj" />
+  </ItemGroup>
+
+</Project>

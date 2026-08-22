@@ -356,6 +356,7 @@ public class SettingsExportContentTests
             [nameof(UserSettings.ImportProfiles)] = "⚠ section: ImportProfiles (opt-in — they embed source file paths)",
             [nameof(UserSettings.ParameterHistory)] = "❌ never — execution history keyed to connection ids, not settings",
             [nameof(UserSettings.DebugWatches)] = "❌ never — same",
+            [nameof(UserSettings.LicenseClockHighWater)] = "❌ never — machine state; exporting it would carry a stranger's clock",
         });
     }
 

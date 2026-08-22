@@ -340,7 +340,7 @@ INSERT INTO PROBE_D (ID) VALUES (1);
     public void Dialog_BuildsProfileWithDeveloperModeAndCarriedDialect()
     {
         using var service = new FirebirdConnectionService();
-        var vm = new NewConnectionDialogViewModel(service);
+        var vm = new NewConnectionDialogViewModel(new EmberTern.App.Licensing.LicensedConnections(service, license: null));
         vm.LoadFromProfile(new ConnectionProfile
         {
             Name = "Edit",

@@ -1,4 +1,4 @@
-# EmberTern — Claude Code Context
+﻿# EmberTern — Claude Code Context
 
 A modern desktop developer workbench for Firebird database developers, built with **.NET 9 + Avalonia
 12.1.1**. Target users: ERP and backend devs who work daily with SQL, procedures, triggers, metadata
@@ -35,7 +35,7 @@ that used to live here still exists verbatim in `docs/history/`.
 | **`CLAUDE.md`** (this file) | Every session, automatically. Rules · architecture · live gotchas · pointers. |
 | **`docs/current-state.md`** | To learn what is done / open / in progress. **The only status source.** |
 | **`docs/gotchas.md`** | When a bug feels familiar. The complete catalog, organized thematically. |
-| **`docs/history/README.md`** | Index into the narrative archive (31 files). |
+| **`docs/history/README.md`** | Index into the narrative archive (36 files, measured 2026-08-22). |
 
 ### Editor & SQL/PSQL language front-end
 
@@ -82,6 +82,8 @@ that used to live here still exists verbatim in `docs/history/`.
 | `design/script-executor-and-smart-parameters.md` | Script Executor + Smart SQL Parameters. |
 | `design/script-executor-transaction-review.md` | Before changing Script Executor transaction handling. §5/§6 = the `Sequenced` design. |
 | `design/metadata-refresh-analysis.md` | Before touching the metadata tree. §7 is the as-built; Layers 2/3 + startup stay open. |
+| `design/licensing-system.md` | 🔒 **The licensing module, CLOSED.** §0 = ratified decisions D1–D16, §61 = the as-built state (removal semantics, final schema, what is open on purpose), §60 = the ratified bulk-send spec. ⚠ §34–§59 are per-stage as-built — read one stage, ⛔ never as the state of the whole. |
+| `design/licensing-key-ceremony-runbook.md` | 🔒 Before touching the signing key. Written to be re-run for a rotation; the register of what was done is `licensing-system.md` §35.4. |
 
 ### Audits & measurement archives
 
@@ -95,7 +97,7 @@ that used to live here still exists verbatim in `docs/history/`.
 
 | Document | When |
 |---|---|
-| `docs/history/*.md` (31 files) | On demand, for the "why" behind a feature or bug. Index: `history/README.md`. |
+| `docs/history/*.md` (37 files, measured 2026-08-22) | On demand, for the "why" behind a feature or bug. Index: `history/README.md`. |
 | `history/30-claude-md-current-state-archive.md` | The pre-2026-08-11 status diary, verbatim (78 entries, 2026-07-12 → 2026-08-10). |
 | `history/handovers/` | 🔒 Closed stage-handover and "next session" prompts (Product Polish M2a–M5, Localization App/Core). ⛔ Do not plan from them — several of their premises were refuted by measurement. |
 | `memory/*.md` (outside the repo) | Claude's cross-session recall. `MEMORY.md` is the always-loaded index; individual files load on demand. |
@@ -261,48 +263,33 @@ copy "Lab\setup.sql" "C:\Temp\setup.sql"
 copy "C:\Temp\embertern_lab_build.fdb" "Lab\EmberTern_Lab.fdb"
 ```
 
-**Gotcha — promote to architecture lore.**
-
-149. **`isql.exe` cannot connect to a database whose path contains non-ASCII characters (the repo path has `Źródła`); EmberTern's managed driver can.** Passing the path on the `isql` command line (or via `CONNECT`/`CREATE DATABASE`/`INPUT` of a non-ASCII path) mangles it at the shell/ANSI encoding boundary — the FB5 server receives garbage (`Źródła` → `ťRãDłA`) and reports "path not found" (SQLSTATE 08001 / I/O error on CreateFile). The `#` in `C#` is fine; only the non-ASCII letters trigger it. **But the path is fully usable everywhere else**: the Windows filesystem, .NET file APIs (`Directory.Exists`/`File.Copy`), and — crucially — **`FirebirdSql.Data.FirebirdClient` (what EmberTern uses)** all handle it correctly, because the managed driver sends the database path as Unicode over the wire rather than through a shell. Consequences: (a) the lab `.fdb` is **built at an ASCII temp path with `isql`, then copied into `Lab/`** (a plain file copy — the file is location-independent); (b) any `isql` script that `INPUT`s `setup.sql` must reference an **ASCII copy** of it, not the repo copy; (c) EmberTern connects to `Lab\EmberTern_Lab.fdb` directly with no issue — verified end-to-end (create + attach + DDL + metadata read all succeed via the managed driver at the non-ASCII path). Rule: never use `isql` against a non-ASCII database path on Windows — build at an ASCII path and copy, or drive the managed driver.
+⚠⚠ **Never point `isql` at the repo path.** `isql.exe` cannot connect to a database whose path contains
+non-ASCII characters (this repo's does — `Źródła`): the path is mangled at the shell/ANSI boundary and the
+server reports "path not found". ⭐ **EmberTern's managed driver has no such problem** — it sends the path
+as Unicode over the wire — and neither do the Windows filesystem or .NET's file APIs, which is what makes
+build-at-`C:\Temp`-then-copy work. Full explanation and the three consequences: gotcha **#149**.
 
 ## Project layout
 
-Top-level shape (refreshed 2026-07-11 against the real tree — the per-file annotations below
-predate most of the modules in "What's built" above and are kept only as illustrative examples
-of each project's role, not a complete file listing):
+⭐ **SEVEN projects across TWO solutions**, and the split is load-bearing: `EmberTern.slnx` is the
+product, `EmberTern.LicenseManager.slnx` is the issuer, and ⛔ `EmberTern.Licensing.Issuing` (the signing
+half) must never enter the product solution — `PrivateKeyNeverShipsTests` asserts that against the
+solution file itself. `EmberTern.Licensing` is in **both**, by project reference rather than a package, so
+the verifier and the issuer can never disagree about what an ETL1 artifact is.
 
-```
-EmberTern.slnx
-Directory.Build.props        # net9.0, Nullable=enable, TreatWarningsAsErrors=true
-src/
-  EmberTern.Core/            # zero Avalonia dependencies, zero FirebirdSql dependency
-    Connections/ Diagnostics/ Export/ Metadata/ Performance/ Query/ Scripting/
-    Search/ Security/ Settings/ Sql/ (incl. Sql/Language/ — the Lexer/Parser/AST/
-    Semantics/Completion/Navigation/Highlighting/Signatures/Snippets front-end)
-    Trace/ Transactions/ Workspace/
-  EmberTern.Firebird/        # all `Fb*` driver types live here; readers return Core DTOs
-    (NuGet: FirebirdSql.Data.FirebirdClient 10.3.4; InternalsVisibleTo: EmberTern.Tests)
-    e.g. FirebirdConnectionService.cs / FirebirdQueryExecutor.cs / TransactionService.cs /
-    FirebirdMetadataReader.cs / FirebirdDdlReader.cs / FirebirdCatalogReader.cs /
-    FirebirdTraceService.cs / FirebirdSessionReader.cs / FirebirdScriptExecutor.cs
-  EmberTern.Office/          # the ONE place a NuGet dep on an Office format is allowed, in BOTH
-                             # directions: DocumentFormat.OpenXml (the streaming XLSX writer XlsxExporter
-                             # and, since I9, the streaming SAX reader XlsxImportProvider) plus, since I10,
-                             # ExcelDataReader for legacy .xls (XlsImportProvider). Renamed from
-                             # EmberTern.Export.Office in I9.
-  EmberTern.App/             # WinExe, Avalonia 12.1.1, CommunityToolkit.Mvvm 8.4.2
-    Program.cs, App.axaml(.cs), UiStrings.cs, app.manifest
-    ViewModels/ Views/ Themes/ (Colors.axaml + ControlStyles.axaml — the ONLY theme sources)
-    Behaviors/ Completion/ Controls/ Converters/ Diagnostics/ Export/ Security/ Sql/
-    Assets/ (FirebirdSql.xshd + .Light.xshd, Branding/, Icons/ — SvgIcon geometries)
-    (NuGet: Avalonia.AvaloniaEdit 12.0.0 — ⚠ deliberately BEHIND the core, no 12.1 build exists;
-     Avalonia.Controls.DataGrid 12.1.2 — ⚠ deliberately AHEAD, no 12.1.1 build exists. Both mismatches carry
-     their reason at the `PackageReference`; see `docs/design/avalonia-12.1.1-update.md` + gotcha #321)
-tests/
-  EmberTern.Tests/           # xunit; ONE shared HeadlessUnitTestSession for the whole
-                             # ConnectionExpandBindingProbe class — see gotchas #94 / #226
-```
+| Project | Role and the boundary it keeps |
+|---|---|
+| `EmberTern.Core` | ⛔ Zero Avalonia, zero `FirebirdSql`. Includes `Sql/Language/` — the one Lexer→Parser→AST→Semantics front-end. |
+| `EmberTern.Firebird` | ⭐ Every `Fb*` driver type lives here and readers hand back Core DTOs. NuGet: `FirebirdSql.Data.FirebirdClient`. |
+| `EmberTern.Office` | ⭐ The ONE place a NuGet dependency on an Office format is allowed, in **both** directions (`DocumentFormat.OpenXml` for XLSX read+write, `ExcelDataReader` for legacy `.xls`). |
+| `EmberTern.App` | WinExe. `Themes/` is the only home of a colour or a metric; `Assets/` holds the `.xshd` grammars, branding and `SvgIcon` geometries. ⚠ Two package versions are deliberately off the core's — the reason sits at each `PackageReference` (gotcha #321). |
+| `EmberTern.Licensing` | The ETL1 format + the verifier. **Shared by both solutions.** |
+| `EmberTern.Licensing.Issuing` | Keystore, issuer, key ceremony. ⛔ **Issuer solution only.** |
+| `EmberTern.LicenseManager` | The issuer application. Links (never copies) `Colors.axaml` / `Tokens.axaml` / `DataGridStyles.axaml` from the product. |
+| `tests/EmberTern.Tests` · `tests/EmberTern.LicenseManager.Tests` | xunit. ⚠ One headless session **per process**, shared via `HeadlessCollection` (#94/#226/#286); the License Manager suite runs **serially** because `Loc` is global static state. |
 
+`Directory.Build.props` applies to every project (`net9.0`, `Nullable=enable`,
+`TreatWarningsAsErrors=true`) and is the **single source of product identity**.
 
 ## What's built — feature inventory
 
@@ -408,6 +395,15 @@ reasoning lives in the referenced document.
   nor `static readonly` (frozen in the first language) — it is a **property**; in XAML the form is
   `{app:Loc Key}`, never `{x:Static}`. Core/Firebird hand up a `MessageKey` + arguments and App
   resolves the words. *(`design/localization.md`, history 28)*
+- **Licensing (V1, offline) + the License Manager** — a signed `EmberTern.etlic` artifact (ECDSA P-256),
+  no backend and no mandatory internet, verified in-product; and a **separate Avalonia application** that
+  holds the register (SQLite), issues and re-issues licences, renews them in batches, sends them by
+  e-mail one at a time or as a **throttled batch**, backs the register up encrypted, and removes
+  customers and licences administratively. ⛔ **The private key never lives in a solution that ships** —
+  two solutions on purpose. ⭐ **The register is append-only where it matters**, so "remove" resolves per
+  row against the data: a never-issued row is DELETED, an ever-issued one is **RETIRED** via a
+  `retired_at` COLUMN — ⛔ never a status, which describes the AGREEMENT and answers a different
+  question. *(`design/licensing-system.md` — §61 is the as-built; history 33–35)*
 
 ## Current state
 
@@ -415,10 +411,11 @@ reasoning lives in the referenced document.
 It is the ONE place that answers *"what is done, what is open, what are we working on"*, and it is
 kept between 100 and 300 lines on purpose.
 
-At a glance, verified 2026-08-14: branch **`fix/audit-followup-2026-08`** (cut from `master`, **not
-pushed**), HEAD `1852611`, build **0/0 in both Release and Debug**, tests **8 813**, last series **6/6
-fully green**, version **0.5.0**. ⏭ **Milestone: audit follow-up, Phase 4 accepted. Next: Phase 5 —
-charset guard, NOT started.** Read `docs/current-state.md` §0 + §3 first.
+At a glance, verified 2026-08-22: branch **`master`**, version **0.5.0**. ⭐⭐ **The licensing module is
+CLOSED** (L1–L10, merged with `--no-ff`; `feat/licensing-system` is kept on both remotes as the historical
+reference). ⏭ **No stage is in progress — the next topic is a user decision.**
+⚠ There are TWO suites here — `dotnet test EmberTern.slnx` and `dotnet test EmberTern.LicenseManager.slnx`.
+Read `docs/current-state.md` §0 + §3 first, and **measure the counts** rather than quoting them.
 
 ⚠⚠ **Do not restore a status diary here.** This section was **5 956 lines (83 % of CLAUDE.md)** until
 2026-08-11, archived verbatim in
@@ -489,11 +486,12 @@ long ago — the surviving, still-true boundary is kept below):
 
 The app has **one** central theming system. Every new window, dialog, UserControl, DataTemplate, and control MUST go through it — no exceptions. These rules exist because new UI kept introducing local colors and FluentTheme's `SystemAccentColor`-derived highlights (the brown/orange selection rectangles), which clash with the workbench palette.
 
-**The central system — five files, each with ONE job; nothing else holds a colour or a metric:**
+**The central system — six files, each with ONE job; nothing else holds a colour or a metric:**
 - [`Themes/Colors.axaml`](src/EmberTern.App/Themes/Colors.axaml) — the **single source of every color**. `ThemeDictionaries` with a `Dark` and a `Light` dictionary, each defining the same set of `Color` keys then `SolidColorBrush` keys over them. This is the token catalog.
 - [`Themes/Tokens.axaml`](src/EmberTern.App/Themes/Tokens.axaml) *(M2a)* — the **non-colour catalog**: spacing, `Thickness`/`CornerRadius` roles, control heights, icon sizes, radii, border widths. **No `ThemeDictionaries`** — a metric does not depend on the theme.
 - [`Themes/Typography.axaml`](src/EmberTern.App/Themes/Typography.axaml) *(M2a)* — the **12 typography roles** (size · weight · line-height) + `Font.Ui` / `Font.Code`.
 - [`Themes/FluentBridge.axaml`](src/EmberTern.App/Themes/FluentBridge.axaml) *(M2b)* — ⭐ **the mapping layer that repins FluentTheme's own named resources onto our tokens**, so we keep the framework's behaviour without copying its templates. ⛔ **Mapping only — never a second token catalog** (rule 8 below).
+- [`Themes/DataGridStyles.axaml`](src/EmberTern.App/Themes/DataGridStyles.axaml) *(2026-08-18)* — **the DataGrid standard**: row height, header height, cell padding, zebra striping, selection-over-zebra, hover, header chrome, cell focus ring. ⭐ **Split out of `ControlStyles.axaml` so it can be LINKED into `EmberTern.LicenseManager`** — that file cannot be (it binds to `EmberTern.App.Controls`, AvaloniaEdit and `avares://EmberTern/`), and one grid appearance for two applications beats a copy that drifts. ⛔ Nothing type-bound may be added here, and the EDITING styles stay in `ControlStyles.axaml`; `DataGridStylesSplitTests` fails the build otherwise. ⚠ Must be included AFTER `Avalonia.Controls.DataGrid/Themes/Fluent.xaml` in both applications.
 - [`Themes/ControlStyles.axaml`](src/EmberTern.App/Themes/ControlStyles.axaml) — the **single home for shared/reusable styles** (`Button.icon`, `Button.primary`, `Button.flat`, `Button.caption`, `TabItem.bottom-tab`, `TabItem.sub-tab`, `TextBlock.field-label`, `DataGridRow`/`DataGridCell`/`DataGridColumnHeader`, `ListBoxItem`/`TreeViewItem` state overrides, etc.). Loaded app-wide via `Application.Styles`, so these styles apply inside dialog windows and UserControls too. **Also the home of every control METRIC setter** (rule 8).
 
 ⚠ [`Themes/ControlThemes.axaml`](src/EmberTern.App/Themes/ControlThemes.axaml) holds the **two** hand-written `ControlTemplate`s (`CheckBox`, `RadioButton`) — structure, not style. Adding a third requires the two measured conditions in `product-polish.md` §16.4.
@@ -514,7 +512,7 @@ The app has **one** central theming system. Every new window, dialog, UserContro
 **Token cheat-sheet** (semantic name → use): `BackgroundBrush` (window/editor), `PanelBrush` (sidebar/header panels), `ChromeStrongBrush` (titlebar/column headers — chrome one step further from the document), `SurfaceRaisedBrush` (⭐ anything that FLOATS above its container: popups, menus, tooltips, dropdown lists, the selected tab — **not** the same job as chrome, and in Light the two are opposites), `BorderBrush` (structural separators, gridlines, the rest rail), ⭐ `ControlOutlineBrush` (**the visible
 outline of an interactive control at rest** — a different role from `BorderBrush`, and that distinction is
 what makes an unchecked `CheckBox` findable: sharing one token measured 1.35:1 in Light. Consumers: CheckBox,
-RadioButton), `ForegroundBrush` (default text), `SubtleForegroundBrush` (hints/captions), `AccentBrush`/`AccentMutedBrush` (primary action, focus accent), `OnAccentBrush`/`OnAccentSubtleBrush` (text on accent/colored chips), `SelectionBrush`, `HoverOverlayBrush`, `FocusBorderBrush`, `ErrorBrush`/`WarningBrush`/`ConnectedBrush`, `TransactionActiveBrush`, `CommitButtonBrush`/`RollbackButtonBrush`, `RowAlternateBrush` (zebra), `DropTargetBrush`, `CloseButtonHoverBrush`, `DataLaneChipBrush`/`MetadataLaneChipBrush`, `IconColor_*` (per metadata kind, via `IconBrushConverter`). If none fit, add a new token (both dictionaries) — don't reach for a literal.
+RadioButton), `ForegroundBrush` (default text), `SubtleForegroundBrush` (hints/captions), `AccentBrush`/`AccentMutedBrush` (primary action, focus accent), `OnAccentBrush`/`OnAccentSubtleBrush` (text on accent/colored chips), `SelectionBrush`, `HoverOverlayBrush`, `FocusBorderBrush`, `ErrorBrush`/`WarningBrush`/`ConnectedBrush`, `TransactionActiveBrush`, `CommitButtonBrush`/`RollbackButtonBrush`, `RowAlternateBrush` (zebra), `DropTargetBrush`, `CloseButtonHoverBrush`, `DataLaneChipBrush`/`MetadataLaneChipBrush`, `IconColor_*` (per metadata kind, via `IconBrushConverter`), ⭐ `BrandEmberBrush` (**the product WORDMARK, and nothing else** — identity, never a signal: ⛔ it may not paint a control state, a severity or any signal, and a guard fails the build on a second consumer; `design/color-language.md` §1.3). If none fit, add a new token (both dictionaries) — don't reach for a literal.
 
 ### Reuse before create
 
@@ -550,13 +548,15 @@ Before considering any UI task done, verify:
 ## Live gotchas — load-bearing subset
 
 The **complete** catalog, organized thematically, lives in **[`docs/gotchas.md`](docs/gotchas.md)**.
-Below are the ~20 that are load-bearing across almost *any* session — the rest are searchable there
-by keyword the moment a bug "feels familiar". Each line is a one-sentence summary; follow the `#N`
-reference for the full explanation and the failure it prevents.
+Below are the ones load-bearing across almost *any* session — the rest are searchable there by keyword
+the moment a bug "feels familiar". ⭐ **Each line is a ONE-SENTENCE summary and nothing more**; the
+mechanism, the measurement and the failure it prevents live behind the `#N`. ⛔ Do not grow an entry
+here into a paragraph — that is how this section reached 164 lines once already; put the detail in
+`docs/gotchas.md` and leave the pointer.
 
 ⛔ **The entry count is deliberately NOT written down here.** Three separate counters used to carry it
-and all three disagreed while every one of them was wrong. **Measure it** (last check 2026-08-11:
-**360 entry lines over 358 distinct numbers, max #371**):
+and all three disagreed while every one of them was wrong. **Measure it** (last check 2026-08-22:
+**407 entry lines over 405 distinct numbers, max #418**):
 
 ```bash
 grep -cE "^[0-9]+\. \*\*" docs/gotchas.md
@@ -566,137 +566,89 @@ grep -cE "^[0-9]+\. \*\*" docs/gotchas.md
 sections, so a bare "#303" is ambiguous.
 
 **Firebird transactions & connections**
-- Never start a Firebird transaction from a bare `IsolationLevel` — always build explicit
-  `FbTransactionOptions` (the driver's default silently picks `WAIT`, the opposite of what you
-  usually want). *(#85)*
-- One `FbConnection` allows exactly one transaction at a time — concurrent commands on the same
-  connection must be serialized (`CommandLock`), and any reader must attach to the caller's
-  active working transaction rather than opening its own. *(#89, #31, #22-revised)*
-- A lane-resolving lock accessor (`MetaLock()`/`DataLock()`/`LaneLock()`) must be captured into a
-  **local variable once** per acquire/release pair — never re-invoked at `Release()`, or a
-  mid-call lane flip leaks one semaphore and over-releases another (survives reconnect; only a
-  restart clears it). *(#98, #120)*
-- **DDL ⇒ WAIT with a bounded lock timeout, wherever it runs.** The cross-attachment
-  `object … is in use` is a TRANSIENT metadata-cache lock that bites only **NOWAIT**; a WAIT
-  transaction clears it in ~10 ms. This **supersedes the old "DDL must be co-located on the
-  attachment that executed the object"** conclusion (#122), which was inferred from a NOWAIT failure
-  and forced Compile onto the data connection — which in turn forced the *"Commit or roll back the
-  active transaction before running DDL"* guard. Both are gone: DDL now runs on its own dedicated
-  attachment, independent of every user transaction. Never conclude "Firebird forbids X across
-  attachments" from a NOWAIT failure without re-testing with WAIT. *(#214, supersedes #122;
-  `docs/history/15-...`)*
-- **A Firebird transaction cannot use an object it created but has not committed** —
-  `CREATE TABLE T …; INSERT INTO T …;` in one transaction fails the INSERT with `Table unknown`
-  (-204). Firebird cannot both let a transaction use an object it created *and* keep it rollbackable;
-  `isql`/IBExpert choose the former via `SET AUTODDL ON`. So in EmberTern's console the user must
-  Commit between DDL and dependent DML — that is correct, expected behaviour. Corollary: uncommitted
-  DDL is invisible to other attachments, so an object created in the SQL Editor appears in the
-  metadata tree **only after Commit**. *(#213, `docs/history/15-...`)*
-- **A statement classifier may decide whether to REFRESH the UI; it must never decide WHERE/HOW a
-  statement executes in an interactive console.** The SQL Editor used to auto-route DDL onto a second
-  attachment with a hidden second transaction — making Commit ambiguous and splitting mixed scripts
-  across two transactions. The classifier is kept (it is reusable infrastructure and the foundation
-  of the future Script Executor engine); only the routing was removed. *(#215,
-  `docs/history/15-...`)*
-- After a transaction settles, refresh ONLY the object actually touched — never blanket-refresh
-  every open tab (each refresh reruns several implicit-tx catalog reads, which on a DB with an
-  `ON TRANSACTION_COMMIT` trigger multiplies into a real storm). *(#119)*
+- Never start a transaction from a bare `IsolationLevel` — build explicit `FbTransactionOptions`, or the
+  driver silently picks `WAIT`. *(#85)*
+- One `FbConnection` allows one transaction at a time: serialize commands (`CommandLock`), and a reader
+  attaches to the caller's working transaction rather than opening its own. *(#89, #31, #22-revised)*
+- Capture a lane-resolving lock accessor (`MetaLock()`/`DataLock()`/`LaneLock()`) into a **local once**
+  per acquire/release pair — re-invoking it at `Release()` leaks one semaphore and over-releases another.
+  *(#98)*
+- ⭐ **DDL ⇒ WAIT with a bounded lock timeout, wherever it runs** — the cross-attachment
+  `object … is in use` is a transient metadata-cache lock that bites only NOWAIT, so ⛔ never conclude
+  "Firebird forbids X across attachments" from a NOWAIT failure without re-testing with WAIT.
+  *(#214, supersedes #122)*
+- A transaction cannot use an object it created but has not committed, so the user must Commit between
+  DDL and dependent DML — correct, expected behaviour, and why a new object reaches the tree only after
+  Commit. *(#213)*
+- ⭐ A statement classifier may decide whether to REFRESH the UI; ⛔ it must never decide WHERE or HOW a
+  statement executes in an interactive console. *(#215)*
+- After a transaction settles, refresh ONLY the object actually touched — a blanket refresh of every open
+  tab multiplies into a real storm on a database with an `ON TRANSACTION_COMMIT` trigger. *(#119)*
 
 **Firebird catalog & DDL generation**
-- Firebird catalog columns vary by version (e.g. `RDB$IDENTITY_TYPE` is FB3+) — version-gate the
-  query (`ParseServerMajor`) instead of issuing a doomed SELECT and catching the exception.
-  *(#146)*
-- A `.sql` script written for `isql`/IBExpert must be UTF-8 **without** a BOM —
-  `Encoding.UTF8` in .NET emits one and breaks the first statement's parse. *(#178)*
-- Object names typed by the user are coerced to UPPERCASE on input (Firebird folds unquoted
-  identifiers anyway) — apply this consistently to every new name-entry field. *(#141)*
-- In PSQL, distinguish `CASE…END` from `BEGIN…END` by statement scope (to the next top-level
-  `;`), never by a naive `BEGIN+1/END-1` counter — a `CASE`'s `END` has no matching `BEGIN` and
-  will corrupt any hand-rolled block scanner. Route through `SqlScanHelpers`'s shared CASE-aware
-  scanner. *(#117, #128, #129)*
+- Catalog columns vary by version (`RDB$IDENTITY_TYPE` is FB3+) — version-gate the query
+  (`ParseServerMajor`) instead of catching the exception from a doomed SELECT. *(#146)*
+- A `.sql` script for `isql`/IBExpert must be UTF-8 **without** BOM; `Encoding.UTF8` emits one and breaks
+  the first statement's parse. *(#178)*
+- Object names typed by the user are coerced to UPPERCASE on input, consistently, in every name field.
+  *(#141)*
+- In PSQL distinguish `CASE…END` from `BEGIN…END` by statement scope, never by a `BEGIN+1/END-1` counter —
+  route through `SqlScanHelpers`'s CASE-aware scanner. *(#117, #128, #129)*
 
 **Avalonia UI & data binding**
-- `x:DataType` on a `<Style Selector="...">` does **not** scope the selector at runtime — it's a
-  compile-time binding hint only. A container style shared by multiple VM types needs ONE style
-  with `ReflectionBinding` setters, never one typed style per VM type (the latter silently
-  clobbers with `UnsetValue`). *(#38)*
-- Avalonia's `DataGrid`/`TreeView`/`ListBox` don't select the row under the cursor on
-  right-click — wire `PointerPressed` to select-then-let-the-context-menu-open, or context-menu
-  actions act on stale selection. *(#16, #99)*
-- A `TreeView` with a nested `VirtualizingStackPanel` cannot do stable random-access scrolling on
-  a large expanded subtree — the sidebar was migrated to a flat, single-VSP `ListBox` for this
-  reason. Filtering must rebuild the bound collection, never just flip `IsVisible` on hidden
-  items (the panel still measures every hidden row). *(#154, #157, FlatTree migration in
-  `docs/history/09-...`)*
-- `Avalonia.Controls.TreeDataGrid` is a **commercially licensed** Avalonia "Accelerate" control —
-  verify licensing before depending on it, version compatibility is not enough. *(#158)*
-- A button/command gated on a computed or collection-derived value (`Count`, `Any()`, a
-  `CanExecute`) needs an explicit `NotifyPropertyChangedFor`/`OnPropertyChanged` on **every**
-  mutation path — correctly computing the value isn't enough if nothing tells the binding to
-  re-query it (symptom: "the feature works but the button stays disabled"). *(#179, #187)*
-- **`x:DataType` on a `DataTemplate` is also the MATCHING type**, so a stale one produces no binding
-  error — the template stops matching and the host silently renders the item's `ToString()`, i.e. a
-  type name on screen where the content belonged. ⚠ Guard a template by asserting the **realized**
-  output (`template.Match(item)` / the text the tree renders), never by what the XAML spells; and
-  when a comment cites a test by name, **grep for it** — a named guard that does not exist reads as
-  coverage while providing none. *(#370)*
+- `x:DataType` on a `<Style Selector>` does not scope the selector at runtime; a style shared by several
+  VM types is ONE style with `ReflectionBinding` setters. *(#38)*
+- `DataGrid`/`TreeView`/`ListBox` don't select the row under the cursor on right-click — wire
+  `PointerPressed`, or context-menu actions act on stale selection. *(#16, #99)*
+- A `TreeView` over a nested `VirtualizingStackPanel` cannot scroll a large expanded subtree stably (hence
+  the flat `ListBox` sidebar), and filtering must rebuild the bound collection, never flip `IsVisible`.
+  *(#154, #157)*
+- `Avalonia.Controls.TreeDataGrid` is **commercially licensed** — check licensing, not just version
+  compatibility, before depending on it. *(#158)*
+- A command gated on a computed or collection-derived value needs an explicit
+  `NotifyPropertyChangedFor`/`OnPropertyChanged` on **every** mutation path — symptom: "it works but the
+  button stays disabled". *(#187)*
+- ⭐ An option offered by a picker takes its identity from its **CODE**; a label inside a `record`'s
+  positional members puts the current language into that identity and `SelectedItem` then matches nothing.
+  *(#394)*
+- `x:DataType` on a `DataTemplate` is also the **matching** type, so a stale one raises no binding error —
+  the host silently renders the item's `ToString()`; guard a template by asserting the **realized** output.
+  *(#370)*
 
-**Editor language front-end (the current, active work)**
-- The AST round-trips the source byte-for-byte via the retained token stream — this is
-  independent of parsing depth, so `RawStatement`/an under-modeled node never risks data loss.
-  Any text-reproducing consumer migrated onto the parser must be gated behind a permanent
-  differential test proving byte-identity against the previous implementation. *(#191, #192)*
-- No transitional class names (`V2`, `NewX`, `Temp`, `Parser2`, …) are left in the codebase once
-  a migration completes — consolidate to the plain responsibility name the moment the old
-  implementation is deleted. *(#195)*
-- **THE CONSTANT RULE.** An AST-driven clause emitter that rebuilds its keyword from a **constant**
-  (`Kw("select")`, `Kw("from")`, `Kw("with")`, a set operator) never renders the tokens that constant
-  replaces — so a comment carried as those tokens' leading trivia is rendered by nobody, §0's net
-  reverts the statement, and the formatter silently **does nothing**. Hand the comments back at the
-  position they held (`CommentsIn` / `SplitCommentsAt` / `TakeLeadingComments`); ⛔ never hoist them to
-  the top. ⚠ The net compares the lexeme **sequence**, so a recovered comment on the wrong side of a
-  token is as fatal as a dropped one. *(#369; the mirror of THE TAIL RULE in `SqlFormatter`)*
-- **A false positive and a missing feature can be the same bug** — so fix it at the **resolution** step,
-  never at the reporting step. A selectable procedure's columns are its **output parameters**; the binder
-  asked `GetColumns` (empty for a procedure), which surfaced as a false `ET0002` *and* as completion
-  offering nothing after `alias.`. ⛔ Do not key such a decision on the AST node (`RoutineTableReference`
-  misses paren-less `FROM MY_NOARG_PROC`) — key it on the **resolved catalog target**; and give every new
-  lazily-warmed fact a `Knows…` readiness answer, or S-2's "everything underlined for a moment" returns.
-  *(#371)*
-- Any offset→scope/reference lookup driving an editor feature (completion, Quick Info, go-to-def)
-  must be **inclusive at the end of a span** — the caret sitting at the exact end of a
-  statement/identifier is the single most common position, and a half-open range silently
-  resolves to the wrong (enclosing) scope there. *(#198)*
-- Every object editor (Table/View/Procedure/Trigger/Function/Package/Domain/Generator/Exception/
-  Index Detail) ships a Revert/Discard action beside its primary Compile/Save action, and it must
-  **confirm** before discarding — an accidental click must never lose uncompiled work. *(#143)*
-- **`SqlEditorBehavior.Attach` IS now "the one seam" for the editor-intrinsic block — RESOLVED by D3
-  (2026-07-17).** It *used* to install only the OBJECT editors' capabilities while the main SQL Editor
-  hand-wired its own in `MainWindow` — so a capability added to only one silently missed the other (how S3
-  shipped with no squiggles in the SQL Editor). **D3 consolidated it:** `MainWindow` now calls the same
-  `SqlEditorBehavior.Attach` at VM-arrival, so a new editor-intrinsic capability goes in **one** place.
-  Per-host wiring (`DiagnosticsPanelHost.Track`, `AmbientModelRefresh`, `SqlSnippetDropTarget`) stays with the
-  caller by design. *(#219 — resolved)*
+**Editor language front-end**
+- The AST round-trips the source byte-for-byte via the retained token stream, independent of parsing
+  depth — and any text-reproducing consumer migrated onto the parser is gated behind a permanent
+  differential test. *(#191, #192)*
+- No transitional class names (`V2`, `NewX`, `Temp`, …) survive a completed migration. *(#195)*
+- ⭐ **THE CONSTANT RULE** — a clause emitter that rebuilds its keyword from a constant never renders the
+  tokens that constant replaces, so their comments are rendered by nobody and the formatter silently does
+  nothing; hand the comments back **at the position they held**. *(#369)*
+- ⭐ A false positive and a missing feature can be the same bug — fix it at the **resolution** step, keyed
+  on the resolved catalog target, never on the AST node and never at the reporting step. *(#371)*
+- Any offset→scope lookup driving an editor feature must be **inclusive at the end of a span** — the caret
+  at the exact end of an identifier is the commonest position. *(#198)*
+- Every object editor ships a Revert/Discard beside its Compile/Save, and it **confirms** before
+  discarding. *(#143)*
+- ⭐ `SqlEditorBehavior.Attach` is **the one seam** for the editor-intrinsic block (resolved by D3): a new
+  editor-intrinsic capability goes there, and per-host wiring stays with the caller by design. *(#219)*
 
 **General**
-- Reflect the actual API surface (get/set, public/protected) before assuming a member is
-  settable or overridable — a member appearing in a metadata dump doesn't mean it has an
-  accessible setter or is safely overridable. *(#199, applies broadly)*
-- One headless UI test session per test **process** — share it, never `StartNew` per test. Not tidiness:
-  AvaloniaEdit builds its caret/editing `KeyBinding`s as **static** lists owned by the thread of whichever
-  session first constructs a `TextEditor`, so any real key sent into an editor from a later session throws
-  *"the calling thread cannot access this object"* — no injection style avoids it. **It is shared through an
-  `ICollectionFixture` (`HeadlessCollection`), NOT `IClassFixture`** — the latter creates one per test *class*,
-  so a second consumer silently gets a second session; join the collection instead. *(#94, #226, #286)*
-- **A derived value that is typed by hand goes stale SILENTLY, and the guard against it must key on the
-  value's SOURCE, not on the value.** A shortcut written into a string (`"Format SQL · Alt+F"`) survived the
-  gesture being re-bound with a green build and green tests — a tooltip teaching a key that no longer existed.
-  A *correctly composed* string contains the same text at run time, so only the declaration (`const` = literal
-  by definition) distinguishes the two. Generalises to any copied derived fact. *(#284)*
-- **Reflect the real runtime contract of a UI member before guarding on it.** AvaloniaEdit's `TextEditor`
-  is **not focusable** — `editor.Focus()` is a no-op returning `false` and `editor.IsFocused` is *always*
-  false; keyboard focus lives on `editor.TextArea`. A guard written against the plausible-looking member
-  compiles, tests green, and silently disables the feature forever. *(#225, an instance of #199)*
+- Reflect the actual API surface before assuming a member is settable or overridable — appearing in a
+  metadata dump proves neither. *(#199)*
+- One headless UI test session per test **process**, shared through an `ICollectionFixture`
+  (`HeadlessCollection`) — ⛔ never `IClassFixture`, which silently gives a second consumer a second
+  session. *(#94, #226, #286)*
+- ⭐⭐ **Every headless test RETURNS its `Task`** — the expression-bodied `void` form compiles while
+  discarding it, so no assertion in the body can fail the test; and `Dispatch(async () => …)` binds to
+  `Action` as `async void`, which is the same defect one level deeper. *(#374, #391)*
+- ⭐ A derived value typed by hand goes stale **silently**, so the guard against it must key on the value's
+  **SOURCE** (a `const` is a literal by definition), never on the value. *(#284)*
+- Reflect the real runtime contract of a UI member before guarding on it — AvaloniaEdit's `TextEditor` is
+  **not focusable**, so a guard on `editor.IsFocused` compiles, stays green, and disables the feature
+  forever. *(#225)*
+- ⛔ `open(path, "w")` **truncates on OPEN**, so any failure before the write destroys the file — encode to
+  bytes, write a temp file, `os.replace`, and `os.utime` after any programmatic restore or the incremental
+  build keeps compiling the old content. *(#415, #416)*
 
 ## Known driver gotchas (Firebird + managed .NET driver)
 
@@ -787,22 +739,9 @@ is the always-loaded index; individual files load on demand. ⚠ **`CLAUDE.md` a
 `docs/current-state.md` are authoritative over any conflicting memory note** — several memory files
 predate the documentation splits and describe states that have since changed.
 
-| Memory file | Holds |
-|---|---|
-| `project_embertern_editor_architecture.md` | Compact mirror of the editor rebuild's status and decisions. |
-| `project_embertern_blueprint.md` · `project_embertern_scaffold.md` | Original V1 scope and the M1–M6 code-layout notes. Froze at V1/M6 — historical framing. |
-| `feedback_never_lose_information.md` | The paramount rule (Architecture rule #11). |
-| `feedback_staged_implementation_contract.md` | Each etap ships complete + tested + smoke-verified before the next starts. |
-| `feedback-one-task-at-a-time.md` | A cross-cutting problem found mid-module goes to the backlog with its measurement. |
-| `feedback-root-cause-before-symptom.md` | A report says *where* the user saw it, not *what* is broken. |
-| `feedback-verify-external-analysis.md` | An external audit is an input to verify, not a task list. |
-| `feedback-tempo-follows-uncertainty.md` | Small steps while a design is forming; one pass once it is accepted. |
-| `feedback_first_principles_ux.md` | Halt and redesign from first principles when real usage shows the UX is wrong. |
-| `feedback_no_speculative_repro.md` | Report what you *proved* vs what merely did not reproduce. |
-| `feedback_naming_no_transitional.md` | No `V2`/`NewX`/`Temp` names survive a completed migration. |
-| `feedback-build-and-test-separately.md` | ⛔ Never chain `dotnet build && dotnet test` — they deadlock. |
-| `feedback_firebird_*.md` | Code-pages registration, FB3 SYSDBA/Srp auth, the transaction-lane audit trail. |
-| `reference_lab_live_fidelity.md` | How to run live simulated-vs-real verification against the lab. |
+⛔ **The per-file table that used to sit here is gone — it duplicated `MEMORY.md`, which is loaded
+automatically into every session.** Read the index there; it lists every memory file with its hook. What
+belongs HERE is only the rule about how to treat them, above.
 
 **Master prompt / V1 blueprint:** `C:\Users\grzegorz.gronski\Desktop\embertern-claude-code-prompt.md`
 **Target UI mockup:** `C:\Users\grzegorz.gronski\Desktop\UI koncepcja.png`

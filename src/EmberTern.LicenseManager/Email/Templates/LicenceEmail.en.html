@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>EmberTern licence — {{Licensee}}</title>
+</head>
+<body style="margin:0;padding:0;background:#EEF1F5;color:#20242A;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#EEF1F5">
+  <tr>
+    <td align="center" style="padding:30px 12px">
+
+      <table role="presentation" width="640" cellpadding="0" cellspacing="0" border="0"
+             style="width:640px;max-width:640px;background:#fff;border:1px solid #DCE1E8;border-radius:10px;overflow:hidden">
+
+        <!-- Header ───────────────────────────────────────────────────────────────────────────────
+             The wordmark is a LITERAL, not {{Product}}, and only here: the orange first letter is a
+             brand mark, and substitution works on the whole placeholder - it cannot colour one letter.
+             Safe by construction: LicenseVerifier refuses any artifact whose `prod` is not `EmberTern`,
+             so this header cannot describe another product. In the body and the footer the product
+             name is already read from the SIGNED payload ({{Product}}). -->
+        <tr>
+          <td style="background:#202326;padding:26px 40px 24px">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="font-size:23px;line-height:28px;font-weight:600;color:#fff"><span style="color:#F28C28">E</span>mberTern</td>
+                <td align="right" style="font-size:10px;letter-spacing:.15em;color:#AEB6C2">LICENCE</td>
+              </tr>
+              <tr>
+                <td colspan="2" style="padding-top:18px"><div style="height:2px;background:#2D6BBF;font-size:0">&nbsp;</div></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Body ─────────────────────────────────────────────────────────────────────────────── -->
+        <tr>
+          <td style="padding:42px 48px 38px">
+
+            <p style="margin:0 0 12px;font-size:16px;line-height:26px">Hello,</p>
+            <p style="margin:0 0 30px;font-size:17px;line-height:28px">I'm sending you the {{Product}} licence.</p>
+
+            <!-- The recipient stands on its OWN, never inside the sentence: a Polish name has to be
+                 declined and the value comes from the signed payload, so no language may inflect it.
+                 Label plus value sidesteps the grammar in both languages, and the two stay identical. -->
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:34px">
+              <tr>
+                <td style="border-left:3px solid #F28C28;padding:2px 0 3px 16px">
+                  <div style="font-size:10px;letter-spacing:.14em;font-weight:700;color:#788392">LICENCE RECIPIENT</div>
+                  <div style="margin-top:5px;font-size:19px;line-height:27px;font-weight:600">{{Licensee}}</div>
+                </td>
+              </tr>
+            </table>
+
+            <div style="font-size:11px;letter-spacing:.14em;font-weight:700;color:#667180;margin-bottom:10px">LICENCE DETAILS</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="background:#F7F9FC;border:1px solid #DCE2E9;border-radius:8px">
+              <tr>
+                <td style="padding:18px 22px">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td style="padding:7px 10px 7px 0;color:#75808E;font-size:14px">Seats</td>
+                      <td align="right" style="padding:7px 0;font-weight:600;font-size:14px">{{Seats}}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:7px 10px 7px 0;color:#75808E;font-size:14px">Valid from</td>
+                      <td align="right" style="padding:7px 0;font-size:14px">{{ValidFrom}}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:7px 10px 7px 0;color:#75808E;font-size:14px">Valid until</td>
+                      <td align="right" style="padding:7px 0;font-size:14px">{{ValidUntil}}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding:7px 10px 7px 0;color:#75808E;font-size:14px">Licence ID</td>
+                      <td align="right" style="padding:7px 0;font-family:Consolas,'Courier New',monospace;font-size:13px">{{LicenceId}}</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+
+            <div style="margin:38px 0 12px;font-size:11px;letter-spacing:.14em;font-weight:700;color:#667180">ACTIVATION</div>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td width="42" valign="top" style="padding-bottom:16px">
+                  <div style="width:28px;height:28px;line-height:28px;text-align:center;background:#EAF2FB;border-radius:50%;font-size:11px;font-weight:700;color:#2D6BBF">01</div>
+                </td>
+                <td valign="top" style="padding:3px 0 16px;font-size:14px;line-height:22px">Save the attached <strong>{{FileName}}</strong> file to disk.</td>
+              </tr>
+              <tr>
+                <td width="42" valign="top" style="padding-bottom:16px">
+                  <div style="width:28px;height:28px;line-height:28px;text-align:center;background:#EAF2FB;border-radius:50%;font-size:11px;font-weight:700;color:#2D6BBF">02</div>
+                </td>
+                <td valign="top" style="padding:3px 0 16px;font-size:14px;line-height:22px">Start {{Product}} and drop the file on the activation window.</td>
+              </tr>
+              <tr>
+                <td width="42" valign="top">
+                  <div style="width:28px;height:28px;line-height:28px;text-align:center;background:#EAF2FB;border-radius:50%;font-size:11px;font-weight:700;color:#2D6BBF">03</div>
+                </td>
+                <td valign="top" style="padding:3px 0;font-size:14px;line-height:22px">The licence is ready to use.</td>
+              </tr>
+            </table>
+            <p style="margin:17px 0 0 42px;font-size:13px;line-height:21px;color:#788392">Activation works offline — no internet connection is needed.</p>
+
+            <div style="margin-top:38px;background:#F7F9FC;border:1px solid #DCE2E9;border-radius:8px;padding:18px 20px">
+              <div style="font-size:10px;letter-spacing:.14em;font-weight:700;color:#788392;margin-bottom:7px">ATTACHMENT</div>
+              <div style="font-family:Consolas,'Courier New',monospace;font-size:14px;font-weight:600">{{FileName}}</div>
+              <p style="margin:9px 0 0;font-size:12px;line-height:19px;color:#788392">Keep this file — you can import it again at any time, for example after moving the program to another computer.</p>
+            </div>
+
+            <p style="margin:34px 0 0;font-size:14px;line-height:23px">If you have any questions, just reply to this message.</p>
+            <p style="margin:22px 0 0;font-size:14px;line-height:23px">Kind regards,<br /><strong>{{SenderName}}</strong></p>
+
+          </td>
+        </tr>
+
+        <!-- Footer ───────────────────────────────────────────────────────────────────────────── -->
+        <tr>
+          <td style="background:#202326;padding:22px 48px 24px">
+            <div style="font-size:13px;font-weight:600;color:#fff">{{Product}}</div>
+            <div style="font-size:11px;line-height:18px;color:#AEB6C2">Firebird developer workbench</div>
+            <div style="padding-top:8px;font-size:11px"><a href="mailto:{{SenderAddress}}" style="color:#AEB6C2;text-decoration:underline">{{SenderAddress}}</a></div>
+          </td>
+        </tr>
+
+      </table>
+
+    </td>
+  </tr>
+</table>
+</body>
+</html>

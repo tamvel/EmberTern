@@ -1,0 +1,139 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
+        xmlns:lm="using:EmberTern.LicenseManager"
+        x:Class="EmberTern.LicenseManager.Views.SendLicenceWindow"
+        x:DataType="vm:SendLicenceViewModel"
+        Title="{lm:Loc Send.SendLicence}"
+        Width="720" Height="640"
+        MinWidth="560" MinHeight="440"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- ⭐⭐ THE WINDOW SHOWS THE MESSAGE THAT WILL BE SENT — the same composed value, not a description of
+       one. Every field below reads `SendLicenceViewModel`, which holds the `LicenseMessage` the sender
+       receives; there is no second composition anywhere on this path, so the preview cannot disagree with
+       what leaves.
+
+       ⭐ ONE licence per send (user directive). ⛔ No recipient list, no bulk, no "send to all" — §14.1
+       allows bulk only behind a full recipient list and one explicit confirmation, and nothing asked for
+       it.
+
+       ⭐ The shape is this application's dialog skeleton, taken rather than invented: `dialog-header`,
+       `dialog-body` with the ONLY scrolling column, `dialog-footer` with `flat` actions before the
+       `primary` one — the same arrangement `SettingsWindow` and `StorageWindow` carry.
+
+       ⛔ No StackPanel `Spacing` in the body: every gap is owned by the element above it through a role,
+       so a caption never sits as far from its own field as two fields sit from each other. -->
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Header ─────────────────────────────────────────────────────────────────────────────────── -->
+    <Border Grid.Row="0" Classes="dialog-header">
+      <TextBlock Classes="h1" VerticalAlignment="Center" Text="{lm:Loc Send.SendLicence}" />
+    </Border>
+
+    <!-- Body ───────────────────────────────────────────────────────────────────────────────────── -->
+    <Border Grid.Row="1" Classes="dialog-body">
+      <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+        <!-- ══ WHO, WHAT, AND WHAT IS ATTACHED ═══════════════════════════════════════════════════ -->
+        <!-- ⚠ `Border.card`, not `Border.message`: this is a standing description of what is about to
+             happen, not a notification about something that did. -->
+        <Border Grid.Row="0" Classes="card" Margin="{DynamicResource Margin.SectionGap}">
+          <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto"
+                ColumnSpacing="{DynamicResource Space.Md}"
+                RowSpacing="{DynamicResource Space.Sm}">
+
+            <TextBlock Grid.Row="0" Grid.Column="0" Classes="field-label" Text="{lm:Loc Send.To}" />
+            <SelectableTextBlock Grid.Row="0" Grid.Column="1" Name="RecipientText"
+                                 Classes="value" TextWrapping="Wrap" Text="{Binding Recipient}" />
+
+            <TextBlock Grid.Row="1" Grid.Column="0" Classes="field-label" Text="{lm:Loc Send.From}" />
+            <SelectableTextBlock Grid.Row="1" Grid.Column="1" Name="SenderText"
+                                 Classes="value" TextWrapping="Wrap" Text="{Binding Sender}" />
+
+            <TextBlock Grid.Row="2" Grid.Column="0" Classes="field-label" Text="{lm:Loc Send.Subject}" />
+            <SelectableTextBlock Grid.Row="2" Grid.Column="1" Name="SubjectText"
+                                 Classes="value" TextWrapping="Wrap" Text="{Binding Subject}" />
+
+            <!-- ⭐ Name, type and SIZE. The size is the cheapest signal that the attachment is a real
+                 artifact — an operator who reads "0 bytes" stops before sending. -->
+            <TextBlock Grid.Row="3" Grid.Column="0" Classes="field-label" Text="{lm:Loc Send.Attached}" />
+            <SelectableTextBlock Grid.Row="3" Grid.Column="1" Name="AttachmentText"
+                                 Classes="value mono" TextWrapping="Wrap" Text="{Binding Attachment}" />
+          </Grid>
+        </Border>
+
+        <!-- ══ THE MESSAGE ═══════════════════════════════════════════════════════════════════════ -->
+        <StackPanel Grid.Row="1">
+          <TextBlock Classes="section" Text="{lm:Loc Send.Message}" />
+          <!-- ⚠ Says what the preview IS: the plain-text body. The HTML alternative travels with it and
+               is not rendered here — that would need a browser control this application does not have,
+               and a preview that silently showed one of two bodies would be the more dangerous choice. -->
+          <TextBlock Name="PreviewNoteText" Classes="hint" TextWrapping="Wrap"
+                     Margin="{DynamicResource Margin.FieldGap}" Text="{Binding PreviewNote}" />
+        </StackPanel>
+
+        <!-- ⭐ A read-only TextBox rather than a TextBlock: it scrolls, it selects, and it copies — an
+             operator checking a message before it reaches a customer will want all three. -->
+        <TextBox Grid.Row="2" Name="BodyPreview" Classes="multiline mono"
+                 IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                 VerticalAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 Text="{Binding Body}" />
+
+        <StackPanel Grid.Row="3">
+          <TextBlock Name="LanguageNoteText" Classes="hint" TextWrapping="Wrap"
+                     Margin="{DynamicResource Margin.FieldGap}" Text="{Binding LanguageNote}" />
+          <TextBlock Name="DeliveryNoteText" Classes="hint" TextWrapping="Wrap"
+                     Margin="{DynamicResource Margin.SectionGap}" Text="{Binding DeliveryNote}" />
+
+          <!-- ⭐ ONE message surface, the full recipe — severity stripe, severity glyph, one `Pad.Cell`
+               inset owned by one container. The same markup MainWindow and SettingsWindow carry. -->
+          <Border Classes="message" Classes.info="{Binding IsInfo}" Classes.success="{Binding IsSuccess}"
+                  Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}"
+                  IsVisible="{Binding HasMessage}">
+            <Grid ColumnDefinitions="3,*">
+              <Border Grid.Column="0" Classes="severity-stripe" />
+              <Grid Grid.Column="1" ColumnDefinitions="Auto,*" ColumnSpacing="{DynamicResource Space.Sm}"
+                    Margin="{DynamicResource Pad.Cell}">
+                <Viewbox Grid.Column="0" Classes="icon" VerticalAlignment="Center">
+                  <Canvas Width="24" Height="24">
+                    <Path Data="{Binding MessageIconKey,
+                                 Converter={x:Static lm:IconGeometryConverter.Instance}}" />
+                  </Canvas>
+                </Viewbox>
+                <TextBlock Grid.Column="1" Name="SendMessageText" VerticalAlignment="Center"
+                           TextWrapping="Wrap" Text="{Binding MessageText}" />
+              </Grid>
+            </Grid>
+          </Border>
+        </StackPanel>
+
+      </Grid>
+    </Border>
+
+    <!-- Footer ─────────────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⭐ `Save as .eml…` is not a consolation prize and is always available: some mailboxes refuse basic
+         auth, some relays strip attachments, and some operators simply want the message in their own Sent
+         items (§14.3). ⛔ It is recorded as an EXPORT, never as a send — nothing has reached the customer
+         when a file is written. -->
+    <Border Grid.Row="2" Classes="dialog-footer">
+      <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Md}"
+                  HorizontalAlignment="Right">
+        <Button Classes="flat" Name="CloseSend" Content="{lm:Loc Common.Close}"
+                IsCancel="True" Command="{Binding CloseCommand}" />
+        <Button Classes="flat" Name="SaveEml" Content="{lm:Loc Send.SaveAsEml}"
+                ToolTip.Tip="{lm:Loc Send.WritesExactMessageAsFileYou}"
+                IsEnabled="{Binding CanSaveFile}" Command="{Binding SaveFileCommand}" />
+        <Button Classes="primary" Name="SendLicence" Content="{lm:Loc Send.Send}"
+                ToolTip.Tip="{lm:Loc Send.SendsMessageItsAttachmentAfterConfirmation}"
+                IsEnabled="{Binding CanSend}" Command="{Binding SendCommand}" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>

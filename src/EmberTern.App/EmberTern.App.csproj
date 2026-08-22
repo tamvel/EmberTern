@@ -99,6 +99,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\EmberTern.Core\EmberTern.Core.csproj" />
+    <!-- ⭐ The licence VERIFIER only. ⛔ `EmberTern.Licensing.Issuing` — which can sign — is not referenced
+         here, is not in `EmberTern.slnx`, and six `PrivateKeyNeverShipsTests` fail the build if either
+         changes. Licensing is a pure assembly: zero package references, zero `System.Net.*`, and
+         `LicensingMakesNoNetworkCallsTests` is the machine-checkable form of decision D1 (V1 is offline). -->
+    <ProjectReference Include="..\EmberTern.Licensing\EmberTern.Licensing.csproj" />
     <ProjectReference Include="..\EmberTern.Office\EmberTern.Office.csproj" />
     <ProjectReference Include="..\EmberTern.Firebird\EmberTern.Firebird.csproj" />
   </ItemGroup>

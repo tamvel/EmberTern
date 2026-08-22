@@ -1,0 +1,39 @@
+Subject: Licencja EmberTern — {{Licensee}}
+
+EmberTern · LICENCJA
+════════════════════
+
+Dzień dobry,
+
+Przesyłam licencję {{Product}}.
+
+ODBIORCA LICENCJI
+{{Licensee}}
+
+SZCZEGÓŁY LICENCJI
+  Stanowiska     {{Seats}}
+  Ważna od       {{ValidFrom}}
+  Ważna do       {{ValidUntil}}
+  ID licencji    {{LicenceId}}
+
+AKTYWACJA
+  01  Zapisz załączony plik {{FileName}} na dysku.
+  02  Uruchom {{Product}} i przeciągnij plik na okno aktywacji.
+  03  Licencja jest gotowa do użycia.
+
+  Aktywacja przebiega offline — połączenie z internetem nie jest potrzebne.
+
+ZAŁĄCZNIK
+  {{FileName}}
+
+  Zachowaj ten plik — możesz go wczytać ponownie w dowolnym momencie,
+  na przykład po przeniesieniu programu na inny komputer.
+
+W razie pytań wystarczy odpowiedzieć na tę wiadomość.
+
+Pozdrawiam,
+{{SenderName}}
+
+--
+{{Product}} — Firebird developer workbench
+{{SenderAddress}}

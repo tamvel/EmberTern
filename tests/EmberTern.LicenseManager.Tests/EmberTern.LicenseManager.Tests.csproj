@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The License Manager's suite. ⛔ Not part of EmberTern.slnx, and not reachable from it — this is
+       where the signing-capable code is exercised, and it must stay on the far side of the wall that
+       PrivateKeyNeverShipsTests guards. Run with:  dotnet test EmberTern.LicenseManager.slnx -->
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Versions deliberately match tests/EmberTern.Tests. Two suites in one repository on two xunit
+         versions is a maintenance trap with nothing to show for it. -->
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0" />
+    <!-- ⚠ MUST match the Avalonia core version in EmberTern.LicenseManager — Avalonia.Headless depends
+         hard on Avalonia in ITS own number, so a mismatch either raises the core transitively or gives
+         NU1605. Same constraint EmberTern.Tests records. -->
+    <PackageReference Include="Avalonia.Headless" Version="12.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\EmberTern.Licensing\EmberTern.Licensing.csproj" />
+    <ProjectReference Include="..\..\src\EmberTern.Licensing.Issuing\EmberTern.Licensing.Issuing.csproj" />
+    <ProjectReference Include="..\..\src\EmberTern.LicenseManager\EmberTern.LicenseManager.csproj" />
+  </ItemGroup>
+
+</Project>

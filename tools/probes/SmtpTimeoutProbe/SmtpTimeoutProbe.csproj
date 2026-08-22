@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DEVELOPER VERIFICATION TOOL — NOT PART OF THE PRODUCT. See tools/probes/README.md.
+
+    L10 side-fix — the SMTP settings test "hangs forever" on a wrong configuration.
+
+    The question this answers, and it is a question about the BCL rather than about our code:
+    does `SmtpClient.Timeout` bound `SendMailAsync`, and does the CancellationToken overload actually
+    interrupt a connect that is going nowhere? Both are documented ambiguously and both decide what the
+    fix has to be — so they are MEASURED here rather than inferred.
+
+    It needs no server and no password: the whole point is an address that never answers.
+
+    Deliberately NOT in either solution.
+
+    Run: dotnet run, from this folder.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

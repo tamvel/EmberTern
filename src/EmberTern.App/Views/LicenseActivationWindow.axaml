@@ -1,0 +1,109 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:EmberTern.App.ViewModels"
+        xmlns:app="using:EmberTern.App"
+        xmlns:controls="using:EmberTern.App.Controls"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d"
+        x:Class="EmberTern.App.Views.LicenseActivationWindow"
+        x:DataType="vm:LicenseActivationViewModel"
+        Title="{app:Loc LicenseActivationTitle}"
+        Width="560"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- The customer's entire first contact with licensing (design §17.1): drop the file we e-mailed, or pick
+       it, or paste it. No wizard, no steps, no "buy now" - one surface, one action.
+
+       The three gestures feed ONE buffer (the paste box), so what Activate acts on is always visible.
+
+       ⚠ ScrollViewer first, ceiling second (GrowingDialogBehavior.Attach in the code-behind). This window
+       genuinely grows AFTER opening - the banner appears on the first failed attempt and the Replace button
+       appears when a different licence id is offered - and a ceiling without something to scroll would
+       simply CLIP it. -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="{DynamicResource Pad.Dialog}" Spacing="{DynamicResource Space.Lg}">
+
+      <TextBlock Classes="h1" Text="{app:Loc LicenseActivationTitle}" />
+
+      <TextBlock Classes="field-label"
+                 Text="{app:Loc LicenseActivationIntro}"
+                 TextWrapping="Wrap" />
+
+      <!-- The drop target, built from shared tokens only: an outline, the raised surface every floating thing
+           uses, and the subtle foreground for the hint. -->
+      <Border x:Name="DropTarget"
+              Background="{DynamicResource SurfaceRaisedBrush}"
+              BorderBrush="{DynamicResource ControlOutlineBrush}"
+              BorderThickness="{DynamicResource Border.All}"
+              CornerRadius="{DynamicResource Radius.Surface}"
+              Padding="{DynamicResource Pad.Group}">
+        <StackPanel HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="{DynamicResource Space.Md}">
+          <TextBlock Text="{app:Loc LicenseActivationDropHint}"
+                     Foreground="{DynamicResource SubtleForegroundBrush}"
+                     HorizontalAlignment="Center" />
+          <TextBlock Text="{app:Loc LicenseActivationOr}"
+                     Foreground="{DynamicResource SubtleForegroundBrush}"
+                     FontSize="{DynamicResource Text.Compact.Size}"
+                     HorizontalAlignment="Center" />
+          <Button x:Name="BrowseButton"
+                  Classes="flat"
+                  Content="{app:Loc LicenseActivationBrowse}"
+                  HorizontalAlignment="Center"
+                  Click="OnBrowseClick" />
+        </StackPanel>
+      </Border>
+
+      <StackPanel Spacing="{DynamicResource Space.Sm}">
+        <TextBlock Classes="field-label" Text="{app:Loc LicenseActivationPasteLabel}" />
+        <!-- Code font: the artifact is armored base64, and a proportional face makes a truncated paste
+             impossible to spot. Height is a deliberate viewport onto a long artifact, not a metric role. -->
+        <TextBox x:Name="PasteBox"
+                 Text="{Binding PasteText}"
+                 PlaceholderText="{app:Loc LicenseActivationPastePlaceholder}"
+                 AcceptsReturn="True"
+                 TextWrapping="Wrap"
+                 Height="110"
+                 FontFamily="{DynamicResource Font.Code}"
+                 FontSize="{DynamicResource Text.Compact.Size}" />
+      </StackPanel>
+
+      <!-- The IDE's ONE message surface. The host sets only Severity / Message / IsVisible - never its own
+           Background, BorderBrush or BorderThickness, which would outrank the shared style. -->
+      <controls:MessageBanner x:Name="ActivationBanner"
+                              Severity="{Binding Severity}"
+                              Message="{Binding Message}"
+                              IsVisible="{Binding HasMessage}" />
+
+      <StackPanel Orientation="Horizontal"
+                  Spacing="{DynamicResource Space.Md}"
+                  HorizontalAlignment="Right">
+        <!-- Shown only when the offered licence carries a different id (§16.4): replacing is legitimate, but
+             it is a decision the user makes, not a default. -->
+        <Button x:Name="ReplaceButton"
+                Classes="flat"
+                Content="{app:Loc LicenseActivationReplace}"
+                IsVisible="{Binding NeedsReplaceConfirmation}"
+                Command="{Binding ReplaceCommand}" />
+        <Button x:Name="ActivateButton"
+                Classes="primary"
+                Content="{app:Loc LicenseActivationActivate}"
+                Command="{Binding ActivateCommand}"
+                IsDefault="True" />
+        <Button x:Name="CloseButton"
+                Classes="flat"
+                Content="{app:Loc LicenseActivationClose}"
+                Click="OnCloseClick"
+                IsCancel="True" />
+      </StackPanel>
+
+    </StackPanel>
+  </ScrollViewer>
+</Window>

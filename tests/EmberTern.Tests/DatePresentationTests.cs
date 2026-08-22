@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -220,6 +220,46 @@ public class DatePresentationTests
                 + "goes through DateTimeDisplay.",
         };
 
+    /// <summary>
+    /// ⭐⭐ <b>The THIRD category, added 2026-08-16: a deliberate ISO display in the License Manager.</b>
+    ///
+    /// <para>The two categories above are "follows the reader" and "machine-readable". EmberTern License
+    /// Manager is neither, and calling it either would be a lie in the record. It is a SEPARATE,
+    /// single-operator administrative application that: has no localization at all (English only, by the
+    /// convention L3 shipped and L5.1 followed); stores every timestamp as RFC 3339 in its register, so a
+    /// displayed ISO date is the same string the operator sees when they open <c>licenses.db</c> with any
+    /// SQL tool; and had ISO ratified as its date form in L3 — <i>"2027-08-15 is unambiguous, verifiable,
+    /// and what an administrator reads off a purchase order"</i>
+    /// (<c>docs/design/licensing-system.md</c> §36.2).</para>
+    ///
+    /// <para>⚠ So these files are recorded here rather than excluded from the scan: the point of this
+    /// guard is that an author must SAY which side of the line a date is on, and "deliberate ISO in the
+    /// admin tool" is a side with a reason. ⛔ It is not a general licence for `EmberTern.LicenseManager`:
+    /// a file has to be named, one at a time, exactly like the machine-readable set.</para>
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, string> DeliberateIsoDisplayPaths =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["src/EmberTern.LicenseManager/ViewModels/LicenseBrowserViewModel.cs"] =
+                "The licences list and its detail line. ISO is the License Manager's ratified date form "
+                + "(§36.2) and matches what its own register stores, so an operator can correlate a row "
+                + "with the .db by eye.",
+            ["src/EmberTern.LicenseManager/ViewModels/BulkSendViewModel.cs"] =
+                "The bulk-send report's per-attempt TIME (L10.4). ISO is the License Manager's ratified "
+                + "date form for EVERY date (§36.2, terminology.md §4.4), and this one is read beside "
+                + "`licence.sent` audit lines that store the same instant as RFC 3339 — so an operator "
+                + "correlating a report row with the register by eye is comparing two renderings of one "
+                + "format rather than translating between two.",
+            ["src/EmberTern.LicenseManager/ViewModels/AboutViewModel.cs"] =
+                "The About window's release date (L9). ⭐ The PRODUCT renders this one date in the "
+                + "reader's long-date pattern, arguing that a single prominent date is exactly the case "
+                + "for it; the License Manager does not, because ISO is its ratified date form for EVERY "
+                + "date (§36.2, terminology.md §4.4) and one exception would be the only non-ISO "
+                + "date in the application. ⚠ The value comes from <ReleaseDate> in "
+                + "Directory.Build.props, which is stored ISO as a build contract, so this is also the "
+                + "form it was written in.",
+        };
+
     // Matches a date/time custom format string being built: ToString("…yyyy…") and friends.
     private static readonly Regex DatePattern =
         new(@"ToString\(\s*@?""[^""]*(yyyy|MMMM|MMM| MM|dd|HH)[^""]*""", RegexOptions.Compiled);
@@ -233,6 +273,7 @@ public class DatePresentationTests
         {
             var relative = Relative(file);
             if (MachineReadablePaths.ContainsKey(relative)) continue;
+            if (DeliberateIsoDisplayPaths.ContainsKey(relative)) continue;
 
             var text = File.ReadAllText(file);
             foreach (Match m in DatePattern.Matches(text))

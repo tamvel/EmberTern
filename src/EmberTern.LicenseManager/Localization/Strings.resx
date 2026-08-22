@@ -1,0 +1,1568 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <!--
+    EmberTern License Manager — English base (neutral) resources.
+
+    ⭐ THIS FILE IS THE BASE LANGUAGE, and "base" is technical rather than a preference: a satellite
+       culture (Strings.<culture>.resx) may TRANSLATE entries, never introduce them. ResourceManager falls
+       back neutral-ward automatically, so an entry a translation has not covered renders in English
+       instead of breaking — which is why English must stay COMPLETE.
+
+    ⭐ THE KEY IS "<CatalogPrefix><MemberName>". Each catalog class carries [StringCatalog("Prefix.")] and
+       resolves its own members by name, so there is one owner of a key and no lookup table in between.
+       The prefix exists because the catalog is split by theme (L8 decision D‑5): without it two areas
+       could each declare a `WindowTitle`.
+
+    ⚠⚠ VALUES ARE THE STRINGS THE APPLICATION ALREADY SHIPPED, character for character. L8.1–L8.4 change
+       no user-visible word: the mechanism is built and the existing ENGLISH text is migrated onto it.
+       L8.5 is the stage that introduces Polish and is the only one where wording is a decision.
+
+    ⚠ `Localization.PluralRuleSet` is METADATA, not a sentence: it names the GRAMMAR this culture uses
+       (see PluralRules), never the language. ⛔ Do not translate it, and ⛔ do not name a rule set after
+       a language.
+  -->
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="Localization.PluralRuleSet" xml:space="preserve">
+    <value>one-other</value>
+  </data>
+
+  <data name="Settings.WindowTitle" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Settings.General" xml:space="preserve">
+    <value>General</value>
+  </data>
+  <data name="Settings.Email" xml:space="preserve">
+    <value>E-mail</value>
+  </data>
+  <data name="Settings.ApplicationLanguage" xml:space="preserve">
+    <value>Application language</value>
+  </data>
+<data name="Settings.MessageLanguage" xml:space="preserve">
+    <value>Message language</value>
+  </data>
+  <data name="Settings.MessageLanguageDescription" xml:space="preserve">
+    <value>The language a licence e-mail is written in. It is independent of the interface language, and it applies to every customer — switch it before sending to a customer who reads the other language.</value>
+  </data>
+  <data name="Settings.SmtpSettings" xml:space="preserve">
+    <value>SMTP settings</value>
+  </data>
+  <data name="Settings.SecurityStartTls" xml:space="preserve">
+    <value>STARTTLS (recommended)</value>
+  </data>
+  <data name="Settings.SecurityNone" xml:space="preserve">
+    <value>No encryption — internal relay only</value>
+  </data>
+  <data name="Status.SigningWithKey" xml:space="preserve">
+    <value>Signing with key {0}.</value>
+  </data>
+  <data name="Status.SelectLicenceInListFirst" xml:space="preserve">
+    <value>Select a licence in the list first.</value>
+  </data>
+  <data name="Status.LicenceNamesUnknownCustomer" xml:space="preserve">
+    <value>Licence {0} names customer {1}, which is not in the register.</value>
+  </data>
+  <data name="Status.NewCustomerHint" xml:space="preserve">
+    <value>New customer. The name is required — it is what gets signed.</value>
+  </data>
+  <data name="Status.CustomerNameRequired" xml:space="preserve">
+    <value>A customer name is required. It is signed into every licence and shown in their EmberTern.</value>
+  </data>
+  <data name="Status.CustomerSaved" xml:space="preserve">
+    <value>Saved {0}.</value>
+  </data>
+  <data name="Status.SelectOrSaveCustomerFirst" xml:space="preserve">
+    <value>Select or save a customer first.</value>
+  </data>
+  <data name="Status.NewLicenceHint" xml:space="preserve">
+    <value>New licence. Save the terms, then issue.</value>
+  </data>
+  <data name="Status.SelectCustomerFirst" xml:space="preserve">
+    <value>Select a customer first.</value>
+  </data>
+  <data name="Status.LicenceSaved" xml:space="preserve">
+    <value>Saved licence {0}….</value>
+  </data>
+  <data name="Status.SelectSavedLicenceToIssue" xml:space="preserve">
+    <value>Select a saved licence to issue.</value>
+  </data>
+  <data name="Status.ChooseIssueReasonFirst" xml:space="preserve">
+    <value>Choose why this licence is being issued again before signing a new artifact.</value>
+  </data>
+  <data name="Status.LicenceNotIssued" xml:space="preserve">
+    <value>The licence could not be issued: {0}</value>
+  </data>
+  <data name="Status.IssuedAndRecorded" xml:space="preserve">
+    <value>Issued and recorded for {0}. Not saved to disk — it can be exported from the register at any time.</value>
+  </data>
+  <data name="Status.IssuedAndSaved" xml:space="preserve">
+    <value>Issued for {0} and saved to {1}.</value>
+  </data>
+  <data name="Status.IssuedButFileNotWritten" xml:space="preserve">
+    <value>Issued and recorded, but the file could not be written: {0}</value>
+  </data>
+  <data name="Status.SelectLicence" xml:space="preserve">
+    <value>Select a licence.</value>
+  </data>
+  <data name="Status.LicenceNeverIssued" xml:space="preserve">
+    <value>This licence has never been issued.</value>
+  </data>
+  <data name="Status.ArtifactExported" xml:space="preserve">
+    <value>Exported the stored artifact to {0}.</value>
+  </data>
+  <data name="Status.SelectLicenceToSend" xml:space="preserve">
+    <value>Select a licence to send.</value>
+  </data>
+  <data name="Status.EmailIsWindowsOnly" xml:space="preserve">
+    <value>Sending e-mail is only available on Windows, because the SMTP password is protected with Windows DPAPI. Export the licence to a file instead.</value>
+  </data>
+  <data name="Status.LicenceNeverIssuedNothingToSend" xml:space="preserve">
+    <value>This licence has never been issued, so there is no artifact to send. Issue it first.</value>
+  </data>
+  <data name="Status.EmailSettingsNotRead" xml:space="preserve">
+    <value>The e-mail settings could not be read: {0}</value>
+  </data>
+  <data name="Status.EmailNotConfigured" xml:space="preserve">
+    <value>E-mail is not configured yet. Open Settings ▸ E-mail and enter at least a sender address.</value>
+  </data>
+  <data name="Status.SelectIssueFromHistoryFirst" xml:space="preserve">
+    <value>Select an issue from the history first.</value>
+  </data>
+  <data name="Status.IssueExported" xml:space="preserve">
+    <value>Exported issue {0} of {1} to {2}.</value>
+  </data>
+  <data name="Status.FileNotWritten" xml:space="preserve">
+    <value>The file could not be written: {0}</value>
+  </data>
+  <data name="Status.BackupPassphraseHint" xml:space="preserve">
+    <value>Use a long passphrase for the backup — six generated words, kept in a password manager. It cannot be reset, and a backup nobody can open is not a backup.</value>
+  </data>
+  <data name="Status.PassphrasesDoNotMatch" xml:space="preserve">
+    <value>The two passphrases do not match.</value>
+  </data>
+  <data name="Status.BackupWritten" xml:space="preserve">
+    <value>Encrypted backup written to {0} — {1} customer(s), {2} licence(s), {3} artifact(s) and {4} audit entries, verified row for row against the register.</value>
+  </data>
+  <data name="Status.BackupNotWritten" xml:space="preserve">
+    <value>The backup could not be written: {0}</value>
+  </data>
+  <data name="Status.JsonlExportWritten" xml:space="preserve">
+    <value>Plain JSONL export written to {0} — {1} line(s). ⛔ NOT encrypted: it carries every issued licence token in readable form. It is a diagnostic escape hatch, not a backup.</value>
+  </data>
+  <data name="Status.ExportNotWritten" xml:space="preserve">
+    <value>The export could not be written: {0}</value>
+  </data>
+  <data name="Status.RegisterNotClosed" xml:space="preserve">
+    <value>The register could not be closed, so it was not replaced. Nothing has been changed.</value>
+  </data>
+  <data name="Status.RegisterReplaced" xml:space="preserve">
+    <value>The active register was replaced — {0} customer(s), {1} licence(s), {2} artifact(s) and {3} audit entries, verified again after it was written. ⭐ Your previous register was kept as {4}. The License Manager will now close — start it again to use the restored register.</value>
+  </data>
+  <data name="Status.RestoredElsewhere" xml:space="preserve">
+    <value>Restored into {0} — {1} customer(s), {2} licence(s), {3} artifact(s) and {4} audit entries, and it passes the integrity check. ⭐ {5} was not changed.</value>
+  </data>
+  <data name="Status.BackupNotRead" xml:space="preserve">
+    <value>That backup could not be read: {0}</value>
+  </data>
+  <data name="Status.BackupInspected" xml:space="preserve">
+    <value>That backup was taken on {0} UTC (register schema {1}). Enter its passphrase to restore it.</value>
+  </data>
+  <data name="Status.DataFolderNotOpened" xml:space="preserve">
+    <value>The data folder could not be opened: {0}</value>
+  </data>
+  <data name="Status.EmailSettingsNotSaved" xml:space="preserve">
+    <value>The e-mail settings could not be saved: {0}</value>
+  </data>
+  <data name="Status.SettingsReloaded" xml:space="preserve">
+    <value>Reloaded the saved settings.</value>
+  </data>
+  <data name="Status.ConfirmationUnavailableNothingChanged" xml:space="preserve">
+    <value>This action needs a confirmation and none could be shown, so nothing was changed.</value>
+  </data>
+  <data name="Status.EmailSettingsNotDeleted" xml:space="preserve">
+    <value>The e-mail settings could not be deleted: {0}</value>
+  </data>
+  <data name="Status.EmailNoLongerConfigured" xml:space="preserve">
+    <value>E-mail is no longer configured.</value>
+  </data>
+  <data name="Status.NotAnEmailAddress" xml:space="preserve">
+    <value>'{0}' does not look like an e-mail address. Enter the address the test message should arrive at.</value>
+  </data>
+  <data name="Status.NoSmtpHostToTest" xml:space="preserve">
+    <value>There is no SMTP host to test. Enter a server above — file delivery needs no test, because it never contacts anything.</value>
+  </data>
+  <data name="Status.ConfirmationUnavailableNothingSent" xml:space="preserve">
+    <value>This action needs a confirmation and none could be shown, so nothing was sent.</value>
+  </data>
+  <data name="Status.SendingTestMessage" xml:space="preserve">
+    <value>Sending a test message to {0}…</value>
+  </data>
+  <data name="Status.TestEmailSent" xml:space="preserve">
+    <value>Test email sent successfully to {0} through {1}. The SMTP configuration works.</value>
+  </data>
+  <data name="Status.TestMessageNotSent" xml:space="preserve">
+    <value>The test message could not be sent: {0} The SMTP configuration on this page did not work — check the host, the port, the transport security and the sign-in details.</value>
+  </data>
+  <data name="Status.EnterKeystorePassphrase" xml:space="preserve">
+    <value>Enter the keystore passphrase.</value>
+  </data>
+  <data name="Status.PassphraseDoesNotOpenKeystore" xml:space="preserve">
+    <value>That passphrase does not open the keystore. Check it and try again.</value>
+  </data>
+  <data name="Status.NotAKeystore" xml:space="preserve">
+    <value>The file at {0} is not an EmberTern keystore.</value>
+  </data>
+  <data name="Status.KeystoreFromNewerBuild" xml:space="preserve">
+    <value>The keystore was written by a newer License Manager. Update this application.</value>
+  </data>
+  <data name="Status.KeystoreDamaged" xml:space="preserve">
+    <value>The keystore is damaged. Restore it from an offline backup and verify the restore.</value>
+  </data>
+  <data name="Status.KeystoreNotOpened" xml:space="preserve">
+    <value>The keystore could not be opened ({0}).</value>
+  </data>
+  <data name="Status.KeystoreNotRead" xml:space="preserve">
+    <value>The keystore could not be read: {0}</value>
+  </data>
+  <data name="Status.KeyIdRequired" xml:space="preserve">
+    <value>A key id is required — it travels in every licence.</value>
+  </data>
+  <data name="Status.NewKeyPassphraseHint" xml:space="preserve">
+    <value>Use a long passphrase — six generated words, kept in a password manager and on paper. It cannot be reset, and losing it means no licence can ever be renewed.</value>
+  </data>
+  <data name="Status.KeystoreNotWritten" xml:space="preserve">
+    <value>The keystore could not be written: {0}</value>
+  </data>
+  <data name="Status.SendingTo" xml:space="preserve">
+    <value>Sending to {0}…</value>
+  </data>
+  <data name="Status.SentThrough" xml:space="preserve">
+    <value>Sent to {0} through {1}. Recorded in the audit log.</value>
+  </data>
+  <data name="Status.MessageNotSent" xml:space="preserve">
+    <value>The message was not sent: {0} The attempt is recorded in the audit log. You can save the message as an .eml file and send it from your own mail client instead.</value>
+  </data>
+  <data name="Status.NoSaveLocationOffered" xml:space="preserve">
+    <value>No place to save was offered, so nothing was written.</value>
+  </data>
+  <data name="Status.MessageSavedToFile" xml:space="preserve">
+    <value>Saved to {0}. Open it in your mail client and send it — the licence is attached and the message is ready.</value>
+  </data>
+  <data name="Status.PreviewOutOfDate" xml:space="preserve">
+    <value>The selection or the target date changed since this preview was built, so nothing was issued. The preview below is up to date — check it and run the operation again.</value>
+  </data>
+  <data name="Status.NothingIssuedRegisterUnchanged" xml:space="preserve">
+    <value>Nothing was issued and the register is unchanged. {0}</value>
+  </data>
+  <data name="Status.VerdictValid" xml:space="preserve">
+    <value>EmberTern would accept it: valid until {0}, licensed to {1}.</value>
+  </data>
+  <data name="Status.VerdictGrace" xml:space="preserve">
+    <value>EmberTern would accept it, but it is past its expiry and inside the grace period.</value>
+  </data>
+  <data name="Status.VerdictExpired" xml:space="preserve">
+    <value>EmberTern would report it as expired.</value>
+  </data>
+  <data name="Status.VerdictNotYetValid" xml:space="preserve">
+    <value>EmberTern would report it as not yet valid.</value>
+  </data>
+  <data name="Status.VerdictRefused" xml:space="preserve">
+    <value>EmberTern would refuse it ({0}).</value>
+  </data>
+  <data name="Status.CopiedToClipboard" xml:space="preserve">
+    <value>Copied {0} to the clipboard.</value>
+  </data>
+  <data name="Confirm.SendLicenceTitle" xml:space="preserve">
+    <value>Send this licence?</value>
+  </data>
+  <data name="Confirm.SendLicenceMessage" xml:space="preserve">
+    <value>The message and {0} will be sent to {1} through {2}. This cannot be recalled.</value>
+  </data>
+  <data name="Confirm.SendLicenceAction" xml:space="preserve">
+    <value>Send</value>
+  </data>
+  <data name="Confirm.ForgetSmtpTitle" xml:space="preserve">
+    <value>Forget SMTP settings?</value>
+  </data>
+  <data name="Confirm.ForgetSmtpMessage" xml:space="preserve">
+    <value>This will permanently remove the saved SMTP configuration, including the stored password. You can enter the settings again later.</value>
+  </data>
+  <data name="Confirm.ForgetSmtpAction" xml:space="preserve">
+    <value>Forget settings</value>
+  </data>
+  <data name="Confirm.TestMessageTitle" xml:space="preserve">
+    <value>Send a test message?</value>
+  </data>
+  <data name="Confirm.TestMessageMessage" xml:space="preserve">
+    <value>A test message will be sent to {0} through {1}, using the settings on this page. No licence is attached and nothing is recorded against any customer.</value>
+  </data>
+  <data name="Confirm.TestMessageAction" xml:space="preserve">
+    <value>Send test</value>
+  </data>
+  <data name="Confirm.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Status.TickAtLeastOneLicence" xml:space="preserve">
+    <value>Tick at least one licence to extend.</value>
+  </data>
+<data name="Status.LicenceRefersToUnknownCustomer" xml:space="preserve">
+    <value>Licence {0} refers to customer {1}, which the register does not hold. Nothing was issued.</value>
+  </data>
+<data name="Status.Verbatim" xml:space="preserve">
+    <value>{0}</value>
+  </data>
+  <data name="Status.KeystoreAlreadyExists" xml:space="preserve">
+    <value>A keystore already exists. Creating a second signing key would leave every licence already issued unrenewable.</value>
+  </data>
+  <data name="Status.SettingsCarryNoSmtpHost" xml:space="preserve">
+    <value>These settings carry no SMTP host, so nothing can be sent directly. Save the message as an .eml file instead, or add a server under Settings ▸ E-mail.</value>
+  </data>
+  <data name="Status.SmtpUnknownMessageLanguage" xml:space="preserve">
+    <value>The message language '{0}' is not one this version can write.</value>
+  </data>
+  <data name="Status.SmtpSenderRequired" xml:space="preserve">
+    <value>A sender address is required — it is what the customer replies to.</value>
+  </data>
+  <data name="Status.SmtpSenderNotAnAddress" xml:space="preserve">
+    <value>The sender address does not look like an e-mail address: {0}</value>
+  </data>
+  <data name="Status.SmtpPortOutOfRange" xml:space="preserve">
+    <value>The port must be between 1 and 65535, not {0}.</value>
+  </data>
+  <data name="Status.SmtpUsernameNeedsStartTls" xml:space="preserve">
+    <value>A username cannot be used without STARTTLS — the password would travel unencrypted. Either enable STARTTLS or clear the username.</value>
+  </data>
+  <data name="Status.SmtpPasswordNeedsUsername" xml:space="preserve">
+    <value>A password without a username cannot be used. Enter the account that signs in.</value>
+  </data>
+  <data name="Status.SmtpCredentialsWithoutServer" xml:space="preserve">
+    <value>Credentials were entered but no server. Enter the SMTP host, or clear the credentials and deliver the message as a file instead.</value>
+  </data>
+  <data name="Status.BackupWrongPassphrase" xml:space="preserve">
+    <value>That passphrase does not open the backup — or the file was modified after it was written. Check the passphrase first.</value>
+  </data>
+  <data name="Status.BackupNotABackup" xml:space="preserve">
+    <value>That file is not an EmberTern register backup. ⚠ The keystore is a different file with a different purpose, and it is not restored here.</value>
+  </data>
+  <data name="Status.BackupFromNewerBuild" xml:space="preserve">
+    <value>That backup was written by a newer License Manager. Update this application to read it.</value>
+  </data>
+  <data name="Status.BackupUnsupportedScheme" xml:space="preserve">
+    <value>That backup uses an encryption scheme this build does not implement.</value>
+  </data>
+  <data name="Status.BackupCorrupt" xml:space="preserve">
+    <value>That backup file is damaged and cannot be read. Try another copy.</value>
+  </data>
+  <data name="Status.BackupNotOpened" xml:space="preserve">
+    <value>That backup could not be opened ({0}).</value>
+  </data>
+  <data name="Status.RestoreNotCompleted" xml:space="preserve">
+    <value>The restore could not be completed: {0}</value>
+  </data>
+  <data name="Status.RestoreRefusedWithProblems" xml:space="preserve">
+    <value>{0} {1}</value>
+  </data>
+  <data name="Status.RegisterClosedAndMustRestart" xml:space="preserve">
+    <value>{0} ⚠ The License Manager has closed its register and must be restarted. Your register on disk was not left in a half-finished state.</value>
+  </data>
+  <data name="Status.RestoreBackupInconsistent" xml:space="preserve">
+    <value>The backup restored into a register that disagrees with itself, so nothing was written.</value>
+  </data>
+  <data name="Status.RestoreRegisterStillOpen" xml:space="preserve">
+    <value>The register is still open, so it was not replaced. Close the License Manager's register first — nothing has been changed.</value>
+  </data>
+  <data name="Status.RestoreRegisterNotOpenable" xml:space="preserve">
+    <value>The register file cannot be opened for replacement, so nothing was changed.</value>
+  </data>
+  <data name="Status.RestorePreservedCopyFailed" xml:space="preserve">
+    <value>The existing register could not be kept safe, so it was not replaced. Nothing has been changed.</value>
+  </data>
+  <data name="Status.RestoreFinalCheckFailed" xml:space="preserve">
+    <value>The restored register failed its final check, so the previous one was put back.</value>
+  </data>
+  <data name="Status.RestoreDoesNotMatchVerified" xml:space="preserve">
+    <value>The restored register does not match what was verified, so the previous one was put back.</value>
+  </data>
+  <data name="Status.RestoreChooseFolder" xml:space="preserve">
+    <value>Choose a folder to restore into.</value>
+  </data>
+  <data name="Status.RestoreNotAUsableFolderPath" xml:space="preserve">
+    <value>That is not a usable folder path.</value>
+  </data>
+  <data name="Status.RestorePathIsAFile" xml:space="preserve">
+    <value>That path is a file. A restore needs a folder of its own.</value>
+  </data>
+  <data name="Status.RestoreNeverIntoActiveFolder" xml:space="preserve">
+    <value>A restore never writes into the active register's folder. Choose a new, empty folder; you can swap the restored register in yourself once you have looked at it.</value>
+  </data>
+  <data name="Status.RestoreFolderNotEmpty" xml:space="preserve">
+    <value>That folder is not empty. A restore always creates its register in a folder of its own, so nothing that is already there can be written over.</value>
+  </data>
+  <data name="Status.RestoreBackupIsNotARegister" xml:space="preserve">
+    <value>The backup decrypted, but what came out is not a register this build can open.</value>
+  </data>
+  <data name="Status.IntegrityNoCurrentArtifact" xml:space="preserve">
+    <value>Licence {0} has artifacts but no current one is marked.</value>
+  </data>
+  <data name="Status.IntegrityCurrentNotOwned" xml:space="preserve">
+    <value>Licence {0} marks a current artifact that does not belong to it.</value>
+  </data>
+  <data name="Status.IntegrityCurrentNotNewest" xml:space="preserve">
+    <value>Licence {0} marks an artifact that is not its newest.</value>
+  </data>
+  <data name="Status.IntegrityCustomerMissing" xml:space="preserve">
+    <value>Licence {0} belongs to a customer that is not in the register.</value>
+  </data>
+  <data name="Status.SmtpFileNotRead" xml:space="preserve">
+    <value>The e-mail settings file could not be read: {0}</value>
+  </data>
+  <data name="Status.SmtpFileEmpty" xml:space="preserve">
+    <value>The e-mail settings file is empty.</value>
+  </data>
+  <data name="Status.SmtpFileFromNewerBuild" xml:space="preserve">
+    <value>These e-mail settings were written by a newer License Manager (version {0}). Update this application, or delete the file to configure e-mail again.</value>
+  </data>
+  <data name="Status.SmtpPasswordNotDecrypted" xml:space="preserve">
+    <value>The stored password could not be decrypted. It is protected for this Windows account on this computer, so a settings file copied from elsewhere cannot be read. Enter the password again to store it for this account.</value>
+  </data>
+  <data name="Status.SavedFileDelivery" xml:space="preserve">
+    <value>Saved. Messages can be delivered as .eml files.</value>
+  </data>
+  <data name="Status.SavedThroughHost" xml:space="preserve">
+    <value>Saved. Messages will be sent through {0}.</value>
+  </data>
+  <data name="Status.DpapiProtectionNote" xml:space="preserve">
+    <value>The password is encrypted with Windows DPAPI for this Windows account on this computer. It cannot be read by another account, on another machine, or from a copy of the file — this is deliberate, and it means the password has to be entered again after moving to a new machine.</value>
+  </data>
+  <data name="Status.EmailSettingsNotReadShort" xml:space="preserve">
+    <value>The e-mail settings could not be read.</value>
+  </data>
+  <data name="Status.ReasonRequired" xml:space="preserve">
+    <value>Choose why this licence is being issued.</value>
+  </data>
+  <data name="Status.ReasonMustBeInitial" xml:space="preserve">
+    <value>This licence has never been issued, so the first artifact can only be the initial one.</value>
+  </data>
+  <data name="Status.ReasonNotInitialAgain" xml:space="preserve">
+    <value>This licence has already been issued, so a further artifact cannot be the initial one. Choose a renewal, a terms change, or a re-issue of a lost file.</value>
+  </data>
+  <data name="Status.ReasonExpiryNotMoved" xml:space="preserve">
+    <value>The expiry has not moved since the last issue, so this is not a renewal. Change the expiry and press Save terms first, or pick a different reason.</value>
+  </data>
+  <data name="Status.ReasonNoTermsChange" xml:space="preserve">
+    <value>Nothing but the expiry differs from the last issue, so there is no terms change to record. Press Save terms if the form still holds unsaved edits, or pick a different reason.</value>
+  </data>
+  <data name="Status.ReasonNotRecorded" xml:space="preserve">
+    <value>'{0}' is not one of the recorded issuing reasons.</value>
+  </data>
+  <data name="Status.TermsSeatsRequired" xml:space="preserve">
+    <value>A licence must carry at least one seat.</value>
+  </data>
+  <data name="Status.TermsStartDateRequired" xml:space="preserve">
+    <value>A start date is required. Pick one from the calendar, or type it into the field.</value>
+  </data>
+  <data name="Status.TermsExpiryDateRequired" xml:space="preserve">
+    <value>An expiry date is required. Pick one from the calendar, or type it into the field.</value>
+  </data>
+  <data name="Status.ComposeNoCustomerEmail" xml:space="preserve">
+    <value>{0} has no e-mail address. Add one on the Customer page, or export the licence to a file and deliver it another way.</value>
+  </data>
+  <data name="Status.ComposeCustomerEmailInvalid" xml:space="preserve">
+    <value>The customer's e-mail address does not look like one: {0}</value>
+  </data>
+  <data name="Status.ComposeNoSenderAddress" xml:space="preserve">
+    <value>There is no usable sender address in the e-mail settings, and a message has to come from somewhere. Set one under Settings ▸ E-mail.</value>
+  </data>
+  <data name="Status.ComposeArtifactUnreadable" xml:space="preserve">
+    <value>The stored artifact for licence {0} could not be read, so no message can describe it. Inspect it in the issuing history before sending anything.</value>
+  </data>
+  <data name="Status.EmailSettingsNotReadNothingSent" xml:space="preserve">
+    <value>The e-mail settings could not be read, so nothing can be sent.</value>
+  </data>
+  <data name="Status.SmtpPasswordUnreadableSendWillFail" xml:space="preserve">
+    <value>The stored SMTP password could not be read on this Windows account, so signing in will probably fail. Saving the message as an .eml file still works.</value>
+  </data>
+  <data name="Status.BlockerTargetBeforeStart" xml:space="preserve">
+    <value>The target date is not after this licence's start date ({0}). Choose a later target date, or remove this licence from the selection.</value>
+  </data>
+  <data name="Status.BlockerAlreadyValidUntil" xml:space="preserve">
+    <value>Already valid until {0}, so the target date would not extend it. Choose a later target date, or remove this licence from the selection.</value>
+  </data>
+  <data name="Status.TermsExpiryMustFollowStart" xml:space="preserve">
+    <value>The expiry must be after the start date.</value>
+  </data>
+  <data name="Status.LicenceSavedShort" xml:space="preserve">
+    <value>Saved licence {0}….</value>
+  </data>
+  <data name="Main.Customers" xml:space="preserve">
+    <value>Customers</value>
+  </data>
+  <data name="Main.Customer" xml:space="preserve">
+    <value>Customer</value>
+  </data>
+  <data name="Main.NameRequiredWhatGetsSigned" xml:space="preserve">
+    <value>Name — required, and this is what gets signed</value>
+  </data>
+  <data name="Main.Identifier" xml:space="preserve">
+    <value>Identifier</value>
+  </data>
+  <data name="Main.Address" xml:space="preserve">
+    <value>Address</value>
+  </data>
+  <data name="Main.FirstName" xml:space="preserve">
+    <value>First name</value>
+  </data>
+  <data name="Main.LastName" xml:space="preserve">
+    <value>Last name</value>
+  </data>
+  <data name="Main.EMail" xml:space="preserve">
+    <value>E-mail</value>
+  </data>
+  <data name="Main.NotesAdministrativeOnlyNeverTravelLicence" xml:space="preserve">
+    <value>Notes — administrative only, never travel in a licence</value>
+  </data>
+  <data name="Main.Licences" xml:space="preserve">
+    <value>Licences</value>
+  </data>
+  <data name="Main.Seats" xml:space="preserve">
+    <value>Seats</value>
+  </data>
+  <data name="Main.ValidFrom" xml:space="preserve">
+    <value>Valid from</value>
+  </data>
+  <data name="Main.ValidUntilInclusive" xml:space="preserve">
+    <value>Valid until (inclusive)</value>
+  </data>
+  <data name="Main.LicenceId" xml:space="preserve">
+    <value>Licence id</value>
+  </data>
+  <data name="Main.NotesAdministrativeOnly" xml:space="preserve">
+    <value>Notes — administrative only</value>
+  </data>
+  <data name="Main.ReasonIssue" xml:space="preserve">
+    <value>Reason for this issue</value>
+  </data>
+  <data name="Main.TheCustomerAlreadyHasExactFile" xml:space="preserve">
+    <value>The customer already has this exact file. Prefer “Export this issue…” in                                  the issuing history below — it re-sends the artifact that was delivered,                                  byte for byte, without signing a new one. Issue only if they need a                                  freshly signed replacement.</value>
+  </data>
+  <data name="Main.IssueNoteOptionalRecordedAuditLog" xml:space="preserve">
+    <value>Issue note — optional, recorded in the audit log</value>
+  </data>
+  <data name="Main.IssuingHistory" xml:space="preserve">
+    <value>Issuing history</value>
+  </data>
+  <data name="Main.WhatEmberternWouldSayAboutToday" xml:space="preserve">
+    <value>What EmberTern would say about it today</value>
+  </data>
+  <data name="Main.LicensedTo" xml:space="preserve">
+    <value>Licensed to</value>
+  </data>
+  <data name="Main.Valid" xml:space="preserve">
+    <value>Valid</value>
+  </data>
+  <data name="Main.Product" xml:space="preserve">
+    <value>Product</value>
+  </data>
+  <data name="Main.SignedWith" xml:space="preserve">
+    <value>Signed with</value>
+  </data>
+  <data name="Main.Token" xml:space="preserve">
+    <value>Token</value>
+  </data>
+  <data name="Main.SignedPayload" xml:space="preserve">
+    <value>Signed payload</value>
+  </data>
+  <data name="Main.FindLicence" xml:space="preserve">
+    <value>Find a licence</value>
+  </data>
+  <data name="Main.Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Main.Status" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Main.Expiry" xml:space="preserve">
+    <value>Expiry</value>
+  </data>
+  <data name="Main.Issuing" xml:space="preserve">
+    <value>Issuing</value>
+  </data>
+  <data name="Main.ExtendSelectedLicences" xml:space="preserve">
+    <value>Extend selected licences</value>
+  </data>
+  <data name="Main.ExtendInclusive" xml:space="preserve">
+    <value>Extend to (inclusive)</value>
+  </data>
+  <data name="Main.NoteOptional" xml:space="preserve">
+    <value>Note (optional)</value>
+  </data>
+  <data name="Main.RecordedAsRenewalAsInitialIssue" xml:space="preserve">
+    <value>Recorded as Renewal — or as Initial issue for a licence that has never been issued.</value>
+  </data>
+  <data name="Main.Held" xml:space="preserve">
+    <value>Held</value>
+  </data>
+  <data name="Main.New" xml:space="preserve">
+    <value>New</value>
+  </data>
+  <data name="Main.SaveCustomer" xml:space="preserve">
+    <value>Save customer</value>
+  </data>
+  <data name="Main.NewLicence" xml:space="preserve">
+    <value>New licence</value>
+  </data>
+  <data name="Main.InspectLatest" xml:space="preserve">
+    <value>Inspect latest</value>
+  </data>
+  <data name="Main.ExportLatest" xml:space="preserve">
+    <value>Export latest…</value>
+  </data>
+  <data name="Main.SendLicence" xml:space="preserve">
+    <value>Send licence…</value>
+  </data>
+  <data name="Main.SaveTerms" xml:space="preserve">
+    <value>Save terms</value>
+  </data>
+  <data name="Main.IssueSave" xml:space="preserve">
+    <value>Issue and save…</value>
+  </data>
+  <data name="Main.ExportIssue" xml:space="preserve">
+    <value>Export this issue…</value>
+  </data>
+  <data name="Main.Clear" xml:space="preserve">
+    <value>Clear</value>
+  </data>
+  <data name="Main.SelectAllShown" xml:space="preserve">
+    <value>Select all shown</value>
+  </data>
+  <data name="Main.ClearSelection" xml:space="preserve">
+    <value>Clear selection</value>
+  </data>
+  <data name="Main.ExtendIssue" xml:space="preserve">
+    <value>Extend and issue</value>
+  </data>
+  <data name="Main.OpenCustomers" xml:space="preserve">
+    <value>Open in Customers</value>
+  </data>
+  <data name="Main.ApplicationMenu" xml:space="preserve">
+    <value>Application menu</value>
+  </data>
+  <data name="Main.StorageBackupRestoreJsonlExportData" xml:space="preserve">
+    <value>Storage — backup, restore, JSONL export and the data folder</value>
+  </data>
+  <data name="Main.SwitchBetweenLightDarkTheme" xml:space="preserve">
+    <value>Switch between the light and dark theme</value>
+  </data>
+  <data name="Main.Minimise" xml:space="preserve">
+    <value>Minimise</value>
+  </data>
+  <data name="Main.MaximiseRestore" xml:space="preserve">
+    <value>Maximise or restore</value>
+  </data>
+  <data name="Common.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Main.CopyIdentifier" xml:space="preserve">
+    <value>Copy the identifier</value>
+  </data>
+  <data name="Main.CopyLicenceId" xml:space="preserve">
+    <value>Copy the licence id</value>
+  </data>
+  <data name="Main.ShowsMessageWillSentStoredLicence" xml:space="preserve">
+    <value>Shows the message that will be sent, with the stored licence attached</value>
+  </data>
+  <data name="Main.CopyWholeToken" xml:space="preserve">
+    <value>Copy the whole token</value>
+  </data>
+  <data name="Main.CopySignedPayload" xml:space="preserve">
+    <value>Copy the signed payload</value>
+  </data>
+  <data name="Main.IncludeLicenceBatchOperation" xml:space="preserve">
+    <value>Include this licence in a batch operation</value>
+  </data>
+  <data name="Main.Settings" xml:space="preserve">
+    <value>Settings…</value>
+  </data>
+  <data name="Main.About" xml:space="preserve">
+    <value>About…</value>
+  </data>
+  <data name="Main.Contact" xml:space="preserve">
+    <value>Contact</value>
+  </data>
+  <data name="Main.Standing" xml:space="preserve">
+    <value>Standing</value>
+  </data>
+  <data name="Main.CustomerEMailIdentifierLicenceId" xml:space="preserve">
+    <value>Customer, e-mail, identifier, licence id or notes</value>
+  </data>
+  <data name="Main.TicketWhoAskedWhyNowStored" xml:space="preserve">
+    <value>Ticket, who asked, why now — stored on the batch's audit line</value>
+  </data>
+  <data name="Send.SendLicence" xml:space="preserve">
+    <value>Send licence</value>
+  </data>
+  <data name="Send.To" xml:space="preserve">
+    <value>To</value>
+  </data>
+  <data name="Send.From" xml:space="preserve">
+    <value>From</value>
+  </data>
+  <data name="Send.Subject" xml:space="preserve">
+    <value>Subject</value>
+  </data>
+  <data name="Send.Attached" xml:space="preserve">
+    <value>Attached</value>
+  </data>
+  <data name="Send.Message" xml:space="preserve">
+    <value>Message</value>
+  </data>
+  <data name="Send.SaveAsEml" xml:space="preserve">
+    <value>Save as .eml…</value>
+  </data>
+  <data name="Send.Send" xml:space="preserve">
+    <value>Send</value>
+  </data>
+  <data name="Send.WritesExactMessageAsFileYou" xml:space="preserve">
+    <value>Writes this exact message as a file you can open and send from your own mail client</value>
+  </data>
+  <data name="Send.SendsMessageItsAttachmentAfterConfirmation" xml:space="preserve">
+    <value>Sends this message and its attachment, after a confirmation</value>
+  </data>
+  <data name="Settings.Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="Settings.Sender" xml:space="preserve">
+    <value>Sender</value>
+  </data>
+  <data name="Settings.FromAddressWhatCustomerReplies" xml:space="preserve">
+    <value>From address — what the customer replies to</value>
+  </data>
+  <data name="Settings.FromNameOptional" xml:space="preserve">
+    <value>From name (optional)</value>
+  </data>
+  <data name="Settings.ServerLeaveEmptyDeliverByFile" xml:space="preserve">
+    <value>Server — leave empty to deliver by file only</value>
+  </data>
+  <data name="Settings.SmtpHost" xml:space="preserve">
+    <value>SMTP host</value>
+  </data>
+  <data name="Settings.Port" xml:space="preserve">
+    <value>Port</value>
+  </data>
+  <data name="Settings.TransportSecurity" xml:space="preserve">
+    <value>Transport security</value>
+  </data>
+  <data name="Settings.SignIn" xml:space="preserve">
+    <value>Sign-in</value>
+  </data>
+  <data name="Settings.UsernameAccountSigns" xml:space="preserve">
+    <value>Username — the account that signs in</value>
+  </data>
+  <data name="Settings.PasswordGmailMailboxAppPasswordNot" xml:space="preserve">
+    <value>Password — for a Gmail mailbox this is an app password, not the account password</value>
+  </data>
+  <data name="Settings.StoredIn" xml:space="preserve">
+    <value>Stored in</value>
+  </data>
+  <data name="Settings.TestConfiguration" xml:space="preserve">
+    <value>Test the configuration</value>
+  </data>
+  <data name="Settings.SendTestMessageYourOwnAddress" xml:space="preserve">
+    <value>Send a test message to - your own address, never a customer's</value>
+  </data>
+  <data name="Settings.ItSendsRealMessageThroughSettings" xml:space="preserve">
+    <value>It sends a real message through the settings on this page, whether or not they have been saved. No licence is attached and nothing is recorded against any customer.</value>
+  </data>
+  <data name="Settings.TheLanguageLicenceEMailWritten" xml:space="preserve">
+    <value>The language a licence e-mail is written in</value>
+  </data>
+  <data name="Settings.ItIndependentInterfaceLanguageAppliesEvery" xml:space="preserve">
+    <value>It is independent of the interface language, and it applies to every customer — switch it before sending to a customer who reads the other language.</value>
+  </data>
+  <data name="Settings.SendTestEmail" xml:space="preserve">
+    <value>Send test email…</value>
+  </data>
+  <data name="Settings.ForgetSettings" xml:space="preserve">
+    <value>Forget settings</value>
+  </data>
+  <data name="Settings.RevertAction" xml:space="preserve">
+    <value>Revert</value>
+  </data>
+  <data name="Settings.SaveAction" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Settings.SendsTestMessageAddressAboveAfter" xml:space="preserve">
+    <value>Sends a test message to the address above, after a confirmation</value>
+  </data>
+  <data name="Settings.DeletesStoredEMailConfigurationIncluding" xml:space="preserve">
+    <value>Deletes the stored e-mail configuration, including the password</value>
+  </data>
+  <data name="Settings.DiscardsEditsReloadsWhatSaved" xml:space="preserve">
+    <value>Discards the edits and reloads what is saved</value>
+  </data>
+  <data name="Settings.LicencjeTwojafirmaPl" xml:space="preserve">
+    <value>licencje@twojafirma.pl</value>
+  </data>
+  <data name="Settings.YouExampleCom" xml:space="preserve">
+    <value>you@example.com</value>
+  </data>
+  <data name="Storage.Storage" xml:space="preserve">
+    <value>Storage</value>
+  </data>
+  <data name="Storage.RegisterRecord" xml:space="preserve">
+    <value>Register of record</value>
+  </data>
+  <data name="Storage.SigningKeystoreSeparateFileNotIncluded" xml:space="preserve">
+    <value>Signing keystore — a separate file, NOT included in a backup</value>
+  </data>
+  <data name="Storage.WhatBackupWillCarry" xml:space="preserve">
+    <value>What a backup will carry</value>
+  </data>
+  <data name="Storage.EncryptedBackup" xml:space="preserve">
+    <value>Encrypted backup</value>
+  </data>
+  <data name="Storage.TheWholeRegisterCustomersLicencesEvery" xml:space="preserve">
+    <value>The whole register — customers, licences, every artifact ever issued, the current-artifact pointers and the complete audit log — encrypted with AES-256-GCM under a passphrase of its own, and verified row for row against the live register before it is written.</value>
+  </data>
+  <data name="Storage.BackupPassphraseItsOwnSecretNot" xml:space="preserve">
+    <value>Backup passphrase — its own secret, not the keystore's</value>
+  </data>
+  <data name="Storage.BackupPassphraseAgain" xml:space="preserve">
+    <value>Backup passphrase again</value>
+  </data>
+  <data name="Storage.PassphraseBackupBeingRestored" xml:space="preserve">
+    <value>Passphrase of the backup being restored</value>
+  </data>
+  <data name="Storage.WhatRestoreWillDo" xml:space="preserve">
+    <value>What this Restore will do</value>
+  </data>
+  <data name="Storage.ExportJsonl" xml:space="preserve">
+    <value>Export JSONL…</value>
+  </data>
+  <data name="Storage.OpenDataFolder" xml:space="preserve">
+    <value>Open data folder</value>
+  </data>
+  <data name="Storage.BackupTab" xml:space="preserve">
+    <value>Backup</value>
+  </data>
+  <data name="Storage.RestoreTab" xml:space="preserve">
+    <value>Restore</value>
+  </data>
+  <data name="Storage.BackupAction" xml:space="preserve">
+    <value>Backup…</value>
+  </data>
+  <data name="Storage.RestoreAction" xml:space="preserve">
+    <value>Restore…</value>
+  </data>
+  <data name="Storage.AReadableUnencryptedCopyEveryRow" xml:space="preserve">
+    <value>A readable, UNENCRYPTED copy of every row. A diagnostic escape hatch, not a backup.</value>
+  </data>
+  <data name="Unlock.NoSigningKeyFoundCreateOne" xml:space="preserve">
+    <value>No signing key was found. Create one to start issuing licences.</value>
+  </data>
+  <data name="Unlock.ThePassphraseCannotResetIfLost" xml:space="preserve">
+    <value>The passphrase cannot be reset. If it is lost, no licence can ever be renewed — back up the keystore to two offline media and verify the restore from each.</value>
+  </data>
+  <data name="Unlock.KeyId" xml:space="preserve">
+    <value>Key id</value>
+  </data>
+  <data name="Unlock.Passphrase" xml:space="preserve">
+    <value>Passphrase</value>
+  </data>
+  <data name="Unlock.PassphraseAgain" xml:space="preserve">
+    <value>Passphrase again</value>
+  </data>
+  <data name="Unlock.UnlockKeystoreIssueLicences" xml:space="preserve">
+    <value>Unlock the keystore to issue licences.</value>
+  </data>
+  <data name="Unlock.CreateSigningKey" xml:space="preserve">
+    <value>Create signing key</value>
+  </data>
+  <data name="Unlock.Unlock" xml:space="preserve">
+    <value>Unlock</value>
+  </data>
+  <data name="ArtifactStanding.Current" xml:space="preserve">
+    <value>current</value>
+  </data>
+  <data name="ArtifactStanding.Superseded" xml:space="preserve">
+    <value>superseded</value>
+  </data>
+  <data name="Batch.FirstIssues.one" xml:space="preserve">
+    <value>{0} of them has never been issued and would receive its first artifact.</value>
+  </data>
+  <data name="Batch.FirstIssues.other" xml:space="preserve">
+    <value>{0} of them have never been issued and would receive their first artifact.</value>
+  </data>
+  <data name="Batch.TickAndChooseDate" xml:space="preserve">
+    <value>Tick licences in the list and choose a target date.</value>
+  </data>
+  <data name="Batch.TickLicences" xml:space="preserve">
+    <value>Tick the licences to extend.</value>
+  </data>
+  <data name="Batch.WouldBeExtended.one" xml:space="preserve">
+    <value>{0} licence would be extended to {1}.</value>
+  </data>
+  <data name="Batch.WouldBeExtended.other" xml:space="preserve">
+    <value>{0} licences would be extended to {1}.</value>
+  </data>
+  <data name="FileType.ChooseBackupTitle" xml:space="preserve">
+    <value>Choose a register backup</value>
+  </data>
+  <data name="FileType.ChooseRestoreFolderTitle" xml:space="preserve">
+    <value>Choose a NEW, empty folder to restore into</value>
+  </data>
+  <data name="FileType.EmailMessage" xml:space="preserve">
+    <value>E-mail message</value>
+  </data>
+  <data name="FileType.JsonLines" xml:space="preserve">
+    <value>JSON Lines</value>
+  </data>
+  <data name="FileType.Licence" xml:space="preserve">
+    <value>EmberTern licence</value>
+  </data>
+  <data name="FileType.RegisterBackup" xml:space="preserve">
+    <value>EmberTern register backup</value>
+  </data>
+  <data name="FileType.SaveLicenceTitle" xml:space="preserve">
+    <value>Save the licence</value>
+  </data>
+  <data name="FileType.SaveMessageTitle" xml:space="preserve">
+    <value>Save the message</value>
+  </data>
+  <data name="FileType.SaveTitle" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Filter.AlreadyExpired" xml:space="preserve">
+    <value>Already expired</value>
+  </data>
+  <data name="Filter.AnyExpiry" xml:space="preserve">
+    <value>Any expiry</value>
+  </data>
+  <data name="Filter.AnyStatus" xml:space="preserve">
+    <value>Any status</value>
+  </data>
+  <data name="Filter.ExpiringWithin30Days" xml:space="preserve">
+    <value>Expiring within 30 days</value>
+  </data>
+  <data name="Filter.ExpiringWithin90Days" xml:space="preserve">
+    <value>Expiring within 90 days</value>
+  </data>
+  <data name="Filter.ExpiringWithinAYear" xml:space="preserve">
+    <value>Expiring within a year</value>
+  </data>
+  <data name="Filter.ExpiringWithinDays" xml:space="preserve">
+    <value>Expiring within {0} days</value>
+  </data>
+  <data name="Filter.IssuedAtLeastOnce" xml:space="preserve">
+    <value>Issued at least once</value>
+  </data>
+  <data name="Filter.IssuedOrNot" xml:space="preserve">
+    <value>Issued or not</value>
+  </data>
+  <data name="Filter.NeverIssued" xml:space="preserve">
+    <value>Never issued</value>
+  </data>
+  <data name="History.NeverIssued" xml:space="preserve">
+    <value>Never issued. Nothing has been sent to the customer for this licence.</value>
+  </data>
+  <data name="History.Summary.one" xml:space="preserve">
+    <value>{0} issue on record. The current file is the one marked below; earlier ones were superseded, never overwritten or deleted.</value>
+  </data>
+  <data name="History.Summary.other" xml:space="preserve">
+    <value>{0} issues on record, all kept. The current file is the one marked below; earlier ones were superseded, never overwritten or deleted.</value>
+  </data>
+<data name="History.UnreadablePayload" xml:space="preserve">
+    <value>— unreadable payload —</value>
+  </data>
+  <data name="LicenceStatus.Active" xml:space="preserve">
+    <value>Active</value>
+  </data>
+  <data name="LicenceStatus.Blocked" xml:space="preserve">
+    <value>Blocked</value>
+  </data>
+  <data name="Licences.Checked.one" xml:space="preserve">
+    <value>{0} licence selected.</value>
+  </data>
+  <data name="Licences.Checked.other" xml:space="preserve">
+    <value>{0} licences selected.</value>
+  </data>
+  <data name="Licences.CheckedWithHidden.one" xml:space="preserve">
+    <value>{0} licence selected — {1} of them not shown by the current filters.</value>
+  </data>
+  <data name="Licences.CheckedWithHidden.other" xml:space="preserve">
+    <value>{0} licences selected — {1} of them not shown by the current filters.</value>
+  </data>
+  <data name="Licences.Count.one" xml:space="preserve">
+    <value>{0} licence.</value>
+  </data>
+  <data name="Licences.Count.other" xml:space="preserve">
+    <value>{0} licences.</value>
+  </data>
+  <data name="Licences.DetailIssuedOnce" xml:space="preserve">
+    <value>{0} — issued once, on {1}.</value>
+  </data>
+  <data name="Licences.DetailIssuedTimes" xml:space="preserve">
+    <value>{0} — issued {1} times, last on {2}.</value>
+  </data>
+  <data name="Licences.DetailNeverIssued" xml:space="preserve">
+    <value>{0} — never issued.</value>
+  </data>
+  <data name="Licences.NoneMatchesTheseFilters" xml:space="preserve">
+    <value>No licence matches these filters.</value>
+  </data>
+  <data name="Licences.NoneSelected" xml:space="preserve">
+    <value>No licence selected.</value>
+  </data>
+  <data name="Licences.RegisterHoldsNoneYet" xml:space="preserve">
+    <value>The register holds no licences yet.</value>
+  </data>
+  <data name="Reason.Initial" xml:space="preserve">
+    <value>Initial issue</value>
+  </data>
+  <data name="Reason.InitialExplained" xml:space="preserve">
+    <value>The first artifact for this licence. Nothing has been sent to the customer yet.</value>
+  </data>
+  <data name="Reason.ReissueLost" xml:space="preserve">
+    <value>Re-issue — lost file</value>
+  </data>
+  <data name="Reason.ReissueLostExplained" xml:space="preserve">
+    <value>The customer lost their copy of a file that is otherwise still correct.</value>
+  </data>
+  <data name="Reason.Renewal" xml:space="preserve">
+    <value>Renewal</value>
+  </data>
+  <data name="Reason.RenewalExplained" xml:space="preserve">
+    <value>The expiry moved. Press Save terms with the new expiry first — the issue signs the saved terms.</value>
+  </data>
+  <data name="Reason.TermsChange" xml:space="preserve">
+    <value>Terms change</value>
+  </data>
+  <data name="Reason.TermsChangeExplained" xml:space="preserve">
+    <value>Something other than the expiry changed: seats, the start date, or the licensee's name.</value>
+  </data>
+  <data name="Row.Seats.one" xml:space="preserve">
+    <value>{0} seat</value>
+  </data>
+  <data name="Row.Seats.other" xml:space="preserve">
+    <value>{0} seats</value>
+  </data>
+  <data name="Row.StandingExpiredDaysAgo" xml:space="preserve">
+    <value>Expired {0} days ago</value>
+  </data>
+  <data name="Row.StandingExpiredYesterday" xml:space="preserve">
+    <value>Expired yesterday</value>
+  </data>
+  <data name="Row.StandingExpiresInDays" xml:space="preserve">
+    <value>Expires in {0} days</value>
+  </data>
+  <data name="Row.StandingExpiresToday" xml:space="preserve">
+    <value>Expires today</value>
+  </data>
+  <data name="Row.StandingExpiresTomorrow" xml:space="preserve">
+    <value>Expires tomorrow</value>
+  </data>
+  <data name="Row.StandingNeverIssued" xml:space="preserve">
+    <value>Never issued</value>
+  </data>
+<data name="Send.DeliveryDirect" xml:space="preserve">
+    <value>Sending through {0}:{1}.</value>
+  </data>
+  <data name="Send.DeliveryNoServer" xml:space="preserve">
+    <value>No SMTP server is configured, so this message can only be saved as an .eml file and sent from your own mail client. Add a server under Settings ▸ E-mail to send directly.</value>
+  </data>
+  <data name="Send.LanguageNote" xml:space="preserve">
+    <value>Written in '{0}'. The language applies to every customer and is changed under Settings ▸ E-mail.</value>
+  </data>
+  <data name="Send.PreviewNote" xml:space="preserve">
+    <value>This is exactly what will be sent. An HTML version of the same message is included for mail clients that show it; clients that strip HTML show the text above.</value>
+  </data>
+  <data name="Settings.DeliveryBoth" xml:space="preserve">
+    <value>Direct sending and file delivery are both available.</value>
+  </data>
+  <data name="Settings.DeliveryFileOnly" xml:space="preserve">
+    <value>File delivery only: a message can be saved as an .eml file and sent from your own mail client. Add a server below to send directly.</value>
+  </data>
+  <data name="Settings.DeliveryNotConfigured" xml:space="preserve">
+    <value>Not configured yet. A sender address is the minimum — without one, no message can be composed at all.</value>
+  </data>
+  <data name="Status.ArtifactIatNotAfterCurrent" xml:space="preserve">
+    <value>The artifact for licence {0} carries iat {1}, which does not come after the current artifact's {2}. EmberTern would refuse to install it as a replacement, so it is refused here instead of being recorded as delivered.</value>
+  </data>
+  <data name="Status.BatchUnitPairsMismatchedTerms" xml:space="preserve">
+    <value>A batch unit pairs the terms of licence {0} with an artifact for {1}.</value>
+  </data>
+  <data name="Status.LicenceAppearsTwiceInBatch" xml:space="preserve">
+    <value>Licence {0} appears twice in one batch. Two artifacts issued in the same operation would carry the same iat, and the second could never replace the first in the field.</value>
+  </data>
+  <data name="Status.LicenceBelongsToAnotherCustomer" xml:space="preserve">
+    <value>Licence {0} belongs to customer {1} and cannot be moved to {2}. Artifacts already issued for it carry the original customer's name, so the register would stop agreeing with what was delivered.</value>
+  </data>
+  <data name="Status.RegisterHasIntegrityProblems" xml:space="preserve">
+    <value>The register has integrity problems, so it was not backed up: {0}</value>
+  </data>
+  <data name="Status.RegisterIsInconsistent" xml:space="preserve">
+    <value>The register is inconsistent.</value>
+  </data>
+  <data name="Status.SnapshotDoesNotReproduceRegister" xml:space="preserve">
+    <value>The snapshot does not reproduce the register row for row. Nothing was written.</value>
+  </data>
+  <data name="Status.SnapshotRowCountMismatch" xml:space="preserve">
+    <value>The snapshot holds {0} row(s) where the register holds {1}. Nothing was written.</value>
+  </data>
+  <data name="Storage.BackupContents" xml:space="preserve">
+    <value>{0} customer(s) · {1} licence(s) · {2} issued artifact(s), the whole history · {3} current-artifact pointer(s) · {4} audit entries.</value>
+  </data>
+  <data name="Storage.ModeReplaceActive" xml:space="preserve">
+    <value>Replace active register</value>
+  </data>
+  <data name="Storage.ModeRestoreElsewhere" xml:space="preserve">
+    <value>Restore to another location</value>
+  </data>
+  <data name="Storage.ReplaceRule" xml:space="preserve">
+    <value>The current register will be preserved before restore. It is moved to {0}.replaced-&lt;date-time&gt; in the same folder and is never deleted, so a failed restore always leaves you the register you started with. ⚠ The License Manager closes when this succeeds — start it again to work on the restored register.</value>
+  </data>
+  <data name="Storage.RestoreElsewhereRule" xml:space="preserve">
+    <value>The active register will not be changed. The backup is restored into a NEW, empty folder of your choosing; nothing is written into {0}, and no history entry is added. For recovering or inspecting a backup while you carry on working.</value>
+  </data>
+  <data name="Unlock.HeadlineCreate" xml:space="preserve">
+    <value>Create the signing key</value>
+  </data>
+  <data name="Unlock.HeadlineUnlock" xml:space="preserve">
+    <value>Unlock the keystore</value>
+  </data>
+  <data name="Status.Blocked.one" xml:space="preserve">
+    <value>{0} selected licence cannot be extended to this date, so the whole operation is held. Nothing is issued in part — remove them from the selection, or choose a different target date.</value>
+  </data>
+  <data name="Status.Blocked.other" xml:space="preserve">
+    <value>{0} selected licences cannot be extended to this date, so the whole operation is held. Nothing is issued in part — remove them from the selection, or choose a different target date.</value>
+  </data>
+  <data name="Status.BatchCompleted.one" xml:space="preserve">
+    <value>{0} licence extended to {1}. {2} artifact(s) recorded as batch {3}. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="Status.BatchCompleted.other" xml:space="preserve">
+    <value>{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="Status.BatchCompletedWithFirstIssues.one" xml:space="preserve">
+    <value>{0} licence extended to {1}. {2} artifact(s) recorded as batch {3}. {4} of them received a first artifact. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="Status.BatchCompletedWithFirstIssues.other" xml:space="preserve">
+    <value>{0} licences extended to {1}. {2} artifact(s) recorded as batch {3}. {4} of them received a first artifact. Nothing was written to disk — export the files from the register when you are ready to send them.</value>
+  </data>
+  <data name="History.TokenSizeAsDelivered.one" xml:space="preserve">
+    <value>{1} byte as delivered</value>
+  </data>
+  <data name="History.TokenSizeAsDelivered.other" xml:space="preserve">
+    <value>{1} bytes as delivered</value>
+  </data>
+  <data name="Send.Attachment.one" xml:space="preserve">
+    <value>{1} · {2} byte · {3}</value>
+  </data>
+  <data name="Send.Attachment.other" xml:space="preserve">
+    <value>{1} · {2} bytes · {3}</value>
+  </data>
+  <data name="Storage.SigningKeyTab" xml:space="preserve">
+    <value>Signing key</value>
+  </data>
+  <data name="Storage.WhatThisKeyIs" xml:space="preserve">
+    <value>What this key is</value>
+  </data>
+  <data name="Storage.RecordTheseThreeValuesWithTheCeremony" xml:space="preserve">
+    <value>Record the fingerprint and the public key together with the ceremony's date, and paste the entry into the client. All three are public — only the keystore file and its passphrase are secret.</value>
+  </data>
+  <data name="Storage.KeyId" xml:space="preserve">
+    <value>Key id</value>
+  </data>
+  <data name="Storage.PublicKeyFingerprint" xml:space="preserve">
+    <value>Public key fingerprint (SHA-256)</value>
+  </data>
+  <data name="Storage.PublicKeySpki" xml:space="preserve">
+    <value>Public key (SPKI, base64)</value>
+  </data>
+  <data name="Storage.TrustedKeyEntry" xml:space="preserve">
+    <value>Entry for TrustedKeys.Production</value>
+  </data>
+  <data name="Storage.Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="Storage.VerifyAKeystoreBackup" xml:space="preserve">
+    <value>Verify a keystore backup</value>
+  </data>
+  <data name="Storage.ABackupNeverRestoredIsAHypothesis" xml:space="preserve">
+    <value>A backup that has never been restored is a hypothesis. This opens the file you choose, checks that it holds this same key, signs a licence with it and verifies that licence. Nothing is written, and the keystore in use is not touched.</value>
+  </data>
+  <data name="Storage.KeystoreBackupPassphrase" xml:space="preserve">
+    <value>Passphrase of the keystore backup</value>
+  </data>
+  <data name="Storage.VerifyBackupAction" xml:space="preserve">
+    <value>Verify backup…</value>
+  </data>
+  <data name="FileType.ChooseKeystoreBackupTitle" xml:space="preserve">
+    <value>Choose a keystore backup to verify</value>
+  </data>
+  <data name="FileType.SigningKeystore" xml:space="preserve">
+    <value>EmberTern signing keystore</value>
+  </data>
+  <data name="Status.KeystoreBackupIsUsable" xml:space="preserve">
+    <value>The backup at {0} is usable: it opened, holds the expected key, and signed a licence that verifies. Fingerprint {1}.</value>
+  </data>
+  <data name="Status.KeystoreBackupDidNotOpen" xml:space="preserve">
+    <value>The backup at {0} did not open. Either the passphrase is wrong or the file is damaged — retype it, then try the other backup.</value>
+  </data>
+  <data name="Status.KeystoreBackupHoldsNoSuchKey" xml:space="preserve">
+    <value>The backup at {0} opened, but holds no key {1}.</value>
+  </data>
+  <data name="Status.KeystoreBackupIsADifferentKey" xml:space="preserve">
+    <value>The backup at {0} holds a DIFFERENT key — it cannot renew the licences already in the field.</value>
+  </data>
+  <data name="Status.KeystoreBackupDidNotProduceAVerifiableLicence" xml:space="preserve">
+    <value>The backup at {0} holds the right key, but the licence it signed did not verify.</value>
+  </data>
+  <data name="Status.CopiedTheFingerprint" xml:space="preserve">
+    <value>Copied the fingerprint to the clipboard.</value>
+  </data>
+  <data name="Status.CopiedThePublicKey" xml:space="preserve">
+    <value>Copied the public key to the clipboard.</value>
+  </data>
+  <data name="Status.CopiedTheTrustedKeyEntry" xml:space="preserve">
+    <value>Copied the trusted-key entry to the clipboard.</value>
+  </data>
+  <data name="About.WindowTitle" xml:space="preserve">
+    <value>About {0}</value>
+  </data>
+  <data name="About.Version" xml:space="preserve">
+    <value>Version {0}</value>
+  </data>
+  <data name="About.Released" xml:space="preserve">
+    <value>Released {0}</value>
+  </data>
+  <data name="About.Author" xml:space="preserve">
+    <value>Created by {0}</value>
+  </data>
+  <data name="About.Close" xml:space="preserve">
+    <value>Close</value>
+  </data>
+  <data name="Status.SmtpBulkDelayOutOfRange" xml:space="preserve">
+    <value>The pause between bulk messages must be between {0} and {1} seconds, not {2}.</value>
+  </data>
+  <data name="Status.SmtpBulkLimitOutOfRange" xml:space="preserve">
+    <value>A bulk run may send between {0} and {1} messages, not {2}.</value>
+  </data>
+  <data name="Settings.BulkSending" xml:space="preserve">
+    <value>Bulk sending</value>
+  </data>
+  <data name="Settings.BulkSendingDescription" xml:space="preserve">
+    <value>These two limit the pace of a bulk run and leave you time to stop it. They are not a promise about deliverability — that depends on your domain’s SPF, DKIM and DMARC records and on the sending address’s reputation, neither of which this application can see.</value>
+  </data>
+  <data name="Settings.BulkDelay" xml:space="preserve">
+    <value>Pause between messages, in seconds</value>
+  </data>
+  <data name="Settings.BulkMaxPerRun" xml:space="preserve">
+    <value>Most messages one run may send</value>
+  </data>
+  <data name="Status.BulkHoldLicenceBlocked" xml:space="preserve">
+    <value>The licence is blocked, so it is not sent.</value>
+  </data>
+  <data name="Status.BulkHoldNeverIssued" xml:space="preserve">
+    <value>The licence has never been issued, so there is nothing to send.</value>
+  </data>
+  <data name="Status.BulkHoldArtifactExpired" xml:space="preserve">
+    <value>The artifact expired on {0}.</value>
+  </data>
+  <data name="Status.BulkSkipAlreadySent" xml:space="preserve">
+    <value>Already sent on {0}, after the current artifact was issued.</value>
+  </data>
+  <data name="Status.BulkAttemptFailed" xml:space="preserve">
+    <value>The message was not sent.</value>
+  </data>
+  <data name="Status.BulkNotAttemptedOperatorStopped" xml:space="preserve">
+    <value>Not sent — you stopped the run before this licence.</value>
+  </data>
+  <data name="Status.BulkNotAttemptedRunStopped" xml:space="preserve">
+    <value>Not sent — the run stopped earlier.</value>
+  </data>
+  <data name="Bulk.TickLicences" xml:space="preserve">
+    <value>Tick the licences you want to send.</value>
+  </data>
+  <data name="Bulk.WillSend.one" xml:space="preserve">
+    <value>{0} message will be sent.</value>
+  </data>
+  <data name="Bulk.WillSend.other" xml:space="preserve">
+    <value>{0} messages will be sent.</value>
+  </data>
+  <data name="Bulk.ToAddresses.one" xml:space="preserve">
+    <value>It goes to {0} address.</value>
+  </data>
+  <data name="Bulk.ToAddresses.other" xml:space="preserve">
+    <value>They go to {0} addresses.</value>
+  </data>
+  <data name="Bulk.AtLeast" xml:space="preserve">
+    <value>It will take at least {0}.</value>
+  </data>
+  <data name="Bulk.DuplicateAddresses.one" xml:space="preserve">
+    <value>{0} address will receive more than one message.</value>
+  </data>
+  <data name="Bulk.DuplicateAddresses.other" xml:space="preserve">
+    <value>{0} addresses will receive more than one message.</value>
+  </data>
+  <data name="Bulk.SkippedCount.one" xml:space="preserve">
+    <value>{0} licence is skipped.</value>
+  </data>
+  <data name="Bulk.SkippedCount.other" xml:space="preserve">
+    <value>{0} licences are skipped.</value>
+  </data>
+  <data name="Bulk.HeldSection" xml:space="preserve">
+    <value>Held ({0})</value>
+  </data>
+  <data name="Bulk.SendableSection" xml:space="preserve">
+    <value>Will be sent ({0})</value>
+  </data>
+  <data name="Bulk.Pacing" xml:space="preserve">
+    <value>One message every {0} s, at most {1} per run, through {2}.</value>
+  </data>
+  <data name="Bulk.AcceptedNotDelivered" xml:space="preserve">
+    <value>“Sent” means the server accepted the message. It does not mean the customer received it.</value>
+  </data>
+  <data name="Bulk.SendingNow" xml:space="preserve">
+    <value>Sending {0} of {1} — {2} &lt;{3}&gt;</value>
+  </data>
+  <data name="Bulk.WaitingSeconds" xml:space="preserve">
+    <value>Waiting {0} s…</value>
+  </data>
+  <data name="Bulk.Stopping" xml:space="preserve">
+    <value>Stopping — finishing the current attempt…</value>
+  </data>
+  <data name="Bulk.ProgressSent.one" xml:space="preserve">
+    <value>{0} sent</value>
+  </data>
+  <data name="Bulk.ProgressSent.other" xml:space="preserve">
+    <value>{0} sent</value>
+  </data>
+  <data name="Bulk.ConclusionNothingToSend" xml:space="preserve">
+    <value>Nothing was sent — no ticked licence qualified.</value>
+  </data>
+  <data name="Bulk.ConclusionCompleted" xml:space="preserve">
+    <value>The run finished and every message was accepted.</value>
+  </data>
+  <data name="Bulk.ConclusionStoppedAfterError" xml:space="preserve">
+    <value>The run stopped after an error.</value>
+  </data>
+  <data name="Bulk.ConclusionStoppedByOperator" xml:space="preserve">
+    <value>You stopped the run.</value>
+  </data>
+  <data name="Bulk.ReportFailed.one" xml:space="preserve">
+    <value>{0} failed</value>
+  </data>
+  <data name="Bulk.ReportFailed.other" xml:space="preserve">
+    <value>{0} failed</value>
+  </data>
+  <data name="Bulk.ReportSkipped.one" xml:space="preserve">
+    <value>{0} skipped</value>
+  </data>
+  <data name="Bulk.ReportSkipped.other" xml:space="preserve">
+    <value>{0} skipped</value>
+  </data>
+  <data name="Bulk.ReportNotAttempted.one" xml:space="preserve">
+    <value>{0} not attempted</value>
+  </data>
+  <data name="Bulk.ReportNotAttempted.other" xml:space="preserve">
+    <value>{0} not attempted</value>
+  </data>
+  <data name="Bulk.ElapsedTime" xml:space="preserve">
+    <value>Time: {0}</value>
+  </data>
+  <data name="Bulk.ShowDetails" xml:space="preserve">
+    <value>Show details ({0})</value>
+  </data>
+  <data name="Bulk.HideDetails" xml:space="preserve">
+    <value>Hide details ({0})</value>
+  </data>
+  <data name="Bulk.OutcomeSent" xml:space="preserve">
+    <value>Sent</value>
+  </data>
+  <data name="Bulk.OutcomeFailed" xml:space="preserve">
+    <value>Failed</value>
+  </data>
+  <data name="Bulk.OutcomeSkipped" xml:space="preserve">
+    <value>Skipped</value>
+  </data>
+  <data name="Bulk.OutcomeNotAttempted" xml:space="preserve">
+    <value>Not attempted</value>
+  </data>
+  <data name="Bulk.ColumnStatus" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="Bulk.ColumnCustomer" xml:space="preserve">
+    <value>Customer</value>
+  </data>
+  <data name="Bulk.ColumnEmail" xml:space="preserve">
+    <value>E-mail</value>
+  </data>
+  <data name="Bulk.ColumnLicenceId" xml:space="preserve">
+    <value>Licence identifier</value>
+  </data>
+  <data name="Bulk.ColumnTime" xml:space="preserve">
+    <value>Time</value>
+  </data>
+  <data name="Bulk.ColumnReason" xml:space="preserve">
+    <value>Reason</value>
+  </data>
+  <data name="Bulk.ColumnServerMessage" xml:space="preserve">
+    <value>Server message</value>
+  </data>
+  <data name="Bulk.DurationHoursMinutes" xml:space="preserve">
+    <value>{0} h {1} min</value>
+  </data>
+  <data name="Bulk.DurationMinutesSeconds" xml:space="preserve">
+    <value>{0} min {1} s</value>
+  </data>
+  <data name="Bulk.DurationSecondsOnly" xml:space="preserve">
+    <value>{0} s</value>
+  </data>
+  <data name="Confirm.BulkSendTitle" xml:space="preserve">
+    <value>Send these licences?</value>
+  </data>
+  <data name="Confirm.BulkSendMessage.one" xml:space="preserve">
+    <value>{0} message will be sent through {1}. It will take at least {2}. This cannot be recalled.</value>
+  </data>
+  <data name="Confirm.BulkSendMessage.other" xml:space="preserve">
+    <value>{0} messages will be sent through {1}. It will take at least {2}. This cannot be recalled.</value>
+  </data>
+  <data name="Confirm.BulkSendAction" xml:space="preserve">
+    <value>Send messages</value>
+  </data>
+  <data name="Status.BulkPreviewOutOfDate" xml:space="preserve">
+    <value>The selection or the e-mail settings changed since this preview was built, so nothing was sent. The preview below is up to date — check it and send again.</value>
+  </data>
+  <data name="Status.BulkTickAtLeastOneLicence" xml:space="preserve">
+    <value>Tick at least one licence to send.</value>
+  </data>
+  <data name="Status.BulkOverRunLimit.one" xml:space="preserve">
+    <value>{0} message would be sent, more than the limit of {1} for one run. Raise the limit in Settings, or tick fewer licences.</value>
+  </data>
+  <data name="Status.BulkOverRunLimit.other" xml:space="preserve">
+    <value>{0} messages would be sent, more than the limit of {1} for one run. Raise the limit in Settings, or tick fewer licences.</value>
+  </data>
+  <data name="Status.BulkComposeFailed" xml:space="preserve">
+    <value>Nothing was sent: the message for {0} ({1}) could not be composed. {2}</value>
+  </data>
+  <data name="Status.BulkRunSentOfPlanned.one" xml:space="preserve">
+    <value>{0} of {1} messages was sent.</value>
+  </data>
+  <data name="Status.BulkRunSentOfPlanned.other" xml:space="preserve">
+    <value>{0} of {1} messages were sent.</value>
+  </data>
+  <data name="Status.BulkReportCopied" xml:space="preserve">
+    <value>The report was copied to the clipboard.</value>
+  </data>
+  <data name="Status.SmtpServerDidNotAnswerInTime" xml:space="preserve">
+    <value>{0}:{1} did not answer within {2} seconds, so the attempt was abandoned. Check the host, the port and whether STARTTLS is right for this server — a port that expects an encrypted connection from the start never replies to this one.</value>
+  </data>
+  <data name="Main.SendSelectedLicences" xml:space="preserve">
+    <value>Send selected licences by e-mail</value>
+  </data>
+  <data name="Main.SkipAlreadySent" xml:space="preserve">
+    <value>Skip licences already sent</value>
+  </data>
+  <data name="Main.SendByEmail" xml:space="preserve">
+    <value>Send by e-mail</value>
+  </data>
+  <data name="Main.StopSending" xml:space="preserve">
+    <value>Stop sending</value>
+  </data>
+  <data name="Main.CopyReport" xml:space="preserve">
+    <value>Copy report</value>
+  </data>
+  <data name="Main.RemoveCustomer" xml:space="preserve">
+    <value>Remove customer…</value>
+  </data>
+  <data name="Status.SelectCustomerToRemove" xml:space="preserve">
+    <value>Select a customer in the list first.</value>
+  </data>
+  <data name="Status.CustomerNotInRegister" xml:space="preserve">
+    <value>Customer {0} is not in the register, so there is nothing to remove.</value>
+  </data>
+  <data name="Status.CustomerStillHasLicences" xml:space="preserve">
+    <value>{0} still has {1} active licence(s), so the customer cannot be removed. Remove those licences first if that is really what you mean to do — a customer whose licences have all been retired can then be retired themselves, and the whole history is kept either way.</value>
+  </data>
+  <data name="Status.CustomerRemoved" xml:space="preserve">
+    <value>{0} was removed. The register’s history still records who they were — that entry cannot be deleted.</value>
+  </data>
+  <data name="Confirm.RemoveCustomerTitle" xml:space="preserve">
+    <value>Remove this customer?</value>
+  </data>
+  <data name="Confirm.RemoveCustomerMessage" xml:space="preserve">
+    <value>{0} ({1}) will be removed from the register. They have no licences, so nothing that was ever issued is affected, and the history keeps the whole record.</value>
+  </data>
+  <data name="Confirm.RemoveCustomerAction" xml:space="preserve">
+    <value>Remove customer</value>
+  </data>
+  <data name="Batch.HeaderTicked.one" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="Batch.HeaderTicked.other" xml:space="preserve">
+    <value>{0} selected</value>
+  </data>
+  <data name="Bulk.HeaderSending" xml:space="preserve">
+    <value>sending {0} of {1}…</value>
+  </data>
+  <data name="Bulk.HeaderFinished" xml:space="preserve">
+    <value>{0} of {1} sent</value>
+  </data>
+  <data name="Bulk.HeaderReady.one" xml:space="preserve">
+    <value>{0} message ready</value>
+  </data>
+  <data name="Bulk.HeaderReady.other" xml:space="preserve">
+    <value>{0} messages ready</value>
+  </data>
+  <data name="Main.RemoveLicence" xml:space="preserve">
+    <value>Remove licence…</value>
+  </data>
+  <data name="Status.SelectLicenceToRemove" xml:space="preserve">
+    <value>Select a licence in the list first.</value>
+  </data>
+  <data name="Status.LicenceNotInRegister" xml:space="preserve">
+    <value>Licence {0} is not in the register, so there is nothing to remove.</value>
+  </data>
+  <data name="Status.LicenceIsRetired" xml:space="preserve">
+    <value>Licence {0} was retired out of the active register and cannot be changed. Its artifacts and its history are intact and readable; the row itself is done.</value>
+  </data>
+  <data name="Status.LicenceDeleted" xml:space="preserve">
+    <value>Licence {0} was removed. It was never issued, so nothing was ever delivered under it — and the register’s history still records that it existed.</value>
+  </data>
+  <data name="Status.LicenceRetired" xml:space="preserve">
+    <value>Licence {0} was retired. It is gone from the active register, and its {1} issued artifact(s) and its whole history are kept — they cannot be deleted.</value>
+  </data>
+  <data name="Confirm.RemoveLicenceTitle" xml:space="preserve">
+    <value>Remove this licence?</value>
+  </data>
+  <data name="Confirm.RemoveLicenceNeverIssuedMessage" xml:space="preserve">
+    <value>Licence {0} was never issued, so nothing was ever delivered under it. It will be removed from the register entirely. The history keeps a record that it existed. This is an administrative action.</value>
+  </data>
+  <data name="Confirm.RemoveLicenceIssuedMessage" xml:space="preserve">
+    <value>Licence {0} has {1} issued artifact(s). It will be retired: it leaves the active register and can no longer be issued, renewed or sent — and every artifact ever issued for it, together with its whole audit trail, is kept and cannot be deleted. This is an administrative action.</value>
+  </data>
+  <data name="Confirm.RemoveLicenceAction" xml:space="preserve">
+    <value>Remove licence</value>
+  </data>
+  <data name="Status.CustomerIsRetired" xml:space="preserve">
+    <value>{0} was retired out of the active register and cannot be changed, and no new licence can be written for them. Their licence history and their audit trail are intact and readable.</value>
+  </data>
+  <data name="Status.CustomerRetired" xml:space="preserve">
+    <value>{0} was retired. They are gone from the active register, and their {1} licence row(s), every artifact ever issued and the whole audit trail are kept — they cannot be deleted.</value>
+  </data>
+  <data name="Confirm.RetireCustomerMessage" xml:space="preserve">
+    <value>{0} ({1}) has no active licences, but {2} retired licence row(s) that can never be deleted — an issued licence carries artifacts the register must keep. The customer will therefore be RETIRED: they leave the active register and can no longer be edited or given a licence, and their whole history is kept. This is an administrative action.</value>
+  </data>
+</root>

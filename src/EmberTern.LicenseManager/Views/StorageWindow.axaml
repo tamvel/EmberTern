@@ -1,0 +1,250 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:lm="clr-namespace:EmberTern.LicenseManager"
+        xmlns:vm="using:EmberTern.LicenseManager.ViewModels"
+        x:Class="EmberTern.LicenseManager.Views.StorageWindow"
+        x:DataType="vm:StorageViewModel"
+        Title="{lm:Loc Storage.Storage}"
+        Width="760" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        Background="{DynamicResource BackgroundBrush}"
+        Foreground="{DynamicResource ForegroundBrush}">
+
+  <!-- ⭐⭐ BACKUP AND RESTORE ARE TWO TASKS, AND THE WINDOW IS SHAPED LIKE THAT.
+
+       They used to share one scrolling form, so an operator reading about restore had a backup
+       passphrase field above them and a restore passphrase field below, and the footer carried five
+       actions of two different kinds. ⛔ Two tasks in one form is not a spacing problem — no amount of
+       gutter makes "which of these fields belongs to what I am about to do" answerable.
+
+       ⭐ The switch is `Border.view-switch` + `Button.view-tab`, the SAME pattern the main window's
+       Customers/Licences switch uses, and for the reason §40.2 recorded: `ControlStyles.axaml` (where
+       EmberTern's real `TabItem` variants live) is not linkable into this application, so a `TabControl`
+       here would fall back to Fluent's own `TabItem` — a fresh set of normal / hover / selected /
+       disabled / focus decisions to repin, introduced for a two-item switch.
+
+       ⭐ Each task ends in exactly ONE primary action, and only its own is visible. That is what keeps
+       the footer from ever again being a strip of five competing buttons. -->
+  <Grid RowDefinitions="Auto,Auto,Auto,Auto">
+
+    <!-- Header ─────────────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⚠ The two TOOL actions live up here, away from the task footers, because they belong to
+         neither task: an export is not a backup (it is unencrypted, and the body says so) and opening a
+         folder changes nothing at all. ⛔ They are `flat` while the task actions are `primary`, so they
+         cannot be mistaken for the thing the operator came to do. -->
+    <Border Grid.Row="0" Classes="dialog-header">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="{DynamicResource Space.Md}">
+        <TextBlock Grid.Column="0" Classes="h1" VerticalAlignment="Center" Text="{lm:Loc Storage.Storage}" />
+        <Button Grid.Column="2" Classes="flat" Name="ExportJsonl" Content="{lm:Loc Storage.ExportJsonl}"
+                VerticalAlignment="Center"
+                ToolTip.Tip="{lm:Loc Storage.AReadableUnencryptedCopyEveryRow}"
+                Command="{Binding ExportJsonlCommand}" />
+        <Button Grid.Column="3" Classes="flat" Name="OpenDataFolder" Content="{lm:Loc Storage.OpenDataFolder}"
+                VerticalAlignment="Center"
+                Command="{Binding OpenDataFolderCommand}" />
+      </Grid>
+    </Border>
+
+    <!-- Task switch ────────────────────────────────────────────────────────────────────────────── -->
+    <Border Grid.Row="1" Classes="view-switch">
+      <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Xs}">
+        <Button Classes="view-tab" Name="BackupTab" Content="{lm:Loc Storage.BackupTab}"
+                Classes.active="{Binding IsBackupTab}"
+                Command="{Binding ShowBackupCommand}" />
+        <Button Classes="view-tab" Name="RestoreTab" Content="{lm:Loc Storage.RestoreTab}"
+                Classes.active="{Binding IsRestoreTab}"
+                Command="{Binding ShowRestoreCommand}" />
+        <!-- ⭐ The third task (L7.1): what the signing key IS, and whether a backup of it works. It sits
+             here because this window is already the administrative surface for the FILES — and the
+             keystore is named on the Backup tab as a separate thing to look after. -->
+        <Button Classes="view-tab" Name="SigningKeyTab" Content="{lm:Loc Storage.SigningKeyTab}"
+                Classes.active="{Binding IsSigningKeyTab}"
+                Command="{Binding ShowSigningKeyCommand}" />
+      </StackPanel>
+    </Border>
+
+    <!-- Body ───────────────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⛔ No StackPanel `Spacing` in either form: every gap is owned by the element above it, through a
+         role, so a caption never sits as far from its own field as two fields sit from each other. -->
+    <Border Grid.Row="2" Classes="dialog-body">
+      <StackPanel>
+
+        <!-- ══ BACKUP ═══════════════════════════════════════════════════════════════════════════ -->
+        <StackPanel Name="BackupForm" IsVisible="{Binding IsBackupTab}">
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.RegisterRecord}" />
+          <SelectableTextBlock Name="RegisterPathText" Classes="mono" TextWrapping="Wrap"
+                               Margin="{DynamicResource Margin.FieldGap}"
+                               Text="{Binding RegisterPath}" />
+
+          <!-- ⛔ Shown so the operator knows the keystore is a SEPARATE thing to look after. It is not in
+               any backup this window takes — §12.3 keeps "back up the register" and "back up the key" as
+               two operations with two risk profiles, and §24.2 forbids the private key from travelling
+               in a backup at all. -->
+          <TextBlock Classes="field-label"
+                     Text="{lm:Loc Storage.SigningKeystoreSeparateFileNotIncluded}" />
+          <SelectableTextBlock Name="KeyStorePathText" Classes="mono" TextWrapping="Wrap"
+                               Margin="{DynamicResource Margin.FieldGap}"
+                               Text="{Binding KeyStorePath}" />
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.WhatBackupWillCarry}" />
+          <TextBlock Name="BackupContentsText" TextWrapping="Wrap"
+                     Margin="{DynamicResource Margin.SectionGap}"
+                     Text="{Binding BackupContents}" />
+
+          <TextBlock Classes="section" Text="{lm:Loc Storage.EncryptedBackup}" />
+          <TextBlock TextWrapping="Wrap" Margin="{DynamicResource Margin.SectionGap}"
+                     Text="{lm:Loc Storage.TheWholeRegisterCustomersLicencesEvery}" />
+
+          <!-- ⭐ D‑1 said in the field's own caption: this is the BACKUP's secret, and the application
+               never reaches for the keystore's. Typing the same words is the operator's choice. -->
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.BackupPassphraseItsOwnSecretNot}" />
+          <TextBox Name="BackupPassphraseBox" PasswordChar="•" Text="{Binding BackupPassphrase}" />
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.BackupPassphraseAgain}" />
+          <TextBox Name="BackupPassphraseConfirmBox" PasswordChar="•"
+                   Text="{Binding BackupPassphraseConfirmation}" />
+
+        </StackPanel>
+
+        <!-- ══ RESTORE ══════════════════════════════════════════════════════════════════════════ -->
+        <StackPanel Name="RestoreForm" IsVisible="{Binding IsRestoreTab}">
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.PassphraseBackupBeingRestored}" />
+          <TextBox Name="RestorePassphraseBox" PasswordChar="•"
+                   Margin="{DynamicResource Margin.FieldGap}"
+                   Text="{Binding RestorePassphrase}" />
+
+          <!-- ⭐ A picker rather than two buttons, so there is ONE Restore action and the paragraph below
+               describes the thing that will actually happen. Two buttons would force the text to explain
+               both at once, which is how the previous layout let the consequential one go unread. -->
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.WhatRestoreWillDo}" />
+          <ComboBox Name="RestoreMode" HorizontalAlignment="Stretch"
+                    Margin="{DynamicResource Margin.FieldGap}"
+                    ItemsSource="{Binding RestoreModes}"
+                    SelectedItem="{Binding SelectedRestoreMode}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:RestoreModeOption">
+                <TextBlock Text="{Binding Caption.Value}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+
+          <!-- ⚠ The stripe follows the CHOICE: warning while the picked mode replaces the working
+               register, neutral while it cannot touch it. ⛔ The sentence describes the rule; it is not
+               what enforces it — RestoreWorkflow is, by preserving and by verifying twice. -->
+          <Border Classes="message"
+                  Classes.warning="{Binding IsReplacingActiveRegister}"
+                  Classes.info="{Binding !IsReplacingActiveRegister}">
+            <TextBlock Name="RestoreConsequenceText" TextWrapping="Wrap"
+                       Text="{Binding RestoreConsequence}" />
+          </Border>
+
+        </StackPanel>
+
+        <!-- ══ SIGNING KEY ══════════════════════════════════════════════════════════════════════ -->
+        <!-- ⭐⭐ THE CEREMONY'S OWN SURFACE (L7.1).
+
+             §24.1 asks for two things this application could not do: record the fingerprint (step 7) and
+             VERIFY a backup by restoring it (step 5). Both existed as code — `KeyCeremony.Fingerprint`,
+             `FormatTrustedKeyEntry`, `VerifyRestore` — and `SigningSession.Create` discarded all three, so
+             the values lived for one method call and were seen by nobody.
+
+             ⛔ Nothing here can sign. The view model holds `SigningKeyFacts`, which is public key material
+             and an operation over a FILE the operator picks — never the session, never the issuer.
+
+             ⚠ Three values, three Copy buttons, because transcription is where a ceremony goes wrong: a
+             public key is 120-odd base64 characters nobody proof-reads, and one altered character produces
+             a build that refuses every licence it will ever be shown. -->
+        <StackPanel Name="SigningKeyForm" IsVisible="{Binding IsSigningKeyTab}">
+
+          <TextBlock Classes="section" Text="{lm:Loc Storage.WhatThisKeyIs}" />
+          <TextBlock TextWrapping="Wrap" Margin="{DynamicResource Margin.SectionGap}"
+                     Text="{lm:Loc Storage.RecordTheseThreeValuesWithTheCeremony}" />
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.KeyId}" />
+          <SelectableTextBlock Name="SigningKeyIdText" Classes="mono" TextWrapping="Wrap"
+                               Margin="{DynamicResource Margin.FieldGap}"
+                               Text="{Binding SigningKeyId}" />
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.PublicKeyFingerprint}" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}"
+                Margin="{DynamicResource Margin.FieldGap}">
+            <SelectableTextBlock Grid.Column="0" Name="FingerprintText" Classes="mono" TextWrapping="Wrap"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding SigningKeyFingerprint}" />
+            <Button Grid.Column="1" Classes="flat" Name="CopyFingerprint"
+                    Content="{lm:Loc Storage.Copy}" VerticalAlignment="Center"
+                    Command="{Binding CopyFingerprintCommand}" />
+          </Grid>
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.PublicKeySpki}" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}"
+                Margin="{DynamicResource Margin.FieldGap}">
+            <SelectableTextBlock Grid.Column="0" Name="PublicKeyText" Classes="mono" TextWrapping="Wrap"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding SigningKeyPublicKey}" />
+            <Button Grid.Column="1" Classes="flat" Name="CopyPublicKey"
+                    Content="{lm:Loc Storage.Copy}" VerticalAlignment="Center"
+                    Command="{Binding CopyPublicKeyCommand}" />
+          </Grid>
+
+          <!-- ⭐ GENERATED, never transcribed — the whole reason `FormatTrustedKeyEntry` exists. -->
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.TrustedKeyEntry}" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}"
+                Margin="{DynamicResource Margin.SectionGap}">
+            <SelectableTextBlock Grid.Column="0" Name="TrustedKeyEntryText" Classes="mono"
+                                 TextWrapping="Wrap" VerticalAlignment="Center"
+                                 Text="{Binding SigningKeyTrustedEntry}" />
+            <Button Grid.Column="1" Classes="flat" Name="CopyTrustedKeyEntry"
+                    Content="{lm:Loc Storage.Copy}" VerticalAlignment="Center"
+                    Command="{Binding CopyTrustedKeyEntryCommand}" />
+          </Grid>
+
+          <TextBlock Classes="section" Text="{lm:Loc Storage.VerifyAKeystoreBackup}" />
+          <TextBlock TextWrapping="Wrap" Margin="{DynamicResource Margin.SectionGap}"
+                     Text="{lm:Loc Storage.ABackupNeverRestoredIsAHypothesis}" />
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.KeystoreBackupPassphrase}" />
+          <TextBox Name="KeystoreBackupPassphraseBox" PasswordChar="•"
+                   Text="{Binding KeystoreBackupPassphrase}" />
+
+        </StackPanel>
+
+        <!-- ⭐ ONE message surface for all three tasks, and the LAST child: the body band's padding is what
+             separates it from the footer, so it carries no bottom margin of its own. -->
+        <Border Classes="message" Classes.info="{Binding IsInfo}" Classes.success="{Binding IsSuccess}"
+                Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}"
+                Margin="{DynamicResource Margin.SectionGap}"
+                IsVisible="{Binding HasMessage}">
+          <TextBlock Name="StorageMessageText" TextWrapping="Wrap" Text="{Binding MessageText}" />
+        </Border>
+
+      </StackPanel>
+    </Border>
+
+    <!-- Footer ─────────────────────────────────────────────────────────────────────────────────── -->
+    <!-- ⭐ ONE action, belonging to the task that is showing. ⚠ Both are `primary` because each IS the
+         point of its own tab; only one is ever visible, so they never compete and the strip can never
+         overflow the way the five-button footer did. -->
+    <Border Grid.Row="3" Classes="dialog-footer">
+      <StackPanel Orientation="Horizontal" Spacing="{DynamicResource Space.Md}">
+        <Button Classes="primary" Name="Backup" Content="{lm:Loc Storage.BackupAction}"
+                IsVisible="{Binding IsBackupTab}"
+                IsDefault="{Binding IsBackupTab}"
+                Command="{Binding BackupCommand}" />
+        <Button Classes="primary" Name="RunRestore" Content="{lm:Loc Storage.RestoreAction}"
+                IsVisible="{Binding IsRestoreTab}"
+                IsDefault="{Binding IsRestoreTab}"
+                Command="{Binding RunRestoreCommand}" />
+        <Button Classes="primary" Name="VerifyKeystoreBackup"
+                Content="{lm:Loc Storage.VerifyBackupAction}"
+                IsVisible="{Binding IsSigningKeyTab}"
+                IsDefault="{Binding IsSigningKeyTab}"
+                Command="{Binding VerifyKeystoreBackupCommand}" />
+      </StackPanel>
+    </Border>
+
+  </Grid>
+</Window>

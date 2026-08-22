@@ -159,6 +159,10 @@ public static class SettingsExporter
 
         // ❌ ParameterHistory and DebugWatches are never copied across — execution history rather than settings,
         // and keyed to connection ids. There is deliberately no option that could include them.
+        //
+        // ❌ LicenseClockHighWater likewise: it is this machine's clock record (licensing design §16.3), so
+        // importing it would hand one machine another's notion of "the latest time that has ever happened".
+        // Excluded by construction — `exported` starts empty and only opted-in sections are copied in.
 
         return new SettingsExportContent
         {
