@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using EmberTern.LicenseManager.Data;
 using EmberTern.LicenseManager.Email;
+using EmberTern.LicenseManager.Services;
 using EmberTern.LicenseManager.Settings;
 using EmberTern.LicenseManager.ViewModels;
 using Xunit;
@@ -206,7 +207,8 @@ public sealed class OptionIdentityTests : IDisposable
         Assert.Contains(browser.SelectedIssuing, browser.IssuingFilters);
 
         Directory.CreateDirectory(_folder);
-        var storage = new StorageViewModel(_manager.Register, _manager.Paths, () => Now);
+        var storage = new StorageViewModel(
+            _manager.Register, _manager.Paths, SigningKeyFacts.Of(_manager.Session), () => Now);
         Assert.Contains(storage.SelectedRestoreMode, storage.RestoreModes);
 
         // ⭐ And it is the SAFE one — the mode that cannot touch the working register is the one an

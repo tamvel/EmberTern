@@ -218,9 +218,20 @@ odpowiada na pytanie *„co EmberTern powiedziałby o tym dzisiaj"*, więc każd
 | Encrypted backup | **Zaszyfrowana kopia zapasowa** |
 | Signing keystore | **Magazyn kluczy podpisujących** |
 | Passphrase | 🔒 **Hasło dostępu** *(D‑6)* |
+| Signing key *(zakładka)* | **Klucz podpisujący** — ⭐ zgodne z ratyfikowanym „Utwórz klucz podpisujący" (§4.2) |
+| Key id | **Identyfikator klucza** — ⭐ jak `Identifier` / `Licence id` powyżej, nie „ID klucza" |
+| Public key fingerprint | **Odcisk klucza publicznego** |
+| Verify backup… | **Sprawdź kopię zapasową…** — ⭐ `Verify` = **Sprawdź**, jak ratyfikowane „Inspect latest / Sprawdź najnowsze" (§4.2); ⛔ nie „Weryfikuj" |
+| Copy | **Kopiuj** |
 | Sender · Sign-in · Transport security | **Nadawca · Logowanie · Zabezpieczenie połączenia** |
 | Message language · Application language | **Język wiadomości · Język aplikacji** |
 | Attached | **Załącznik** |
+
+⚠ **Siedem ostatnich wierszy powyżej dodał etap L7.1** (powierzchnia ceremonii w oknie Storage). ⛔ To
+**rozszerzenie**, nie korekta — żaden ratyfikowany termin nie został zmieniony; każdy nowy dobrany tak, by
+czytał się jak wyraz już zatwierdzony w §4.2/§4.3 (`Verify` → **Sprawdź** jak w „Inspect latest", `Key id`
+→ **Identyfikator klucza** jak w „Licence id"). ⚠ Wartości techniczne w tych etykietach — `SPKI`, `base64`,
+`SHA-256`, `TrustedKeys.Production` — zostają nieprzetłumaczone na mocy §4.4.
 
 ⭐ **`Passphrase` ≠ `Password`, i rozróżnienia nie wolno zgubić** (D‑6). Aplikacja rozróżnia je celowo: hasło
 skrzynki SMTP to `Password` / **Hasło**, sekret magazynu kluczy i kopii zapasowej to `Passphrase` /

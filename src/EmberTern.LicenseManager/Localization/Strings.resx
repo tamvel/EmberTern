@@ -1175,4 +1175,70 @@
   <data name="Send.Attachment.other" xml:space="preserve">
     <value>{1} · {2} bytes · {3}</value>
   </data>
+  <data name="Storage.SigningKeyTab" xml:space="preserve">
+    <value>Signing key</value>
+  </data>
+  <data name="Storage.WhatThisKeyIs" xml:space="preserve">
+    <value>What this key is</value>
+  </data>
+  <data name="Storage.RecordTheseThreeValuesWithTheCeremony" xml:space="preserve">
+    <value>Record the fingerprint and the public key together with the ceremony's date, and paste the entry into the client. All three are public — only the keystore file and its passphrase are secret.</value>
+  </data>
+  <data name="Storage.KeyId" xml:space="preserve">
+    <value>Key id</value>
+  </data>
+  <data name="Storage.PublicKeyFingerprint" xml:space="preserve">
+    <value>Public key fingerprint (SHA-256)</value>
+  </data>
+  <data name="Storage.PublicKeySpki" xml:space="preserve">
+    <value>Public key (SPKI, base64)</value>
+  </data>
+  <data name="Storage.TrustedKeyEntry" xml:space="preserve">
+    <value>Entry for TrustedKeys.Production</value>
+  </data>
+  <data name="Storage.Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="Storage.VerifyAKeystoreBackup" xml:space="preserve">
+    <value>Verify a keystore backup</value>
+  </data>
+  <data name="Storage.ABackupNeverRestoredIsAHypothesis" xml:space="preserve">
+    <value>A backup that has never been restored is a hypothesis. This opens the file you choose, checks that it holds this same key, signs a licence with it and verifies that licence. Nothing is written, and the keystore in use is not touched.</value>
+  </data>
+  <data name="Storage.KeystoreBackupPassphrase" xml:space="preserve">
+    <value>Passphrase of the keystore backup</value>
+  </data>
+  <data name="Storage.VerifyBackupAction" xml:space="preserve">
+    <value>Verify backup…</value>
+  </data>
+  <data name="FileType.ChooseKeystoreBackupTitle" xml:space="preserve">
+    <value>Choose a keystore backup to verify</value>
+  </data>
+  <data name="FileType.SigningKeystore" xml:space="preserve">
+    <value>EmberTern signing keystore</value>
+  </data>
+  <data name="Status.KeystoreBackupIsUsable" xml:space="preserve">
+    <value>The backup at {0} is usable: it opened, holds the expected key, and signed a licence that verifies. Fingerprint {1}.</value>
+  </data>
+  <data name="Status.KeystoreBackupDidNotOpen" xml:space="preserve">
+    <value>The backup at {0} did not open. Either the passphrase is wrong or the file is damaged — retype it, then try the other backup.</value>
+  </data>
+  <data name="Status.KeystoreBackupHoldsNoSuchKey" xml:space="preserve">
+    <value>The backup at {0} opened, but holds no key {1}.</value>
+  </data>
+  <data name="Status.KeystoreBackupIsADifferentKey" xml:space="preserve">
+    <value>The backup at {0} holds a DIFFERENT key — it cannot renew the licences already in the field.</value>
+  </data>
+  <data name="Status.KeystoreBackupDidNotProduceAVerifiableLicence" xml:space="preserve">
+    <value>The backup at {0} holds the right key, but the licence it signed did not verify.</value>
+  </data>
+  <data name="Status.CopiedTheFingerprint" xml:space="preserve">
+    <value>Copied the fingerprint to the clipboard.</value>
+  </data>
+  <data name="Status.CopiedThePublicKey" xml:space="preserve">
+    <value>Copied the public key to the clipboard.</value>
+  </data>
+  <data name="Status.CopiedTheTrustedKeyEntry" xml:space="preserve">
+    <value>Copied the trusted-key entry to the clipboard.</value>
+  </data>
 </root>

@@ -12,14 +12,20 @@ using EmberTern.LicenseManager.Services;
 namespace EmberTern.LicenseManager.ViewModels;
 
 /// <summary>
-/// The Storage surface: where the register lives, how to back it up, and how to restore one somewhere
-/// else.
+/// The Storage surface: where the register lives, how to back it up, how to restore one somewhere else —
+/// and, since L7.1, what the signing key IS and whether a backup of it works.
 ///
 /// <para>⭐⭐ <b>Its own window, reached deliberately</b> (D‑4). It is not a third view tab — the two tabs
 /// answer two questions about LICENCES, and file operations are not a third one of those — and it is not
 /// a card on the customers view, which already carries four sections about a customer. ⚠ The separation
 /// is also a safety property: restore is the most consequential action in this application, and it should
 /// take a decision to reach rather than sit one click from daily work.</para>
+///
+/// <para>⭐ <b>The signing key is a THIRD task here rather than a surface of its own</b> (L7.1). This
+/// window already named the keystore as a separate file to look after, and every question it now answers —
+/// which key is this, what is its fingerprint, does this backup work — is an administrative question about
+/// a file, which is exactly what this window is for. ⛔ It is not on first run: the ceremony screen exists
+/// to perform ONE action, and §36.5 already removed infrastructure from it once.</para>
 ///
 /// <para>⛔ <b>Restore never writes over the active register, and this view model cannot make it.</b> It
 /// hands <see cref="RestoreWorkflow"/> a folder the operator chose, and that class refuses the active
@@ -35,14 +41,29 @@ public sealed partial class StorageViewModel : MessageHostViewModel
     private readonly BackupWorkflow _backups;
     private readonly RestoreWorkflow _restores;
     private readonly ManagerPaths _paths;
+    private readonly SigningKeyFacts _signingKey;
     private readonly Func<DateTimeOffset> _clock;
 
     /// <summary>Creates the view model.</summary>
+    /// <param name="register">The register of record.</param>
+    /// <param name="paths">Where the files live.</param>
+    /// <param name="signingKey">
+    /// ⭐ The public half of the key this session signs with. <b>Required rather than optional</b>, for the
+    /// reason <see cref="ShellViewModel"/> gives for <c>paths</c>: an optional one would create a state —
+    /// "the window exists but does not know its key" — that the application cannot reach, since this window
+    /// is only ever opened from an unlocked shell. A parameter that can only be omitted by a test is a
+    /// branch nobody maintains.
+    /// </param>
+    /// <param name="clock">The clock.</param>
     public StorageViewModel(
-        LicenseRegister register, ManagerPaths paths, Func<DateTimeOffset>? clock = null)
+        LicenseRegister register,
+        ManagerPaths paths,
+        SigningKeyFacts signingKey,
+        Func<DateTimeOffset>? clock = null)
     {
         ArgumentNullException.ThrowIfNull(register);
         _paths = paths ?? throw new ArgumentNullException(nameof(paths));
+        _signingKey = signingKey ?? throw new ArgumentNullException(nameof(signingKey));
         _clock = clock ?? (() => DateTimeOffset.UtcNow);
         _backups = new BackupWorkflow(register, _clock);
 
@@ -58,26 +79,48 @@ public sealed partial class StorageViewModel : MessageHostViewModel
         Counts = SnapshotCounts.Read(register);
     }
 
-    // ── The two tasks ───────────────────────────────────────────────────────────────────────────────
+    // ── The three tasks ─────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Which of the two tasks is showing. ⭐ Backup first — it is what an operator opens this window to
-    /// do, and it is the only one of the two that is routine.
+    /// Which task is showing.
+    ///
+    /// <para>⭐ Backup first — it is what an operator opens this window to do, and it is the only one of
+    /// the three that is routine.</para>
     /// </summary>
+    /// <remarks>
+    /// ⚠⚠ <b>It used to be a <c>bool IsBackupTab</c> with <c>IsRestoreTab =&gt; !IsBackupTab</c>, and the
+    /// third task is exactly what that shape cannot express.</b> A second bool beside the first would make
+    /// two of the four combinations meaningless and let both be true at once — a state the markup would
+    /// render as two forms stacked on top of each other, with no binding error. ⭐ The three
+    /// <c>Is…Tab</c> properties are kept as derived reads, so every existing binding and test still asks
+    /// the same question.
+    /// </remarks>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsBackupTab))]
     [NotifyPropertyChangedFor(nameof(IsRestoreTab))]
-    private bool _isBackupTab = true;
+    [NotifyPropertyChangedFor(nameof(IsSigningKeyTab))]
+    private StorageTask _selectedTask = StorageTask.Backup;
+
+    /// <summary>The backup task.</summary>
+    public bool IsBackupTab => SelectedTask == StorageTask.Backup;
 
     /// <summary>The restore task.</summary>
-    public bool IsRestoreTab => !IsBackupTab;
+    public bool IsRestoreTab => SelectedTask == StorageTask.Restore;
+
+    /// <summary>The signing-key task — the ceremony's own surface (L7.1).</summary>
+    public bool IsSigningKeyTab => SelectedTask == StorageTask.SigningKey;
 
     /// <summary>Shows the backup task.</summary>
     [RelayCommand]
-    private void ShowBackup() => IsBackupTab = true;
+    private void ShowBackup() => SelectedTask = StorageTask.Backup;
 
     /// <summary>Shows the restore task.</summary>
     [RelayCommand]
-    private void ShowRestore() => IsBackupTab = false;
+    private void ShowRestore() => SelectedTask = StorageTask.Restore;
+
+    /// <summary>Shows the signing-key task.</summary>
+    [RelayCommand]
+    private void ShowSigningKey() => SelectedTask = StorageTask.SigningKey;
 
     /// <summary>Asks where to save. Takes a suggested file name; returns the path or <see langword="null"/>.</summary>
     public Func<string, Task<string?>>? SaveFilePicker { get; set; }
@@ -90,6 +133,19 @@ public sealed partial class StorageViewModel : MessageHostViewModel
 
     /// <summary>Shows a folder to the operator in their file manager.</summary>
     public Action<string>? FolderOpener { get; set; }
+
+    /// <summary>Asks which keystore BACKUP to verify. Returns the path or <see langword="null"/>.</summary>
+    /// <remarks>
+    /// ⚠ A separate delegate from <see cref="OpenBackupPicker"/> on purpose: a register backup and a
+    /// keystore are different files with different extensions, and offering one filter for both is how an
+    /// operator ends up verifying the wrong thing.
+    /// </remarks>
+    public Func<Task<string?>>? OpenKeystorePicker { get; set; }
+
+    /// <summary>
+    /// Puts a value on the clipboard. ⭐ Assigned by the view — the clipboard is pure platform.
+    /// </summary>
+    public Func<string, Task>? TextCopier { get; set; }
 
     // ── What is here ────────────────────────────────────────────────────────────────────────────────
 
@@ -492,6 +548,137 @@ public sealed partial class StorageViewModel : MessageHostViewModel
         _ => null,
     };
 
+    // ── The signing key ─────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>The <c>kid</c> every licence issued in this session carries.</summary>
+    public string SigningKeyId => _signingKey.KeyId;
+
+    /// <summary>SHA-256 of the public key, uppercase hex — the value recorded in §35.4.</summary>
+    public string SigningKeyFingerprint => _signingKey.Fingerprint;
+
+    /// <summary>The public key, base64 — the other value the ceremony register records.</summary>
+    public string SigningKeyPublicKey => _signingKey.PublicKeyBase64;
+
+    /// <summary>The ready-to-paste <c>TrustedKeys.Production</c> entry.</summary>
+    public string SigningKeyTrustedEntry => _signingKey.TrustedKeyEntry;
+
+    /// <summary>
+    /// The passphrase of the keystore BACKUP being verified.
+    ///
+    /// <para>⛔ Not the register backup's (that one is <see cref="BackupPassphrase"/>) and not something the
+    /// application knows: the keystore's passphrase is never stored, so verifying a backup means typing it.
+    /// ⚠ It is cleared only on success — a failed attempt leaves six words in the box rather than making
+    /// the operator retype them to try the other backup.</para>
+    /// </summary>
+    [ObservableProperty]
+    private string _keystoreBackupPassphrase = string.Empty;
+
+    /// <summary>
+    /// Verifies a keystore backup against the running session's own public key.
+    ///
+    /// <para>⭐⭐ <b>This is §24.1 step 5 — the step that is always skipped</b>: <i>"a backup that has never
+    /// been restored is a hypothesis"</i>. Until L7.1 the operation existed only in the test suite, so the
+    /// one thing the ceremony most needs to prove had no way to be proved on a real backup.</para>
+    ///
+    /// <para>⭐ The expected key is not asked for and cannot be chosen — see
+    /// <see cref="SigningKeyFacts.VerifyBackup"/>. Without that, the check would prove only that the file
+    /// holds <i>a</i> working key, and a backup of the WRONG key passes that while being as useless as no
+    /// backup at all.</para>
+    /// </summary>
+    [RelayCommand]
+    private async Task VerifyKeystoreBackupAsync()
+    {
+        if (OpenKeystorePicker is null)
+        {
+            return;
+        }
+
+        if (KeystoreBackupPassphrase.Length == 0)
+        {
+            Message = StatusMessage.Warning(StatusCatalog.EnterKeystorePassphrase);
+            return;
+        }
+
+        var path = await OpenKeystorePicker().ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        byte[] file;
+        try
+        {
+            file = File.ReadAllBytes(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            Message = StatusMessage.Error(StatusCatalog.KeystoreNotRead, e.Message);
+            return;
+        }
+
+        var report = _signingKey.VerifyBackup(file, KeystoreBackupPassphrase, _clock());
+
+        // ⚠ The four booleans are reported in the order they can fail, so the operator is told the FIRST
+        //   thing that went wrong rather than a summary. ⛔ `report.Detail` is deliberately not shown: its
+        //   own contract says it is English, for a log, never for a screen.
+        // ⚠⚠ "Did not open" cannot distinguish a wrong passphrase from a damaged file — VerifyRestore
+        //   folds the classified KeyStoreFailure into that English detail, and reaching it would mean
+        //   opening the keystore twice or changing the report's shape. Both were rejected for L7.1: the
+        //   operator's next move is the same either way (retype, then try the other backup), and the
+        //   sentence says so.
+        Message = report switch
+        {
+            { Succeeded: true } =>
+                StatusMessage.Success(StatusCatalog.KeystoreBackupIsUsable, path, _signingKey.Fingerprint),
+            { Opened: false } =>
+                StatusMessage.Error(StatusCatalog.KeystoreBackupDidNotOpen, path),
+            { KeyPresent: false } =>
+                StatusMessage.Error(StatusCatalog.KeystoreBackupHoldsNoSuchKey, path, _signingKey.KeyId),
+            { PublicKeyMatches: false } =>
+                StatusMessage.Error(StatusCatalog.KeystoreBackupIsADifferentKey, path),
+            _ => StatusMessage.Error(StatusCatalog.KeystoreBackupDidNotProduceAVerifiableLicence, path),
+        };
+
+        if (report.Succeeded)
+        {
+            KeystoreBackupPassphrase = string.Empty;
+        }
+    }
+
+    /// <summary>Copies the fingerprint — the value two machines compare.</summary>
+    [RelayCommand]
+    private Task CopyFingerprintAsync() =>
+        CopyAsync(SigningKeyFingerprint, StatusCatalog.CopiedTheFingerprint);
+
+    /// <summary>Copies the public key — the value the ceremony register records.</summary>
+    [RelayCommand]
+    private Task CopyPublicKeyAsync() =>
+        CopyAsync(SigningKeyPublicKey, StatusCatalog.CopiedThePublicKey);
+
+    /// <summary>Copies the ready-to-paste trusted-key entry.</summary>
+    [RelayCommand]
+    private Task CopyTrustedKeyEntryAsync() =>
+        CopyAsync(SigningKeyTrustedEntry, StatusCatalog.CopiedTheTrustedKeyEntry);
+
+    /// <summary>
+    /// One copy path, three actions.
+    ///
+    /// <para>⭐⭐ <b>Each action names its own whole sentence</b> rather than passing a label into a shared
+    /// one. Architecture rule 12: a sentence assembled from a catalog fragment plus a name in code makes
+    /// word order English's decision. ⚠ And the value is NOT put in the message — a 120-character base64
+    /// blob quoted back at the operator says nothing that "copied" does not.</para>
+    /// </summary>
+    private async Task CopyAsync(string value, MessageKey confirmation)
+    {
+        if (TextCopier is null)
+        {
+            return;
+        }
+
+        await TextCopier(value).ConfigureAwait(true);
+        Message = StatusMessage.Success(confirmation);
+    }
+
     // ── The folder ──────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -527,6 +714,25 @@ public sealed partial class StorageViewModel : MessageHostViewModel
         BackupFailure.Corrupt => new LocalizedText(StatusCatalog.BackupCorrupt),
         _ => new LocalizedText(StatusCatalog.BackupNotOpened, error.Failure),
     };
+}
+
+/// <summary>
+/// Which of the Storage window's tasks is showing.
+///
+/// <para>⭐ An enum rather than a set of bools, so "two tasks at once" is unrepresentable rather than
+/// merely unlikely. ⛔ It carries no words: the tab labels come from the catalog through <c>{lm:Loc}</c>,
+/// and a label inside an identity is what gotcha #394 is about.</para>
+/// </summary>
+public enum StorageTask
+{
+    /// <summary>Take an encrypted backup of the register. ⭐ The routine one, and the default.</summary>
+    Backup,
+
+    /// <summary>Restore a register — elsewhere, or over the active one.</summary>
+    Restore,
+
+    /// <summary>What the signing key is, and whether a backup of it works (L7.1).</summary>
+    SigningKey,
 }
 
 /// <summary>

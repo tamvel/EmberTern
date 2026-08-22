@@ -53,4 +53,10 @@ internal static class FileTypeCatalog
 
     /// <summary>The plain export's file type. ⛔ A format name — see the class remarks.</summary>
     public static string JsonLines => Word(nameof(JsonLines));
+
+    /// <summary>Title of the dialog that picks a keystore backup to verify (L7.1).</summary>
+    public static string ChooseKeystoreBackupTitle => Word(nameof(ChooseKeystoreBackupTitle));
+
+    /// <summary>The encrypted signing keystore's file type.</summary>
+    public static string SigningKeystore => Word(nameof(SigningKeystore));
 }

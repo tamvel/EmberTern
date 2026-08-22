@@ -1209,4 +1209,70 @@
   <data name="Unlock.UnlockKeystoreIssueLicences" xml:space="preserve">
     <value>Odblokuj magazyn kluczy, aby wystawiać licencje.</value>
   </data>
+  <data name="Storage.SigningKeyTab" xml:space="preserve">
+    <value>Klucz podpisujący</value>
+  </data>
+  <data name="Storage.WhatThisKeyIs" xml:space="preserve">
+    <value>Czym jest ten klucz</value>
+  </data>
+  <data name="Storage.RecordTheseThreeValuesWithTheCeremony" xml:space="preserve">
+    <value>Zapisz odcisk i klucz publiczny razem z datą ceremonii, a wpis wklej do klienta. Wszystkie trzy są publiczne — sekretem są wyłącznie plik magazynu kluczy i jego hasło dostępu.</value>
+  </data>
+  <data name="Storage.KeyId" xml:space="preserve">
+    <value>Identyfikator klucza</value>
+  </data>
+  <data name="Storage.PublicKeyFingerprint" xml:space="preserve">
+    <value>Odcisk klucza publicznego (SHA-256)</value>
+  </data>
+  <data name="Storage.PublicKeySpki" xml:space="preserve">
+    <value>Klucz publiczny (SPKI, base64)</value>
+  </data>
+  <data name="Storage.TrustedKeyEntry" xml:space="preserve">
+    <value>Wpis do TrustedKeys.Production</value>
+  </data>
+  <data name="Storage.Copy" xml:space="preserve">
+    <value>Kopiuj</value>
+  </data>
+  <data name="Storage.VerifyAKeystoreBackup" xml:space="preserve">
+    <value>Sprawdź kopię zapasową magazynu kluczy</value>
+  </data>
+  <data name="Storage.ABackupNeverRestoredIsAHypothesis" xml:space="preserve">
+    <value>Kopia zapasowa, której nigdy nie przywrócono, jest tylko hipotezą. Ta operacja otwiera wskazany plik, sprawdza, czy zawiera ten sam klucz, podpisuje nim licencję i tę licencję weryfikuje. Nic nie jest zapisywane, a używany magazyn kluczy pozostaje nietknięty.</value>
+  </data>
+  <data name="Storage.KeystoreBackupPassphrase" xml:space="preserve">
+    <value>Hasło dostępu do kopii zapasowej magazynu kluczy</value>
+  </data>
+  <data name="Storage.VerifyBackupAction" xml:space="preserve">
+    <value>Sprawdź kopię zapasową…</value>
+  </data>
+  <data name="FileType.ChooseKeystoreBackupTitle" xml:space="preserve">
+    <value>Wybierz kopię zapasową magazynu kluczy do sprawdzenia</value>
+  </data>
+  <data name="FileType.SigningKeystore" xml:space="preserve">
+    <value>Magazyn kluczy podpisujących EmberTern</value>
+  </data>
+  <data name="Status.KeystoreBackupIsUsable" xml:space="preserve">
+    <value>Kopia zapasowa {0} jest sprawna: otworzyła się, zawiera oczekiwany klucz i podpisała licencję, która przechodzi weryfikację. Odcisk {1}.</value>
+  </data>
+  <data name="Status.KeystoreBackupDidNotOpen" xml:space="preserve">
+    <value>Kopia zapasowa {0} nie otworzyła się. Albo hasło dostępu jest niepoprawne, albo plik jest uszkodzony — wpisz hasło ponownie, a potem sprawdź drugą kopię.</value>
+  </data>
+  <data name="Status.KeystoreBackupHoldsNoSuchKey" xml:space="preserve">
+    <value>Kopia zapasowa {0} otworzyła się, ale nie zawiera klucza {1}.</value>
+  </data>
+  <data name="Status.KeystoreBackupIsADifferentKey" xml:space="preserve">
+    <value>Kopia zapasowa {0} zawiera INNY klucz — nie odnowi licencji, które są już u klientów.</value>
+  </data>
+  <data name="Status.KeystoreBackupDidNotProduceAVerifiableLicence" xml:space="preserve">
+    <value>Kopia zapasowa {0} zawiera właściwy klucz, ale podpisana nim licencja nie przeszła weryfikacji.</value>
+  </data>
+  <data name="Status.CopiedTheFingerprint" xml:space="preserve">
+    <value>Skopiowano odcisk klucza do schowka.</value>
+  </data>
+  <data name="Status.CopiedThePublicKey" xml:space="preserve">
+    <value>Skopiowano klucz publiczny do schowka.</value>
+  </data>
+  <data name="Status.CopiedTheTrustedKeyEntry" xml:space="preserve">
+    <value>Skopiowano wpis zaufanego klucza do schowka.</value>
+  </data>
 </root>

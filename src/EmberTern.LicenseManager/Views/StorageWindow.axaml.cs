@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input.Platform;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using EmberTern.LicenseManager.Data;
@@ -38,6 +39,12 @@ public sealed partial class StorageWindow : Window
             model.OpenBackupPicker = OpenBackupAsync;
             model.RestoreFolderPicker = PickRestoreFolderAsync;
             model.FolderOpener = ShowFolder;
+
+            // ⭐ The two the signing-key task needs (L7.1). The clipboard is pure platform, exactly like
+            //   the theme toggle and MainWindow's own copy handler; ⛔ the view model decides WHAT is
+            //   copied and WHICH sentence confirms it, and never touches Avalonia to do either.
+            model.OpenKeystorePicker = OpenKeystoreBackupAsync;
+            model.TextCopier = CopyToClipboardAsync;
 
             // ⭐ The two delegates that make "replace the active register" possible at all (D‑6): only
             //    the application owns the register, and only the application can shut itself down. ⛔ The
@@ -77,6 +84,32 @@ public sealed partial class StorageWindow : Window
         });
 
         return files.Count == 0 ? null : files[0].TryGetLocalPath();
+    }
+
+    /// <summary>
+    /// Picks a keystore BACKUP to verify.
+    ///
+    /// <para>⚠ Its own filter, not the register backup's: the two are different files, and offering one
+    /// picker for both is how an operator verifies the wrong thing and believes the key is safe.</para>
+    /// </summary>
+    private async Task<string?> OpenKeystoreBackupAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = FileTypeCatalog.ChooseKeystoreBackupTitle,
+            AllowMultiple = false,
+            FileTypeFilter = [KeyStoreFileType],
+        });
+
+        return files.Count == 0 ? null : files[0].TryGetLocalPath();
+    }
+
+    private async Task CopyToClipboardAsync(string value)
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(value).ConfigureAwait(true);
+        }
     }
 
     private async Task<string?> PickRestoreFolderAsync()
@@ -124,5 +157,13 @@ public sealed partial class StorageWindow : Window
     private static FilePickerFileType JsonlFileType => new(FileTypeCatalog.JsonLines)
     {
         Patterns = ["*" + RegisterJsonl.FileExtension],
+    };
+
+    // ⭐ The extension is DERIVED from the one place the file is named (`ManagerPaths.KeyStoreFileName`),
+    //   never typed here. Gotcha #284: a copied derived fact goes stale silently, and the correct and the
+    //   stale versions read identically.
+    private static FilePickerFileType KeyStoreFileType => new(FileTypeCatalog.SigningKeystore)
+    {
+        Patterns = ["*" + Path.GetExtension(Services.ManagerPaths.KeyStoreFileName)],
     };
 }

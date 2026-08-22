@@ -67,6 +67,10 @@ public sealed class ManagerTerminologyTests
     [InlineData("ArtifactStanding.Current", "bieżący")]
     [InlineData("ArtifactStanding.Superseded", "zastąpiony")]
     [InlineData("Storage.RegisterRecord", "Rejestr wzorcowy")]
+    // §4.3 — słownictwo powierzchni ceremonii, dodane przez L7.1 jako rozszerzenie normy.
+    [InlineData("Storage.SigningKeyTab", "Klucz podpisujący")]
+    [InlineData("Storage.KeyId", "Identyfikator klucza")]
+    [InlineData("Storage.VerifyBackupAction", "Sprawdź kopię zapasową…")]
     public void EveryRatifiedTerm_ReadsAsTheNormSaysItDoes(string key, string expected)
     {
         using var isolated = Loc.IsolateSubscribersForVerification();

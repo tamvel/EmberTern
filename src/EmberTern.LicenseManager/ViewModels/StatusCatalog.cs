@@ -224,6 +224,36 @@ internal static class StatusCatalog
     /// <summary>The keystore could not be written: {0}</summary>
     public static MessageKey KeystoreNotWritten => Key(nameof(KeystoreNotWritten));
 
+    // ── Verifying a backup of the keystore (L7.1, §24.1 step 5) ─────────────────────────────────────
+    // ⭐ Five outcomes, five sentences. ⛔ Not one sentence with the failure as an argument: the four
+    //   failures mean four different things to do next, and a caller that can only say "it failed" is
+    //   a caller that has thrown away the report it was given.
+
+    /// <summary>The backup at {0} is usable: it opened, holds the expected key, and signed a licence that verifies. Fingerprint {1}.</summary>
+    public static MessageKey KeystoreBackupIsUsable => Key(nameof(KeystoreBackupIsUsable));
+
+    /// <summary>The backup at {0} did not open. Either the passphrase is wrong, or the file is damaged — retype it, then try the other backup.</summary>
+    public static MessageKey KeystoreBackupDidNotOpen => Key(nameof(KeystoreBackupDidNotOpen));
+
+    /// <summary>The backup at {0} opened but holds no key {1}.</summary>
+    public static MessageKey KeystoreBackupHoldsNoSuchKey => Key(nameof(KeystoreBackupHoldsNoSuchKey));
+
+    /// <summary>⚠ The backup at {0} holds a DIFFERENT key — it cannot renew the licences already in the field.</summary>
+    public static MessageKey KeystoreBackupIsADifferentKey => Key(nameof(KeystoreBackupIsADifferentKey));
+
+    /// <summary>The backup at {0} holds the right key, but the licence it signed did not verify.</summary>
+    public static MessageKey KeystoreBackupDidNotProduceAVerifiableLicence =>
+        Key(nameof(KeystoreBackupDidNotProduceAVerifiableLicence));
+
+    /// <summary>Copied the fingerprint to the clipboard.</summary>
+    public static MessageKey CopiedTheFingerprint => Key(nameof(CopiedTheFingerprint));
+
+    /// <summary>Copied the public key to the clipboard.</summary>
+    public static MessageKey CopiedThePublicKey => Key(nameof(CopiedThePublicKey));
+
+    /// <summary>Copied the trusted-key entry to the clipboard.</summary>
+    public static MessageKey CopiedTheTrustedKeyEntry => Key(nameof(CopiedTheTrustedKeyEntry));
+
     /// <summary>Sending to {0}…</summary>
     public static MessageKey SendingTo => Key(nameof(SendingTo));
 

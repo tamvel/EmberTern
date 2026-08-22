@@ -70,7 +70,10 @@ public sealed partial class ShellViewModel : MessageHostViewModel
         History = new ArtifactHistoryViewModel(register, _workflow, session);
         BatchRenewal = new BatchRenewalViewModel(
             register, _workflow, session, Browser, message => Message = message);
-        Storage = new StorageViewModel(register, paths, _clock);
+        // ⭐ The PUBLIC half only. `SigningKeyFacts.Of` reads the three ceremony values off the session and
+        //   keeps nothing of it — no issuer, no key, no passphrase — so the Storage surface can show and
+        //   verify a key without being able to sign with one (L7.1).
+        Storage = new StorageViewModel(register, paths, SigningKeyFacts.Of(session), _clock);
 
         // ⭐ Built here rather than when the window opens, for the same reason Storage is: the settings
         //    are read ONCE, so re-opening the window shows what the operator last typed rather than

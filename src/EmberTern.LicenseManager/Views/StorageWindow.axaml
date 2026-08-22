@@ -55,6 +55,12 @@
         <Button Classes="view-tab" Name="RestoreTab" Content="{lm:Loc Storage.RestoreTab}"
                 Classes.active="{Binding IsRestoreTab}"
                 Command="{Binding ShowRestoreCommand}" />
+        <!-- ⭐ The third task (L7.1): what the signing key IS, and whether a backup of it works. It sits
+             here because this window is already the administrative surface for the FILES — and the
+             keystore is named on the Backup tab as a separate thing to look after. -->
+        <Button Classes="view-tab" Name="SigningKeyTab" Content="{lm:Loc Storage.SigningKeyTab}"
+                Classes.active="{Binding IsSigningKeyTab}"
+                Command="{Binding ShowSigningKeyCommand}" />
       </StackPanel>
     </Border>
 
@@ -137,7 +143,76 @@
 
         </StackPanel>
 
-        <!-- ⭐ ONE message surface for both tasks, and the LAST child: the body band's padding is what
+        <!-- ══ SIGNING KEY ══════════════════════════════════════════════════════════════════════ -->
+        <!-- ⭐⭐ THE CEREMONY'S OWN SURFACE (L7.1).
+
+             §24.1 asks for two things this application could not do: record the fingerprint (step 7) and
+             VERIFY a backup by restoring it (step 5). Both existed as code — `KeyCeremony.Fingerprint`,
+             `FormatTrustedKeyEntry`, `VerifyRestore` — and `SigningSession.Create` discarded all three, so
+             the values lived for one method call and were seen by nobody.
+
+             ⛔ Nothing here can sign. The view model holds `SigningKeyFacts`, which is public key material
+             and an operation over a FILE the operator picks — never the session, never the issuer.
+
+             ⚠ Three values, three Copy buttons, because transcription is where a ceremony goes wrong: a
+             public key is 120-odd base64 characters nobody proof-reads, and one altered character produces
+             a build that refuses every licence it will ever be shown. -->
+        <StackPanel Name="SigningKeyForm" IsVisible="{Binding IsSigningKeyTab}">
+
+          <TextBlock Classes="section" Text="{lm:Loc Storage.WhatThisKeyIs}" />
+          <TextBlock TextWrapping="Wrap" Margin="{DynamicResource Margin.SectionGap}"
+                     Text="{lm:Loc Storage.RecordTheseThreeValuesWithTheCeremony}" />
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.KeyId}" />
+          <SelectableTextBlock Name="SigningKeyIdText" Classes="mono" TextWrapping="Wrap"
+                               Margin="{DynamicResource Margin.FieldGap}"
+                               Text="{Binding SigningKeyId}" />
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.PublicKeyFingerprint}" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}"
+                Margin="{DynamicResource Margin.FieldGap}">
+            <SelectableTextBlock Grid.Column="0" Name="FingerprintText" Classes="mono" TextWrapping="Wrap"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding SigningKeyFingerprint}" />
+            <Button Grid.Column="1" Classes="flat" Name="CopyFingerprint"
+                    Content="{lm:Loc Storage.Copy}" VerticalAlignment="Center"
+                    Command="{Binding CopyFingerprintCommand}" />
+          </Grid>
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.PublicKeySpki}" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}"
+                Margin="{DynamicResource Margin.FieldGap}">
+            <SelectableTextBlock Grid.Column="0" Name="PublicKeyText" Classes="mono" TextWrapping="Wrap"
+                                 VerticalAlignment="Center"
+                                 Text="{Binding SigningKeyPublicKey}" />
+            <Button Grid.Column="1" Classes="flat" Name="CopyPublicKey"
+                    Content="{lm:Loc Storage.Copy}" VerticalAlignment="Center"
+                    Command="{Binding CopyPublicKeyCommand}" />
+          </Grid>
+
+          <!-- ⭐ GENERATED, never transcribed — the whole reason `FormatTrustedKeyEntry` exists. -->
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.TrustedKeyEntry}" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="{DynamicResource Space.Md}"
+                Margin="{DynamicResource Margin.SectionGap}">
+            <SelectableTextBlock Grid.Column="0" Name="TrustedKeyEntryText" Classes="mono"
+                                 TextWrapping="Wrap" VerticalAlignment="Center"
+                                 Text="{Binding SigningKeyTrustedEntry}" />
+            <Button Grid.Column="1" Classes="flat" Name="CopyTrustedKeyEntry"
+                    Content="{lm:Loc Storage.Copy}" VerticalAlignment="Center"
+                    Command="{Binding CopyTrustedKeyEntryCommand}" />
+          </Grid>
+
+          <TextBlock Classes="section" Text="{lm:Loc Storage.VerifyAKeystoreBackup}" />
+          <TextBlock TextWrapping="Wrap" Margin="{DynamicResource Margin.SectionGap}"
+                     Text="{lm:Loc Storage.ABackupNeverRestoredIsAHypothesis}" />
+
+          <TextBlock Classes="field-label" Text="{lm:Loc Storage.KeystoreBackupPassphrase}" />
+          <TextBox Name="KeystoreBackupPassphraseBox" PasswordChar="•"
+                   Text="{Binding KeystoreBackupPassphrase}" />
+
+        </StackPanel>
+
+        <!-- ⭐ ONE message surface for all three tasks, and the LAST child: the body band's padding is what
              separates it from the footer, so it carries no bottom margin of its own. -->
         <Border Classes="message" Classes.info="{Binding IsInfo}" Classes.success="{Binding IsSuccess}"
                 Classes.warning="{Binding IsWarning}" Classes.error="{Binding IsError}"
@@ -163,6 +238,11 @@
                 IsVisible="{Binding IsRestoreTab}"
                 IsDefault="{Binding IsRestoreTab}"
                 Command="{Binding RunRestoreCommand}" />
+        <Button Classes="primary" Name="VerifyKeystoreBackup"
+                Content="{lm:Loc Storage.VerifyBackupAction}"
+                IsVisible="{Binding IsSigningKeyTab}"
+                IsDefault="{Binding IsSigningKeyTab}"
+                Command="{Binding VerifyKeystoreBackupCommand}" />
       </StackPanel>
     </Border>
 

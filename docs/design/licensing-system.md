@@ -1213,6 +1213,15 @@ networks and VPNs, that is a support burden out of proportion to the piracy it p
 7. Record the ceremony date, kid and public-key fingerprint in Appendix A.
 ```
 
+⭐ **The step-by-step procedure is
+[`licensing-key-ceremony-runbook.md`](licensing-key-ceremony-runbook.md)** (written at L7.2), which turns
+the seven lines above into fourteen steps, each naming what is created, where, what is secret, what must
+never reach the repository, and how it is verified. ⚠ Two corrections it carries: **"Appendix A" does not
+exist and is not being created** — §35.4's table IS the ceremony register (user's decision D1, 2026-08-22) —
+and step 5's *"verify the restore"* had **no executor in the application** until L7.1 gave the Storage
+window a Signing-key task; `SigningSession.Create` had been discarding the fingerprint, the public key and
+the paste-ready entry that `KeyCeremony.Perform` produced.
+
 ### 24.2 Where the private key must never be
 
 ⛔ EmberTern · the installer · any repository (a `.gitignore` entry is not protection — the keystore lives

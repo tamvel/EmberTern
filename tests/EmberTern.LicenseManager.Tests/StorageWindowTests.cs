@@ -1,14 +1,18 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Headless;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using EmberTern.LicenseManager.Data;
+using EmberTern.LicenseManager.Localization;
 using EmberTern.LicenseManager.Services;
+using EmberTern.LicenseManager.Settings;
 using EmberTern.LicenseManager.ViewModels;
 using EmberTern.LicenseManager.Views;
 using Xunit;
@@ -667,11 +671,176 @@ public sealed class StorageWindowTests
                 b => (b.Content as string)?.Contains("Storage", StringComparison.OrdinalIgnoreCase) == true);
         }, default);
 
+    // ── The signing key: the ceremony's own surface (L7.1) ──────────────────────────────────────────
+
+    /// <summary>
+    /// ⭐⭐ <b>Three tasks, and exactly one of them on screen — including its own footer action.</b>
+    /// </summary>
+    /// <remarks>
+    /// ⚠ This is the guard that would have caught the shape the third task replaced. The switch used to be
+    /// one <c>bool IsBackupTab</c> with <c>IsRestoreTab =&gt; !IsBackupTab</c>; a second bool beside it
+    /// would let two forms be visible at once, and Avalonia reports nothing when two siblings in a
+    /// <c>StackPanel</c> are both visible — it simply stacks them. ⭐ Asserted on REALISED visibility, never
+    /// on the markup (gotcha #387: <c>IsVisible</c> is a control's own declared value, so the assertion has
+    /// to be <c>IsEffectivelyVisible</c>).
+    /// </remarks>
+    [Fact]
+    public Task ExactlyOneOfTheThreeTasksIsOnScreenWithItsOwnAction() =>
+        _session.Dispatch(() =>
+        {
+            using var manager = new ManagerFixture();
+            var window = Show(manager);
+            var model = (StorageViewModel)window.DataContext!;
+
+            var forms = new[] { "BackupForm", "RestoreForm", "SigningKeyForm" };
+            var actions = new[] { "Backup", "RunRestore", "VerifyKeystoreBackup" };
+
+            void AssertOnly(int index)
+            {
+                window.UpdateLayout();
+
+                for (var i = 0; i < forms.Length; i++)
+                {
+                    Assert.Equal(
+                        i == index,
+                        ViewProbe.Named<StackPanel>(window, forms[i]).IsEffectivelyVisible);
+                    Assert.Equal(
+                        i == index,
+                        ViewProbe.Named<Button>(window, actions[i]).IsEffectivelyVisible);
+                }
+            }
+
+            // ⭐ Backup is the default — the only routine one of the three.
+            AssertOnly(0);
+
+            model.ShowSigningKeyCommand.Execute(null);
+            AssertOnly(2);
+
+            model.ShowRestoreCommand.Execute(null);
+            AssertOnly(1);
+
+            model.ShowBackupCommand.Execute(null);
+            AssertOnly(0);
+
+            window.Close();
+        }, default);
+
+    /// <summary>
+    /// ⭐⭐ The three values the ceremony has to leave behind are on the screen, and Copy hands over the
+    /// value VERBATIM.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ <b>Verbatim is the whole point.</b> Risk #2 of §30 is a mistranscribed key: one altered character
+    /// in the pasted entry produces a build that refuses every licence it will ever be shown. So this
+    /// asserts the copied text is byte-identical to what <c>KeyCeremony</c> generated — ⛔ not merely that
+    /// something was copied, and ⛔ not that it "looks like" a key.
+    /// </remarks>
+    [Fact]
+    public Task TheCeremonyValuesAreShownAndCopiedVerbatim() =>
+        _session.Dispatch(() =>
+        {
+            using var manager = new ManagerFixture();
+            var window = Show(manager);
+            var model = (StorageViewModel)window.DataContext!;
+            model.ShowSigningKeyCommand.Execute(null);
+            window.UpdateLayout();
+
+            var expected = SigningKeyFacts.Of(manager.Session);
+
+            Assert.Equal("R1", ViewProbe.Named<SelectableTextBlock>(window, "SigningKeyIdText").Text);
+            Assert.Equal(
+                expected.Fingerprint,
+                ViewProbe.Named<SelectableTextBlock>(window, "FingerprintText").Text);
+            Assert.Equal(
+                expected.PublicKeyBase64,
+                ViewProbe.Named<SelectableTextBlock>(window, "PublicKeyText").Text);
+            Assert.Equal(
+                expected.TrustedKeyEntry,
+                ViewProbe.Named<SelectableTextBlock>(window, "TrustedKeyEntryText").Text);
+
+            var copied = new List<string>();
+            model.TextCopier = value =>
+            {
+                copied.Add(value);
+                return Task.CompletedTask;
+            };
+
+            model.CopyFingerprintCommand.Execute(null);
+            model.CopyPublicKeyCommand.Execute(null);
+            model.CopyTrustedKeyEntryCommand.Execute(null);
+
+            Assert.Equal(
+                [expected.Fingerprint, expected.PublicKeyBase64, expected.TrustedKeyEntry],
+                copied);
+
+            // ⚠ And the confirmation names WHAT was copied rather than quoting a 120-character blob back.
+            Assert.True(model.IsSuccess);
+            Assert.DoesNotContain(expected.PublicKeyBase64, model.MessageText, StringComparison.Ordinal);
+
+            window.Close();
+        }, default);
+
+    /// <summary>
+    /// ⭐ The signing-key surface follows a language change, on the OPEN window, in both directions.
+    /// </summary>
+    /// <remarks>
+    /// ⚠⚠ Gotcha #408's rule, applied to a new surface as it is built rather than after an operator finds
+    /// it: <b>one behavioural test per surface</b> — switch the language on the realised window and assert
+    /// the words followed. A sweep over member names cannot see this, and the return leg matters because a
+    /// fix that works one way works by accident.
+    /// </remarks>
+    [Fact]
+    public Task TheSigningKeySurface_FollowsALanguageChange() =>
+        _session.Dispatch(() =>
+        {
+            using var manager = new ManagerFixture();
+            using var isolated = Loc.IsolateSubscribersForVerification();
+
+            try
+            {
+                Loc.Apply(ApplicationLanguages.English);
+
+                var window = Show(manager);
+                var model = (StorageViewModel)window.DataContext!;
+                model.ShowSigningKeyCommand.Execute(null);
+                window.UpdateLayout();
+
+                var tab = ViewProbe.Named<Button>(window, "SigningKeyTab");
+                var action = ViewProbe.Named<Button>(window, "VerifyKeystoreBackup");
+
+                Assert.Equal("Signing key", tab.Content);
+                Assert.Equal("Verify backup…", action.Content);
+
+                Loc.Apply(ApplicationLanguages.Polish);
+                window.UpdateLayout();
+
+                Assert.Equal("Klucz podpisujący", tab.Content);
+                Assert.Equal("Sprawdź kopię zapasową…", action.Content);
+
+                // ⚠ …and back, because a one-way fix is not a fix.
+                Loc.Apply(ApplicationLanguages.English);
+                window.UpdateLayout();
+
+                Assert.Equal("Signing key", tab.Content);
+                Assert.Equal("Verify backup…", action.Content);
+
+                window.Close();
+            }
+            finally
+            {
+                Loc.Apply(ApplicationLanguages.Default);
+            }
+        }, default);
+
     private static StorageWindow Show(ManagerFixture manager)
     {
         var window = new StorageWindow
         {
-            DataContext = new StorageViewModel(manager.Register, manager.Paths, () => manager.Now),
+            DataContext = new StorageViewModel(
+                manager.Register,
+                manager.Paths,
+                SigningKeyFacts.Of(manager.Session),
+                () => manager.Now),
         };
         window.Show();
         return window;
